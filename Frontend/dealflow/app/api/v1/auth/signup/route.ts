@@ -97,16 +97,19 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Signup BFF Error:", error);
+    const isConnRefused = error?.cause?.code === "ECONNREFUSED" || error?.message?.includes("fetch failed");
     return Response.json(
       {
         error: {
-          code: "INTERNAL_ERROR",
-          message: "An unexpected error occurred during signup.",
+          code: isConnRefused ? "BACKEND_UNREACHABLE" : "INTERNAL_ERROR",
+          message: isConnRefused
+            ? "Cannot reach the Go backend. Make sure the Go server is running on port 8080."
+            : "An unexpected error occurred during signup.",
         },
       },
-      { status: 500 }
+      { status: isConnRefused ? 502 : 500 }
     );
   }
 }

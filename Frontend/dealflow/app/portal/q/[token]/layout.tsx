@@ -1,0 +1,44 @@
+import React from "react";
+import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
+
+export default function CustomerPortalLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen bg-cream text-ink flex flex-col justify-between">
+      {/* Customer-Facing Clean Header */}
+      <header className="border-b border-ink/8 bg-white/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="size-7 rounded-lg bg-ink flex items-center justify-center text-bone font-bold text-[13px]">
+              D
+            </div>
+            <span className="font-headline font-semibold text-[16px] tracking-tight">
+              DealFlow360 Customer Portal
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-[12px] text-mist">
+            <ShieldCheck className="size-4 text-emerald-700" />
+            <span>256-Bit Encrypted Secure Session</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Portal Content */}
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
+        {children}
+      </main>
+
+      {/* Customer-Facing Footer */}
+      <footer className="border-t border-ink/8 py-6 text-center text-[12px] text-mist">
+        <p>
+          &copy; 2026 DealFlow360 Enterprise Operations. This document and negotiation portal are legally protected.
+        </p>
+      </footer>
+    </div>
+  );
+}

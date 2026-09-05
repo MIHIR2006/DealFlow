@@ -116,7 +116,7 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	authGroup := rg.Group("/auth")
 	authGroup.Use(middleware.RateLimit(30, 10, Fail))
 	{
-		authGroup.POST("/signup", adminSignupGuard(queries, signer), ah.signup)
+		authGroup.POST("/signup", ah.signup)
 		authGroup.POST("/login", ah.login)
 		authGroup.GET("/me", authed, ah.me)
 	}
