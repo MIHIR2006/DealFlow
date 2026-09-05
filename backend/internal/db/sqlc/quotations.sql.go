@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -107,9 +107,9 @@ type GetQuotationRow struct {
 	MatchedPolicyID  *int64
 	RiskRationale    string
 	Version          int32
-	LastActivityAt   pgtype.Timestamptz
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	LastActivityAt   time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 	CustomerName     string
 	CustomerTier     string
 	CustomerEmail    string
@@ -254,8 +254,8 @@ type ListQuotationLinesRow struct {
 	OveragePts           decimal.Decimal
 	LineType             string
 	PlanID               *int64
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 	ProductName          string
 	Sku                  string
 	CategoryName         string
@@ -349,8 +349,8 @@ type ListQuotationLinesForQuotationsRow struct {
 	OveragePts           decimal.Decimal
 	LineType             string
 	PlanID               *int64
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 	ProductName          string
 	CategoryName         string
 }
@@ -453,9 +453,9 @@ type ListQuotationsRow struct {
 	MatchedPolicyID  *int64
 	RiskRationale    string
 	Version          int32
-	LastActivityAt   pgtype.Timestamptz
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	LastActivityAt   time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 	CustomerName     string
 	CustomerTier     string
 	RepName          string

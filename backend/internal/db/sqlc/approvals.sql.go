@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -129,9 +129,9 @@ type GetApprovalRequestRow struct {
 	Status          string
 	ActorID         *int64
 	Reason          string
-	DecidedAt       pgtype.Timestamptz
+	DecidedAt       *time.Time
 	Round           int32
-	CreatedAt       pgtype.Timestamptz
+	CreatedAt       time.Time
 	RepID           int64
 	QuotationStatus string
 	Reference       string
@@ -202,9 +202,9 @@ type ListApprovalsForQuotationRow struct {
 	Status       string
 	ActorID      *int64
 	Reason       string
-	DecidedAt    pgtype.Timestamptz
+	DecidedAt    *time.Time
 	Round        int32
-	CreatedAt    pgtype.Timestamptz
+	CreatedAt    time.Time
 	ActorName    *string
 }
 
@@ -273,9 +273,9 @@ type ListPendingApprovalsRow struct {
 	Status           string
 	ActorID          *int64
 	Reason           string
-	DecidedAt        pgtype.Timestamptz
+	DecidedAt        *time.Time
 	Round            int32
-	CreatedAt        pgtype.Timestamptz
+	CreatedAt        time.Time
 	Reference        string
 	GrandTotal       decimal.Decimal
 	BlendedRiskScore decimal.Decimal

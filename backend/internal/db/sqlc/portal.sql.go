@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -98,7 +98,7 @@ type CreatePortalTokenParams struct {
 	Token       string
 	QuotationID int64
 	CustomerID  int64
-	ExpiresAt   pgtype.Timestamptz
+	ExpiresAt   time.Time
 }
 
 func (q *Queries) CreatePortalToken(ctx context.Context, arg CreatePortalTokenParams) (PortalToken, error) {
@@ -161,15 +161,15 @@ type GetQuotationByPortalTokenRow struct {
 	MatchedPolicyID  *int64
 	RiskRationale    string
 	Version          int32
-	LastActivityAt   pgtype.Timestamptz
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	LastActivityAt   time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 	CustomerName     string
 	CustomerEmail    string
 	CustomerTier     string
 	TokenID          int64
-	ExpiresAt        pgtype.Timestamptz
-	UsedAt           pgtype.Timestamptz
+	ExpiresAt        time.Time
+	UsedAt           *time.Time
 }
 
 // The portal resolves everything from the token. No portal query accepts a
@@ -228,7 +228,7 @@ type ListCounterOffersRow struct {
 	ProposedDiscountPct decimal.Decimal
 	Outcome             string
 	Note                string
-	CreatedAt           pgtype.Timestamptz
+	CreatedAt           time.Time
 	ProductID           *int64
 }
 

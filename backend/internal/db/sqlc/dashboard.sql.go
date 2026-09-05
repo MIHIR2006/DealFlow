@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -65,7 +65,7 @@ type FindDeliverySlippageRow struct {
 	ID           int64
 	Reference    string
 	Status       string
-	PromisedDate pgtype.Timestamptz
+	PromisedDate *time.Time
 	DaysLate     int32
 	CustomerName string
 }
@@ -198,7 +198,7 @@ type FindStalledQuotationsRow struct {
 	Reference      string
 	Status         string
 	GrandTotal     decimal.Decimal
-	LastActivityAt pgtype.Timestamptz
+	LastActivityAt time.Time
 	DaysInactive   int32
 	CustomerName   string
 	RepName        string
@@ -254,8 +254,8 @@ type ListOpenDealAlertsRow struct {
 	Severity     string
 	Detail       string
 	Metric       decimal.Decimal
-	ResolvedAt   pgtype.Timestamptz
-	CreatedAt    pgtype.Timestamptz
+	ResolvedAt   *time.Time
+	CreatedAt    time.Time
 	Reference    string
 	CustomerName string
 }
@@ -357,8 +357,8 @@ ORDER BY net_revenue DESC
 `
 
 type SalesReportParams struct {
-	From       pgtype.Timestamptz
-	To         pgtype.Timestamptz
+	From       *time.Time
+	To         *time.Time
 	RepID      *int64
 	SalesTeam  *string
 	Status     *string

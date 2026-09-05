@@ -46,7 +46,10 @@ test: ## Run unit tests with the race detector
 .PHONY: test-integration
 test-integration: ## Run tests that need a real Postgres (set TEST_DATABASE_URL)
 	@test -n "$(TEST_DATABASE_URL)" || (echo "TEST_DATABASE_URL is required"; exit 1)
-	go test -tags=integration $(PKG) -race -count=1
+	# -p 1 runs packages one at a time. Several integration suites reseed the
+	# same database, so running them concurrently would have them truncating
+	# each other's fixtures mid-test.
+	go test -tags=integration $(PKG) -race -count=1 -p 1
 
 .PHONY: test-all
 test-all: test test-integration ## Unit and integration tests

@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -85,7 +85,7 @@ type CreateSalesOrderParams struct {
 	Reference    string
 	QuotationID  int64
 	CustomerID   int64
-	PromisedDate pgtype.Timestamptz
+	PromisedDate *time.Time
 }
 
 func (q *Queries) CreateSalesOrder(ctx context.Context, arg CreateSalesOrderParams) (SalesOrder, error) {
@@ -143,10 +143,10 @@ type GetSalesOrderRow struct {
 	QuotationID        int64
 	CustomerID         int64
 	Status             string
-	PromisedDate       pgtype.Timestamptz
-	ConfirmedAt        pgtype.Timestamptz
-	CreatedAt          pgtype.Timestamptz
-	UpdatedAt          pgtype.Timestamptz
+	PromisedDate       *time.Time
+	ConfirmedAt        time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 	QuotationReference string
 	CustomerName       string
 }
@@ -216,8 +216,8 @@ type ListConsolidatableBackordersRow struct {
 	ProductID    int64
 	Qty          int64
 	Status       string
-	ResolvedAt   pgtype.Timestamptz
-	CreatedAt    pgtype.Timestamptz
+	ResolvedAt   *time.Time
+	CreatedAt    time.Time
 	ProductName  string
 	Available    int64
 }
@@ -270,7 +270,7 @@ type ListFulfillmentLinesRow struct {
 	ProductID     int64
 	Qty           int64
 	ShipmentGroup int32
-	CreatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
 	WarehouseName string
 	ProductName   string
 }
@@ -319,8 +319,8 @@ type ListOpenBackordersRow struct {
 	ProductID    int64
 	Qty          int64
 	Status       string
-	ResolvedAt   pgtype.Timestamptz
-	CreatedAt    pgtype.Timestamptz
+	ResolvedAt   *time.Time
+	CreatedAt    time.Time
 	ProductName  string
 }
 
