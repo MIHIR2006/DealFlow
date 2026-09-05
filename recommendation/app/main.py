@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, status
+from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db import check_db_health, close_pool, init_pool, init_schema_tables
 from app.routers.admin import router as admin_router
@@ -30,6 +31,14 @@ app = FastAPI(
     description="Real-time Upsell and Cross-Sell Recommendation Engine for B2B Quotations.",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(recommend_router)

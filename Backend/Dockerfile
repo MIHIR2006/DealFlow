@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -15,6 +15,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /dealflow-server ./cmd
 
 # Stage 2: Minimal runtime image
 FROM alpine:3.20
+
+RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 

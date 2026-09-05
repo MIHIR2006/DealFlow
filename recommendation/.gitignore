@@ -14,10 +14,6 @@ seed.sql
 *.sql
 migrations/
 
-# Ignore Dockerfile
-Dockerfile
-dockerfile
-
 # Python
 __pycache__/
 *.py[cod]

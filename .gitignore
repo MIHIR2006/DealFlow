@@ -27,13 +27,6 @@ seed.sql
 migrations/
 **/migrations/
 
-# Docker containerization files
-Dockerfile
-**/Dockerfile
-dockerfile
-**/dockerfile
-docker-compose*.yml
-docker-compose*.yaml
 
 # Python caches and environments
 __pycache__/

@@ -1,11 +1,11 @@
 # Stage 1: Install dependencies
-FROM oven/bun:1.1-alpine AS deps
+FROM oven/bun:1.2-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # Stage 2: Build the application
-FROM oven/bun:1.1-alpine AS builder
+FROM oven/bun:1.2-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -28,10 +28,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 RUN mkdir .next && chown nextjs:nodejs .next
 
 # Copy the standalone output and static files
-# Note: Next.js standalone output doesn't natively include public or static folders,
-# but it automatically copies the necessary static/public files to the standalone directory
-# if configured properly, but usually we must copy static manually into standalone.
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
