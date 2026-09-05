@@ -123,14 +123,6 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 
 	// The customer-facing tree. Separate group, separate middleware, and no
 	// handler below it ever accepts a quotation id from the request.
-	portal := rg.Group("/portal/q/:token")
-	portal.Use(
-		middleware.RateLimit(60, 20, Fail),
-		middleware.RequirePortalToken(queries, Fail),
-	)
-	{
-		portal.GET("", portalHandler{}.show)
-	}
 
 	// Administrative configuration. Reads are open to any signed-in staff
 	// member because the quotation builder needs the catalogue; writes are
@@ -185,6 +177,26 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		// The rep never chooses an approver: the blended risk score decides
 		// whether this needs one and which chain it takes.
 		quotes.POST("/:id/submit", qh.submit)
+	}
+
+	// The customer-facing tree. Separate group, separate middleware, and no
+	// handler below it takes a quotation id: the token names exactly one.
+	ph := portalHandler{
+		svc: service.NewPortalService(d.Pool, queries, quoteSvc),
+		ttl: d.Config.PortalTokenTTL,
+	}
+	quotes.POST("/:id/send", ph.send)
+
+	portal := rg.Group("/portal/q/:token")
+	portal.Use(
+		middleware.RateLimit(60, 20, Fail),
+		middleware.RequirePortalToken(queries, Fail),
+	)
+	{
+		portal.GET("", ph.show)
+		portal.POST("/messages", ph.postMessage)
+		portal.POST("/counter-offer", ph.counterOffer)
+		portal.POST("/confirm", ph.confirm)
 	}
 
 	// The approvals inbox and the three decisions a reviewer can take.
