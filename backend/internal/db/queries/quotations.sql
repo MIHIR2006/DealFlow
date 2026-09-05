@@ -59,12 +59,21 @@ INSERT INTO quotations (reference, customer_id, rep_id)
 VALUES ($1, $2, $3)
 RETURNING *;
 
+-- The next position is computed in the same statement rather than fetched
+-- first: a separate SELECT would double the round trips on the hottest write
+-- in the builder, and could race with a concurrent insert besides.
 -- name: InsertQuotationLine :one
 INSERT INTO quotation_lines (
     quotation_id, product_id, category_id, position,
     qty, unit_price, unit_cost, line_discount_pct, tax_rate_pct,
     line_type, plan_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+) VALUES (
+    @quotation_id, @product_id, @category_id,
+    (SELECT COALESCE(max(position), 0) + 1
+       FROM quotation_lines WHERE quotation_id = @quotation_id),
+    @qty, @unit_price, @unit_cost, @line_discount_pct, @tax_rate_pct,
+    @line_type, @plan_id
+)
 RETURNING *;
 
 -- name: UpdateQuotationLineInput :one
@@ -133,4 +142,49 @@ RETURNING *;
 UPDATE quotations SET last_activity_at = now() WHERE id = $1;
 
 -- name: NextQuotationReference :one
-SELECT 'Q-' || to_char(nextval('quotations_id_seq'), 'FM0000') AS reference;
+SELECT ('Q-' || to_char(nextval('quotations_id_seq'), 'FM0000'))::text AS reference;
+
+-- Writes every line's computed values in one statement.
+--
+-- Recalculation touches all lines of a quotation on every keystroke, so
+-- updating them one at a time would make the builder's cost grow with the
+-- size of the deal. The whole batch arrives as one JSONB document and is
+-- expanded into rows, keeping the write at a single round trip.
+--
+-- Every numeric arrives as text and is cast here: decimal values serialise as
+-- JSON strings precisely so they never pass through a float on the way.
+-- name: UpdateQuotationLinesComputed :exec
+UPDATE quotation_lines ql
+SET effective_discount_pct = v.effective_discount_pct::numeric,
+    list_value             = v.list_value::numeric,
+    discount_amount        = v.discount_amount::numeric,
+    net_amount             = v.net_amount::numeric,
+    tax_amount             = v.tax_amount::numeric,
+    cost_amount            = v.cost_amount::numeric,
+    margin_amount          = v.margin_amount::numeric,
+    margin_pct             = v.margin_pct::numeric,
+    ceiling_pct            = v.ceiling_pct::numeric,
+    overage_pts            = v.overage_pts::numeric,
+    updated_at             = now()
+FROM jsonb_to_recordset(@lines::jsonb) AS v(
+    id                     bigint,
+    effective_discount_pct text,
+    list_value             text,
+    discount_amount        text,
+    net_amount             text,
+    tax_amount             text,
+    cost_amount            text,
+    margin_amount          text,
+    margin_pct             text,
+    ceiling_pct            text,
+    overage_pts            text
+)
+WHERE ql.id = v.id AND ql.quotation_id = @quotation_id;
+
+-- name: GetQuotationLine :one
+SELECT ql.*, p.name AS product_name, cat.name AS category_name
+FROM quotation_lines ql
+JOIN products   p   ON p.id   = ql.product_id
+JOIN categories cat ON cat.id = ql.category_id
+WHERE ql.id = $1 AND ql.quotation_id = $2;
+

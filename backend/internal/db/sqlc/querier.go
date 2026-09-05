@@ -10,13 +10,18 @@ import (
 
 type Querier interface {
 	AddStock(ctx context.Context, arg AddStockParams) (StockItem, error)
+	AdjustScheduleAmount(ctx context.Context, arg AdjustScheduleAmountParams) (BillingSchedule, error)
 	AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) (AuditLog, error)
+	CancelRemainingSchedules(ctx context.Context, quotationLineID int64) (int64, error)
+	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
+	CountFulfillmentsForOrder(ctx context.Context, salesOrderID int64) (int64, error)
 	CountOpenApprovals(ctx context.Context, arg CountOpenApprovalsParams) (int64, error)
 	CreateApprovalPolicy(ctx context.Context, arg CreateApprovalPolicyParams) (ApprovalPolicy, error)
 	CreateApprovalRequest(ctx context.Context, arg CreateApprovalRequestParams) (ApprovalRequest, error)
 	CreateBackorder(ctx context.Context, arg CreateBackorderParams) (Backorder, error)
 	CreateCategory(ctx context.Context, name string) (Category, error)
 	CreateCounterOffer(ctx context.Context, arg CreateCounterOfferParams) (CounterOffer, error)
+	CreateCreditNote(ctx context.Context, arg CreateCreditNoteParams) (CreditNote, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateDealAlert(ctx context.Context, arg CreateDealAlertParams) (DealAlert, error)
 	CreateFulfillment(ctx context.Context, arg CreateFulfillmentParams) (Fulfillment, error)
@@ -46,6 +51,7 @@ type Querier interface {
 	// Covered by idx_quotations_stalled.
 	FindStalledQuotations(ctx context.Context, arg FindStalledQuotationsParams) ([]FindStalledQuotationsRow, error)
 	GetApprovalRequest(ctx context.Context, id int64) (GetApprovalRequestRow, error)
+	GetCurrentBillingPeriod(ctx context.Context, quotationLineID int64) (BillingSchedule, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
 	GetFulfillmentForOrder(ctx context.Context, salesOrderID int64) (Fulfillment, error)
 	GetIdempotentResponse(ctx context.Context, arg GetIdempotentResponseParams) (IdempotencyKey, error)
@@ -65,6 +71,7 @@ type Querier interface {
 	// quotation id, so a token for one quotation cannot reach another: the
 	// isolation is structural, not a check that could be forgotten.
 	GetQuotationByPortalToken(ctx context.Context, token string) (GetQuotationByPortalTokenRow, error)
+	GetQuotationLine(ctx context.Context, arg GetQuotationLineParams) (GetQuotationLineRow, error)
 	GetSalesOrder(ctx context.Context, id int64) (GetSalesOrderRow, error)
 	GetSalesOrderByQuotation(ctx context.Context, quotationID int64) (SalesOrder, error)
 	// Availability for a set of products across every warehouse, in one query.
@@ -77,6 +84,9 @@ type Querier interface {
 	// never one insert per warehouse line.
 	InsertFulfillmentLines(ctx context.Context, arg []InsertFulfillmentLinesParams) (int64, error)
 	InsertInvoiceLines(ctx context.Context, arg []InsertInvoiceLinesParams) (int64, error)
+	// The next position is computed in the same statement rather than fetched
+	// first: a separate SELECT would double the round trips on the hottest write
+	// in the builder, and could race with a concurrent insert besides.
 	InsertQuotationLine(ctx context.Context, arg InsertQuotationLineParams) (QuotationLine, error)
 	ListApprovalPolicies(ctx context.Context) ([]ApprovalPolicy, error)
 	// Every round, including superseded ones. The approval screen shows the full
@@ -90,6 +100,7 @@ type Querier interface {
 	// the "stock arrived, consolidate?" prompt.
 	ListConsolidatableBackorders(ctx context.Context, salesOrderID int64) ([]ListConsolidatableBackordersRow, error)
 	ListCounterOffers(ctx context.Context, quotationID int64) ([]ListCounterOffersRow, error)
+	ListCreditNotesForOrder(ctx context.Context, salesOrderID int64) ([]CreditNote, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]Customer, error)
 	// The governance configuration is small, changes rarely, and is read on every
 	// keystroke in the quotation builder. These four queries populate the
@@ -99,6 +110,9 @@ type Querier interface {
 	// Drives the recurring-billing background job; covered by the partial index
 	// idx_billing_schedules_due.
 	ListDueBillingSchedules(ctx context.Context, limit int32) ([]BillingSchedule, error)
+	// The physical lines of an order. Recurring subscription lines are billed,
+	// never shipped, so they are excluded here rather than filtered in Go.
+	ListFulfillableLines(ctx context.Context, id int64) ([]ListFulfillableLinesRow, error)
 	ListFulfillmentLines(ctx context.Context, fulfillmentID int64) ([]ListFulfillmentLinesRow, error)
 	ListInvoiceLines(ctx context.Context, invoiceID int64) ([]InvoiceLine, error)
 	ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]ListInvoicesRow, error)
@@ -124,19 +138,31 @@ type Querier interface {
 	ListSubscriptionPlans(ctx context.Context) ([]SubscriptionPlan, error)
 	ListUsersByRole(ctx context.Context, role string) ([]User, error)
 	ListWarehouses(ctx context.Context) ([]Warehouse, error)
-	// Locks the rows before reserving so two orders racing for the last unit
-	// cannot both win. Must run inside a transaction.
+	// Locks the stock rows for a set of products and returns them with the
+	// warehouse context the split engine needs.
+	//
+	// Planning and reserving must see the same numbers. Without the lock, two
+	// orders could each be told the last unit is available and both reserve it.
+	// Rows are locked in id order so concurrent transactions queue rather than
+	// deadlock. Only the stock rows are locked, not the warehouse rows, which
+	// are read-mostly configuration.
 	LockStockForProducts(ctx context.Context, dollar_1 []int64) ([]LockStockForProductsRow, error)
 	MarkBillingScheduleInvoiced(ctx context.Context, arg MarkBillingScheduleInvoicedParams) error
 	MarkPortalTokenUsed(ctx context.Context, id int64) error
-	NextInvoiceReference(ctx context.Context) (interface{}, error)
-	NextQuotationReference(ctx context.Context) (interface{}, error)
-	NextSalesOrderReference(ctx context.Context) (interface{}, error)
+	NextCreditNoteReference(ctx context.Context) (string, error)
+	NextInvoiceReference(ctx context.Context) (string, error)
+	NextQuotationReference(ctx context.Context) (string, error)
+	NextSalesOrderReference(ctx context.Context) (string, error)
 	QuotationStatusCounts(ctx context.Context) ([]QuotationStatusCountsRow, error)
 	// Recomputes paid amount and status from the payments actually recorded, so
 	// the invoice can never drift from its ledger. A short payment lands on
 	// PARTIAL, not PAID.
 	RecalculateInvoicePayment(ctx context.Context, id int64) (Invoice, error)
+	ReleaseIdempotencyKey(ctx context.Context, arg ReleaseIdempotencyKeyParams) error
+	ReleaseStock(ctx context.Context, arg ReleaseStockParams) error
+	// Reserves a key before the work runs, so two concurrent replays cannot both
+	// execute. Returning no row means someone else owns this key.
+	ReserveIdempotencyKey(ctx context.Context, arg ReserveIdempotencyKeyParams) (IdempotencyKey, error)
 	ReserveStock(ctx context.Context, arg ReserveStockParams) (StockItem, error)
 	ResolveBackorder(ctx context.Context, id int64) (Backorder, error)
 	ResolveDealAlert(ctx context.Context, id int64) error
@@ -161,12 +187,23 @@ type Querier interface {
 	// views and dashboards read columns instead of re-running the engine per row.
 	UpdateQuotationLineComputed(ctx context.Context, arg UpdateQuotationLineComputedParams) error
 	UpdateQuotationLineInput(ctx context.Context, arg UpdateQuotationLineInputParams) (QuotationLine, error)
+	// Writes every line's computed values in one statement.
+	//
+	// Recalculation touches all lines of a quotation on every keystroke, so
+	// updating them one at a time would make the builder's cost grow with the
+	// size of the deal. The whole batch arrives as one JSONB document and is
+	// expanded into rows, keeping the write at a single round trip.
+	//
+	// Every numeric arrives as text and is cast here: decimal values serialise as
+	// JSON strings precisely so they never pass through a float on the way.
+	UpdateQuotationLinesComputed(ctx context.Context, arg UpdateQuotationLinesComputedParams) error
 	UpdateQuotationStatus(ctx context.Context, arg UpdateQuotationStatusParams) (Quotation, error)
 	// Optimistic locking: the update only applies when the caller's version is
 	// still current, so two reps editing one quotation cannot silently clobber
 	// each other. Zero rows returned means "someone else changed it".
 	UpdateQuotationTotals(ctx context.Context, arg UpdateQuotationTotalsParams) (Quotation, error)
 	UpdateSalesOrderStatus(ctx context.Context, arg UpdateSalesOrderStatusParams) (SalesOrder, error)
+	UpdateScheduleAmountsFrom(ctx context.Context, arg UpdateScheduleAmountsFromParams) (int64, error)
 	UpsertCategoryCeiling(ctx context.Context, arg UpsertCategoryCeilingParams) (CategoryCeiling, error)
 	UpsertDiscountTier(ctx context.Context, arg UpsertDiscountTierParams) (DiscountTier, error)
 	UpsertStock(ctx context.Context, arg UpsertStockParams) (StockItem, error)

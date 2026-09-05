@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+	"golang.org/x/crypto/bcrypt"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/domain/fulfillment"
@@ -39,7 +40,7 @@ func seeded(t *testing.T) (*db.Pool, *sqlcgen.Queries) {
 	}
 	t.Cleanup(pool.Close)
 
-	if err := seed.Run(context.Background(), pool); err != nil {
+	if err := seed.RunWith(context.Background(), pool, fixtureSeed); err != nil {
 		t.Fatalf("seed.Run: %v", err)
 	}
 	return pool, sqlcgen.New(pool)
@@ -315,3 +316,7 @@ func TestSeedIsRepeatable(t *testing.T) {
 		t.Errorf("product count changed from %d to %d across reseeds", len(first), len(second))
 	}
 }
+
+// fixtureSeed keeps password hashing cheap; these tests are about the data,
+// not about key stretching.
+var fixtureSeed = seed.Options{BcryptCost: bcrypt.MinCost}

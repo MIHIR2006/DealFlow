@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/platform/cache"
@@ -61,7 +62,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	t.Cleanup(pool.Close)
 
-	if err := seed.Run(context.Background(), pool); err != nil {
+	if err := seed.RunWith(context.Background(), pool, fixtureSeed); err != nil {
 		t.Fatalf("seed.Run: %v", err)
 	}
 
@@ -101,6 +102,32 @@ func (h *harness) do(method, path, token string, body any) *httptest.ResponseRec
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
+	w := httptest.NewRecorder()
+	h.router.ServeHTTP(w, req)
+	return w
+}
+
+// request builds a request without sending it, so a test can add headers
+// such as Idempotency-Key before dispatch.
+func (h *harness) request(method, path, token string, body any) *http.Request {
+	var buf io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		buf = bytes.NewReader(b)
+	}
+
+	req := httptest.NewRequest(method, path, buf)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return req
+}
+
+// send dispatches a request built by request.
+func (h *harness) send(req *http.Request) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	h.router.ServeHTTP(w, req)
 	return w
@@ -407,3 +434,8 @@ func TestProbesDoNotTouchTheDatabase(t *testing.T) {
 		t.Errorf("liveness ran %s queries, want 0", got)
 	}
 }
+
+// fixtureSeed builds the dataset with a cheap password cost. The suite signs
+// in dozens of times, and a production bcrypt cost turns that into a minute
+// of pure key stretching for no added confidence.
+var fixtureSeed = seed.Options{BcryptCost: bcrypt.MinCost}
