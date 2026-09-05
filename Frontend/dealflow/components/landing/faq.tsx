@@ -1,3 +1,8 @@
+"use client";
+
+import { useState } from "react";
+import { Plus, Minus } from "lucide-react";
+
 const items = [
   {
     q: "What is DealFlow360?",
@@ -26,6 +31,12 @@ const items = [
 ];
 
 export function Faq() {
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
+
+  const toggle = (i: number) => {
+    setOpenIndex(openIndex === i ? null : i);
+  };
+
   return (
     <section id="faq" className="px-6 py-24 sm:px-10">
       <div className="mx-auto grid max-w-[1120px] gap-12 lg:grid-cols-[minmax(0,0.9fr)_1.1fr] lg:gap-20">
@@ -41,23 +52,54 @@ export function Faq() {
           </p>
         </div>
         <div className="overflow-hidden rounded-[20px] bg-white card-shadow">
-          {items.map((item, i) => (
-            <details
-              key={item.q}
-              className={`group px-6 ${i < items.length - 1 ? "border-b border-ink/8" : ""}`}
-            >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-[15.5px] font-medium text-ink [&::-webkit-details-marker]:hidden">
-                {item.q}
-                <span className="relative size-5 shrink-0 text-mist">
-                  <span className="absolute top-1/2 left-0 h-px w-5 -translate-y-1/2 bg-current" />
-                  <span className="absolute top-0 left-1/2 h-5 w-px -translate-x-1/2 bg-current transition-transform group-open:rotate-90 group-open:scale-y-0" />
-                </span>
-              </summary>
-              <p className="pb-5 text-[14.5px] leading-relaxed text-mist">
-                {item.a}
-              </p>
-            </details>
-          ))}
+          {items.map((item, i) => {
+            const isOpen = openIndex === i;
+            return (
+              <div
+                key={item.q}
+                className={`group px-6 transition-colors duration-200 ${
+                  i < items.length - 1 ? "border-b border-ink/8" : ""
+                } ${isOpen ? "bg-cream/40" : "hover:bg-cream/20"}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggle(i)}
+                  className="flex w-full cursor-pointer items-center justify-between gap-6 py-5 text-left text-[15.5px] font-medium text-ink transition-colors"
+                  aria-expanded={isOpen}
+                >
+                  <span className={isOpen ? "font-semibold text-ink" : "text-ink/90"}>
+                    {item.q}
+                  </span>
+                  <span
+                    className={`flex size-6 shrink-0 items-center justify-center rounded-full border border-ink/15 text-mist transition-all duration-300 ${
+                      isOpen
+                        ? "rotate-180 bg-ink text-bone border-ink"
+                        : "group-hover:border-ink/30 group-hover:text-ink"
+                    }`}
+                  >
+                    {isOpen ? (
+                      <Minus className="size-3.5" />
+                    ) : (
+                      <Plus className="size-3.5" />
+                    )}
+                  </span>
+                </button>
+                <div
+                  className={`grid transition-all duration-300 ease-in-out ${
+                    isOpen
+                      ? "grid-rows-[1fr] opacity-100 pb-5"
+                      : "grid-rows-[0fr] opacity-0 pb-0"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <p className="text-[14.5px] leading-relaxed text-mist">
+                      {item.a}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

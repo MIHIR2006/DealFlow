@@ -7,6 +7,7 @@ import { Chapter } from "@/components/landing/chapter";
 import { Faq } from "@/components/landing/faq";
 import { RiskCard } from "@/components/landing/risk-card";
 import { SmoothScroll } from "@/components/landing/smooth-scroll";
+import { Preloader } from "@/components/landing/preloader";
 
 const marquee = [
   "Laptop 12% / 15% · OK",
@@ -34,6 +35,7 @@ const pills = [
 export default function Home() {
   return (
     <SmoothScroll>
+      <Preloader />
       <div id="top" className="bg-cream text-ink">
       <Nav />
 
@@ -435,11 +437,11 @@ function Hero() {
 function Marquee() {
   const loop = [...marquee, ...marquee];
   return (
-    <section className="border-b border-ink/8 bg-cream py-10">
+    <section className="border-b border-ink/8 bg-cream pt-16 pb-12 sm:pt-20 sm:pb-14">
       <p className="text-center text-[15px] font-medium">
         Built around the spec&rsquo;s own worked example
       </p>
-      <div className="mt-6 overflow-hidden">
+      <div className="mt-8 sm:mt-10 overflow-hidden">
         <div className="marquee-track gap-12 px-8 text-[15px] text-ink/70">
           {loop.map((item, i) => (
             <span key={`${item}-${i}`} className="shrink-0">
