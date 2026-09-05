@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AddStock(ctx context.Context, arg AddStockParams) (StockItem, error)
 	AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) (AuditLog, error)
+	CountFulfillmentsForOrder(ctx context.Context, salesOrderID int64) (int64, error)
 	CountOpenApprovals(ctx context.Context, arg CountOpenApprovalsParams) (int64, error)
 	CreateApprovalPolicy(ctx context.Context, arg CreateApprovalPolicyParams) (ApprovalPolicy, error)
 	CreateApprovalRequest(ctx context.Context, arg CreateApprovalRequestParams) (ApprovalRequest, error)
@@ -103,6 +104,9 @@ type Querier interface {
 	// Drives the recurring-billing background job; covered by the partial index
 	// idx_billing_schedules_due.
 	ListDueBillingSchedules(ctx context.Context, limit int32) ([]BillingSchedule, error)
+	// The physical lines of an order. Recurring subscription lines are billed,
+	// never shipped, so they are excluded here rather than filtered in Go.
+	ListFulfillableLines(ctx context.Context, id int64) ([]ListFulfillableLinesRow, error)
 	ListFulfillmentLines(ctx context.Context, fulfillmentID int64) ([]ListFulfillmentLinesRow, error)
 	ListInvoiceLines(ctx context.Context, invoiceID int64) ([]InvoiceLine, error)
 	ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]ListInvoicesRow, error)
@@ -128,8 +132,14 @@ type Querier interface {
 	ListSubscriptionPlans(ctx context.Context) ([]SubscriptionPlan, error)
 	ListUsersByRole(ctx context.Context, role string) ([]User, error)
 	ListWarehouses(ctx context.Context) ([]Warehouse, error)
-	// Locks the rows before reserving so two orders racing for the last unit
-	// cannot both win. Must run inside a transaction.
+	// Locks the stock rows for a set of products and returns them with the
+	// warehouse context the split engine needs.
+	//
+	// Planning and reserving must see the same numbers. Without the lock, two
+	// orders could each be told the last unit is available and both reserve it.
+	// Rows are locked in id order so concurrent transactions queue rather than
+	// deadlock. Only the stock rows are locked, not the warehouse rows, which
+	// are read-mostly configuration.
 	LockStockForProducts(ctx context.Context, dollar_1 []int64) ([]LockStockForProductsRow, error)
 	MarkBillingScheduleInvoiced(ctx context.Context, arg MarkBillingScheduleInvoicedParams) error
 	MarkPortalTokenUsed(ctx context.Context, id int64) error
@@ -141,6 +151,7 @@ type Querier interface {
 	// the invoice can never drift from its ledger. A short payment lands on
 	// PARTIAL, not PAID.
 	RecalculateInvoicePayment(ctx context.Context, id int64) (Invoice, error)
+	ReleaseStock(ctx context.Context, arg ReleaseStockParams) error
 	ReserveStock(ctx context.Context, arg ReserveStockParams) (StockItem, error)
 	ResolveBackorder(ctx context.Context, id int64) (Backorder, error)
 	ResolveDealAlert(ctx context.Context, id int64) error

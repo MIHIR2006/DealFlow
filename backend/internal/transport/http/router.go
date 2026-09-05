@@ -201,7 +201,20 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		approvals.POST("/:id/reject", ah2.reject)
 	}
 
-	// Phase 7 → fulfillment routes
+	// Fulfilment. Suggesting is free and persists nothing; accepting reserves
+	// stock inside one transaction over locked rows, so the warehouses the
+	// engine chose are the ones the order actually takes from.
+	fh := fulfillmentHandler{svc: service.NewFulfillmentService(d.Pool, queries, quoteSvc)}
+	quotes.POST("/:id/confirm", fh.confirm)
+
+	orders := rg.Group("/orders", authed, staff)
+	{
+		orders.GET("/:id", fh.get)
+		orders.GET("/:id/fulfillment/suggest", fh.suggest)
+		orders.POST("/:id/fulfillment", fh.accept)
+		orders.POST("/:id/backorders/consolidate", fh.consolidate)
+	}
+
 	// Phase 8 → billing + invoicing routes
 	// Phase 9 → portal negotiation routes
 	// Phase 10 → analytics routes

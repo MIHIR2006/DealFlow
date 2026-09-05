@@ -141,23 +141,37 @@ func (q *Queries) ListWarehouses(ctx context.Context) ([]Warehouse, error) {
 }
 
 const lockStockForProducts = `-- name: LockStockForProducts :many
-SELECT si.id, si.warehouse_id, si.product_id, si.on_hand, si.reserved
+SELECT si.id, si.warehouse_id, si.product_id, si.on_hand, si.reserved,
+       (si.on_hand - si.reserved)::bigint AS available,
+       w.name AS warehouse_name,
+       w.shipping_cost_weight
 FROM stock_items si
+JOIN warehouses w ON w.id = si.warehouse_id
 WHERE si.product_id = ANY($1::bigint[])
+  AND w.is_active
 ORDER BY si.id
-FOR UPDATE
+FOR UPDATE OF si
 `
 
 type LockStockForProductsRow struct {
-	ID          int64
-	WarehouseID int64
-	ProductID   int64
-	OnHand      int64
-	Reserved    int64
+	ID                 int64
+	WarehouseID        int64
+	ProductID          int64
+	OnHand             int64
+	Reserved           int64
+	Available          int64
+	WarehouseName      string
+	ShippingCostWeight decimal.Decimal
 }
 
-// Locks the rows before reserving so two orders racing for the last unit
-// cannot both win. Must run inside a transaction.
+// Locks the stock rows for a set of products and returns them with the
+// warehouse context the split engine needs.
+//
+// Planning and reserving must see the same numbers. Without the lock, two
+// orders could each be told the last unit is available and both reserve it.
+// Rows are locked in id order so concurrent transactions queue rather than
+// deadlock. Only the stock rows are locked, not the warehouse rows, which
+// are read-mostly configuration.
 func (q *Queries) LockStockForProducts(ctx context.Context, dollar_1 []int64) ([]LockStockForProductsRow, error) {
 	rows, err := q.db.Query(ctx, lockStockForProducts, dollar_1)
 	if err != nil {
@@ -173,6 +187,9 @@ func (q *Queries) LockStockForProducts(ctx context.Context, dollar_1 []int64) ([
 			&i.ProductID,
 			&i.OnHand,
 			&i.Reserved,
+			&i.Available,
+			&i.WarehouseName,
+			&i.ShippingCostWeight,
 		); err != nil {
 			return nil, err
 		}

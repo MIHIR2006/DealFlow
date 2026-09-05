@@ -12,6 +12,17 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const countFulfillmentsForOrder = `-- name: CountFulfillmentsForOrder :one
+SELECT count(*)::bigint FROM fulfillments WHERE sales_order_id = $1
+`
+
+func (q *Queries) CountFulfillmentsForOrder(ctx context.Context, salesOrderID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countFulfillmentsForOrder, salesOrderID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createBackorder = `-- name: CreateBackorder :one
 INSERT INTO backorders (sales_order_id, product_id, qty)
 VALUES ($1, $2, $3)
@@ -254,6 +265,54 @@ func (q *Queries) ListConsolidatableBackorders(ctx context.Context, salesOrderID
 	return items, nil
 }
 
+const listFulfillableLines = `-- name: ListFulfillableLines :many
+SELECT ql.id, ql.product_id, ql.qty, ql.unit_price, ql.list_value,
+       p.name AS product_name
+FROM quotation_lines ql
+JOIN products p       ON p.id  = ql.product_id
+JOIN sales_orders so  ON so.quotation_id = ql.quotation_id
+WHERE so.id = $1 AND ql.line_type = 'ONETIME'
+ORDER BY ql.position, ql.id
+`
+
+type ListFulfillableLinesRow struct {
+	ID          int64
+	ProductID   int64
+	Qty         decimal.Decimal
+	UnitPrice   decimal.Decimal
+	ListValue   decimal.Decimal
+	ProductName string
+}
+
+// The physical lines of an order. Recurring subscription lines are billed,
+// never shipped, so they are excluded here rather than filtered in Go.
+func (q *Queries) ListFulfillableLines(ctx context.Context, id int64) ([]ListFulfillableLinesRow, error) {
+	rows, err := q.db.Query(ctx, listFulfillableLines, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFulfillableLinesRow{}
+	for rows.Next() {
+		var i ListFulfillableLinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.Qty,
+			&i.UnitPrice,
+			&i.ListValue,
+			&i.ProductName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFulfillmentLines = `-- name: ListFulfillmentLines :many
 SELECT fl.id, fl.fulfillment_id, fl.warehouse_id, fl.product_id, fl.qty, fl.shipment_group, fl.created_at, w.name AS warehouse_name, p.name AS product_name
 FROM fulfillment_lines fl
@@ -362,6 +421,23 @@ func (q *Queries) NextSalesOrderReference(ctx context.Context) (string, error) {
 	var reference string
 	err := row.Scan(&reference)
 	return reference, err
+}
+
+const releaseStock = `-- name: ReleaseStock :exec
+UPDATE stock_items
+SET reserved = GREATEST(reserved - $1::bigint, 0), updated_at = now()
+WHERE warehouse_id = $2 AND product_id = $3
+`
+
+type ReleaseStockParams struct {
+	Qty         int64
+	WarehouseID int64
+	ProductID   int64
+}
+
+func (q *Queries) ReleaseStock(ctx context.Context, arg ReleaseStockParams) error {
+	_, err := q.db.Exec(ctx, releaseStock, arg.Qty, arg.WarehouseID, arg.ProductID)
+	return err
 }
 
 const resolveBackorder = `-- name: ResolveBackorder :one
