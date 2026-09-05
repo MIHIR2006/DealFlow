@@ -350,7 +350,7 @@ export default function QuotationBuilderPage({
         <div className="flex items-center gap-3">
           <Link
             href="/quotations"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white shadow-xs hover:bg-cream transition-colors text-ink"
+            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
           >
             <ArrowLeft className="size-4" />
           </Link>
@@ -359,7 +359,7 @@ export default function QuotationBuilderPage({
               <h1 className="font-serif text-[24px] font-medium tracking-tight text-ink sm:text-[28px]">
                 {quoteId} &middot; {customerName}
               </h1>
-              <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900 border border-amber-500/20">
+              <span className="rounded-full tone-warn px-2.5 py-0.5 text-[11px] font-semibold text-warn border border-transparent">
                 {customerTier} Customer (15% Discretion)
               </span>
             </div>
@@ -373,11 +373,11 @@ export default function QuotationBuilderPage({
           <button
             type="button"
             onClick={copyPortalLink}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
           >
             {portalCopied ? (
               <>
-                <CheckCircle className="size-3.5 text-emerald-600" />
+                <CheckCircle className="size-3.5 text-ok" />
                 Copied Link!
               </>
             ) : (
@@ -404,7 +404,7 @@ export default function QuotationBuilderPage({
       {/* ASYMMETRIC 3-PANEL WORKSPACE */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* PANEL 1: PRODUCT CATALOG BROWSER (3 cols) */}
-        <div className="rounded-[24px] bg-white p-4 border border-ink/8 shadow-xs lg:col-span-3 flex flex-col h-[740px]">
+        <div className="rounded-[24px] bg-white p-4 card-shadow lg:col-span-3 flex flex-col h-[740px]">
           <div className="pb-3 border-b border-ink/6">
             <h2 className="text-[14px] font-semibold text-ink">Catalog &amp; Stock</h2>
             <p className="text-[11.5px] text-mist mt-0.5">
@@ -457,7 +457,7 @@ export default function QuotationBuilderPage({
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-ink/6">
-                  <span className="font-mono text-[12px] font-semibold tabular-nums text-ink">
+                  <span className="text-[12px] font-semibold tabular-nums text-ink">
                     &#8377;{product.unitPrice.toLocaleString("en-IN")}
                   </span>
                   <button
@@ -474,7 +474,7 @@ export default function QuotationBuilderPage({
         </div>
 
         {/* PANEL 2: QUOTATION CART & ACTIVE LINES (5 cols) */}
-        <div className="rounded-[24px] bg-white p-5 border border-ink/8 shadow-xs lg:col-span-5 flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-5 card-shadow lg:col-span-5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-ink/6">
               <div>
@@ -490,7 +490,7 @@ export default function QuotationBuilderPage({
                 <span className="text-[11px] text-mist font-medium uppercase">
                   Net Cart Value
                 </span>
-                <p className="font-mono text-[18px] font-serif font-semibold text-ink tabular-nums">
+                <p className="text-[18px] font-serif font-semibold text-ink tabular-nums">
                   &#8377;{totals.finalNet.toLocaleString("en-IN")}
                 </p>
               </div>
@@ -503,8 +503,8 @@ export default function QuotationBuilderPage({
                   key={line.id}
                   className={`rounded-[18px] p-3.5 border transition-all ${
                     line.isOver
-                      ? "border-amber-500/40 bg-amber-500/[0.04]"
-                      : "border-ink/8 bg-white shadow-2xs"
+                      ? "border-transparent bg-amber-500/5"
+                      : "border-ink/8 bg-white"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -513,11 +513,11 @@ export default function QuotationBuilderPage({
                         <span className="font-semibold text-[13.5px] text-ink">
                           {line.productName}
                         </span>
-                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-ink/5 text-mist">
+                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-ink/5 text-mist">
                           {line.category}
                         </span>
                       </div>
-                      <p className="font-mono text-[11px] text-mist">
+                      <p className="text-[11px] text-mist">
                         {line.sku} &middot; List: &#8377;
                         {line.unitPrice.toLocaleString("en-IN")} each
                       </p>
@@ -526,7 +526,7 @@ export default function QuotationBuilderPage({
                     <button
                       type="button"
                       onClick={() => removeLine(line.id)}
-                      className="text-mist hover:text-rose-600 transition-colors p-1"
+                      className="text-mist hover:text-bad transition-colors p-1"
                       title="Remove line item"
                     >
                       <Trash2 className="size-3.5" />
@@ -544,7 +544,7 @@ export default function QuotationBuilderPage({
                       >
                         <Minus className="size-3" />
                       </button>
-                      <span className="font-mono text-[12px] font-semibold px-2 tabular-nums">
+                      <span className="text-[12px] font-semibold px-2 tabular-nums">
                         {line.qty}
                       </span>
                       <button
@@ -569,9 +569,9 @@ export default function QuotationBuilderPage({
                         onChange={(e) =>
                           updateDiscount(line.id, parseFloat(e.target.value) || 0)
                         }
-                        className={`w-14 rounded-md px-1.5 py-0.5 text-right font-mono text-[12.5px] font-semibold border focus:outline-hidden ${
+                        className={`w-14 rounded-md px-1.5 py-0.5 text-right text-[12.5px] font-semibold border focus:outline-hidden ${
                           line.isOver
-                            ? "border-amber-500 bg-amber-50 text-amber-900"
+                            ? "border-ink/20 tone-warn"
                             : "border-ink/15 bg-white text-ink"
                         }`}
                       />
@@ -579,10 +579,10 @@ export default function QuotationBuilderPage({
 
                     {/* Line Total & Line Margin */}
                     <div className="text-right">
-                      <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
+                      <span className="text-[13px] font-semibold text-ink tabular-nums">
                         &#8377;{line.lineNet.toLocaleString("en-IN")}
                       </span>
-                      <span className="ml-1.5 text-[11px] font-mono font-medium text-emerald-800">
+                      <span className="ml-1.5 text-[11px] font-medium text-ok">
                         ({line.lineMarginPct.toFixed(0)}% mg)
                       </span>
                     </div>
@@ -590,8 +590,8 @@ export default function QuotationBuilderPage({
 
                   {/* Ceiling Violation Warning Box */}
                   {line.isOver && (
-                    <div className="mt-2 rounded-lg bg-amber-500/10 p-2 text-[11.5px] text-amber-900 border border-amber-500/20 flex items-start gap-1.5">
-                      <ShieldAlert className="size-3.5 text-amber-700 shrink-0 mt-0.5" />
+                    <div className="mt-2 rounded-lg tone-warn p-2 text-[11.5px] text-warn border border-transparent flex items-start gap-1.5">
+                      <ShieldAlert className="size-3.5 text-warn shrink-0 mt-0.5" />
                       <span>
                         <strong>Exceeds category discretion:</strong> Allowed{" "}
                         {line.allowedCeiling}% ({line.category}), Applied{" "}
@@ -628,9 +628,9 @@ export default function QuotationBuilderPage({
                   onChange={(e) =>
                     setOrderDiscountPct(parseFloat(e.target.value) || 0)
                   }
-                  className="w-16 rounded-md border border-ink/15 bg-white px-2 py-1 text-right font-mono text-[12.5px] font-semibold focus:outline-hidden"
+                  className="w-16 rounded-md border border-ink/15 bg-white px-2 py-1 text-right text-[12.5px] font-semibold focus:outline-hidden"
                 />
-                <span className="font-mono text-mist">%</span>
+                <span className="text-mist">%</span>
               </div>
             </div>
           </div>
@@ -642,9 +642,9 @@ export default function QuotationBuilderPage({
               onClick={handleSubmitQuote}
               className={`w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-[13.5px] font-semibold transition-all shadow-sm ${
                 totals.requiredLevel === "FINANCE"
-                  ? "bg-rose-700 text-white hover:bg-rose-800"
+                  ? "fill-warn"
                   : totals.requiredLevel === "MANAGER"
-                  ? "bg-amber-600 text-white hover:bg-amber-700"
+                  ? "fill-warn"
                   : "bg-ink text-bone hover:bg-ink/90"
               }`}
             >
@@ -676,7 +676,7 @@ export default function QuotationBuilderPage({
         {/* PANEL 3: FINANCIAL SUMMARY, LIVE MARGIN & INTELLIGENCE (4 cols) */}
         <div className="space-y-4 lg:col-span-4">
           {/* Financial Summary Card */}
-          <div className="rounded-[24px] bg-white p-5 border border-ink/8 shadow-xs">
+          <div className="rounded-[24px] bg-white p-5 card-shadow">
             <h3 className="text-[14px] font-semibold text-ink pb-2.5 border-b border-ink/6">
               Financial Summary
             </h3>
@@ -684,14 +684,14 @@ export default function QuotationBuilderPage({
             <dl className="mt-3 space-y-2 text-[12.5px]">
               <div className="flex justify-between">
                 <dt className="text-mist">List Subtotal</dt>
-                <dd className="font-mono tabular-nums text-ink">
+                <dd className="tabular-nums text-ink">
                   &#8377;{totals.listSubtotal.toLocaleString("en-IN")}
                 </dd>
               </div>
 
-              <div className="flex justify-between text-amber-800 font-medium">
+              <div className="flex justify-between text-warn font-medium">
                 <dt>Discount Reductions</dt>
-                <dd className="font-mono tabular-nums">
+                <dd className="tabular-nums">
                   -&#8377;
                   {(totals.lineDiscountTotal + totals.orderDiscountAmt).toLocaleString(
                     "en-IN"
@@ -701,34 +701,34 @@ export default function QuotationBuilderPage({
 
               <div className="flex justify-between">
                 <dt className="text-mist">Net Subtotal</dt>
-                <dd className="font-mono tabular-nums text-ink font-semibold">
+                <dd className="tabular-nums text-ink font-semibold">
                   &#8377;{totals.finalNet.toLocaleString("en-IN")}
                 </dd>
               </div>
 
               <div className="flex justify-between">
                 <dt className="text-mist">Applicable GST (18%)</dt>
-                <dd className="font-mono tabular-nums text-ink">
+                <dd className="tabular-nums text-ink">
                   &#8377;{totals.finalTax.toLocaleString("en-IN")}
                 </dd>
               </div>
 
               <div className="pt-2 border-t border-ink/8 flex justify-between text-[15px] font-semibold">
                 <dt className="text-ink">Grand Total</dt>
-                <dd className="font-mono text-ink tabular-nums">
+                <dd className="text-ink tabular-nums">
                   &#8377;{totals.grandTotal.toLocaleString("en-IN")}
                 </dd>
               </div>
 
               <div className="pt-2 border-t border-ink/4 flex justify-between text-[11.5px] text-mist">
                 <dt>One-time items:</dt>
-                <dd className="font-mono tabular-nums font-medium">
+                <dd className="tabular-nums font-medium">
                   &#8377;{totals.oneTimeTotal.toLocaleString("en-IN")}
                 </dd>
               </div>
               <div className="flex justify-between text-[11.5px] text-mist">
                 <dt>Recurring subscriptions:</dt>
-                <dd className="font-mono tabular-nums font-medium">
+                <dd className="tabular-nums font-medium">
                   &#8377;{totals.recurringTotal.toLocaleString("en-IN")}
                 </dd>
               </div>
@@ -746,12 +746,12 @@ export default function QuotationBuilderPage({
 
           {/* Governance Risk Verdict Card */}
           <div
-            className={`rounded-[24px] p-5 border shadow-xs transition-all ${
+            className={`rounded-[24px] p-5 border transition-all ${
               totals.requiredLevel === "FINANCE"
-                ? "bg-rose-50/70 border-rose-200"
+                ? "tone-bad border-transparent"
                 : totals.requiredLevel === "MANAGER"
-                ? "bg-amber-50/70 border-amber-200"
-                : "bg-emerald-50/70 border-emerald-200"
+                ? "tone-warn border-transparent"
+                : "tone-ok border-transparent"
             }`}
           >
             <div className="flex items-center justify-between pb-2 border-b border-ink/6">

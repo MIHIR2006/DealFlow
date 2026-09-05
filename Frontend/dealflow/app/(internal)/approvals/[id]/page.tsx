@@ -190,7 +190,7 @@ export default function ApprovalDetailPage({
         <div className="flex items-center gap-3">
           <Link
             href="/approvals"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white shadow-xs hover:bg-cream transition-colors text-ink"
+            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
           >
             <ArrowLeft className="size-4" />
           </Link>
@@ -202,7 +202,7 @@ export default function ApprovalDetailPage({
             </div>
             <p className="text-[12.5px] text-mist">
               Order Value:{" "}
-              <strong className="font-mono text-ink">
+              <strong className="text-ink">
                 {approvalState.grandTotal}
               </strong>{" "}
               &middot; Customer Tier: <strong>Gold (15% Max)</strong>
@@ -219,11 +219,11 @@ export default function ApprovalDetailPage({
       <LifecycleBar currentStage="APPROVAL" quoteId={quoteId} />
 
       {actionDone && (
-        <div className="rounded-[18px] bg-emerald-500/10 p-4 border border-emerald-500/20 text-[13px] text-emerald-950 font-medium flex items-center justify-between">
+        <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex items-center justify-between">
           <span>{actionDone}</span>
           <Link
             href={`/fulfillment/${quoteId}`}
-            className="rounded-full bg-emerald-700 text-white px-3 py-1 text-[12px] font-semibold hover:bg-emerald-800 transition-colors"
+            className="rounded-full fill-ok text-white px-3 py-1 text-[12px] font-semibold hover:fill-ok transition-colors"
           >
             Go to Fulfillment &rarr;
           </Link>
@@ -231,25 +231,25 @@ export default function ApprovalDetailPage({
       )}
 
       {/* SECTION 1: "WHY THIS QUOTE WAS FLAGGED" TABLE (Exact Mockup Screen 6) */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <div className="flex items-center justify-between pb-3 border-b border-ink/6">
           <div>
             <h2 className="text-[16px] font-semibold tracking-tight text-ink flex items-center gap-2">
-              <ShieldAlert className="size-4 text-amber-700" />
+              <ShieldAlert className="size-4 text-warn" />
               Why This Quote Was Flagged
             </h2>
             <p className="text-[12.5px] text-mist">
               Line-by-line breakdown comparing applied discounts against category and customer tier discretion.
             </p>
           </div>
-          <span className="text-[11.5px] font-mono text-mist font-medium">
+          <span className="text-[11.5px] text-mist font-medium">
             Rule Version: v2026.08 (Active)
           </span>
         </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-left text-[13.5px]">
-            <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+            <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-5 py-3">Line Item</th>
                 <th className="px-5 py-3">Category</th>
@@ -263,7 +263,7 @@ export default function ApprovalDetailPage({
               {approvalState.flaggedLines.map((line) => (
                 <tr
                   key={line.id}
-                  className={line.isOver ? "bg-amber-500/[0.04]" : "hover:bg-cream/40"}
+                  className={line.isOver ? "tone-warn0/[0.04]" : "hover:bg-cream/40"}
                 >
                   <td className="px-5 py-3.5 font-medium text-ink">
                     {line.name}
@@ -271,24 +271,24 @@ export default function ApprovalDetailPage({
                   <td className="px-5 py-3.5 text-mist text-[12.5px]">
                     {line.category}
                   </td>
-                  <td className="px-5 py-3.5 font-mono font-semibold tabular-nums text-ink">
+                  <td className="px-5 py-3.5 font-semibold tabular-nums text-ink">
                     {line.givenDiscount}
                   </td>
-                  <td className="px-5 py-3.5 font-mono text-mist text-[12.5px]">
+                  <td className="px-5 py-3.5 text-mist text-[12.5px]">
                     {line.limitAllowed}
                   </td>
                   <td className="px-5 py-3.5">
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full font-mono text-[12px] font-semibold ${
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold ${
                         line.isOver
-                          ? "bg-rose-100 text-rose-800 border border-rose-200"
-                          : "bg-emerald-100 text-emerald-800"
+                          ? "tone-bad text-bad border border-transparent"
+                          : "tone-ok text-ok"
                       }`}
                     >
                       {line.overage}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right font-mono tabular-nums text-mist">
+                  <td className="px-5 py-3.5 text-right tabular-nums text-mist">
                     {line.value}
                   </td>
                 </tr>
@@ -298,9 +298,9 @@ export default function ApprovalDetailPage({
         </div>
 
         {/* Yellow Callout Explaining the Blended Rationale */}
-        <div className="mt-5 rounded-[18px] bg-amber-500/10 p-4 border border-amber-500/25 flex items-start gap-3">
-          <Info className="size-5 text-amber-800 shrink-0 mt-0.5" />
-          <div className="text-[12.5px] leading-relaxed text-amber-950">
+        <div className="mt-5 rounded-[18px] tone-warn p-4 border border-transparent flex items-start gap-3">
+          <Info className="size-5 text-warn shrink-0 mt-0.5" />
+          <div className="text-[12.5px] leading-relaxed text-warn">
             <strong className="font-semibold block mb-0.5">
               Blended Risk Calculation Rationale (Score: 5.6%):
             </strong>
@@ -310,7 +310,7 @@ export default function ApprovalDetailPage({
       </div>
 
       {/* SECTION 2: VISUAL WORKFLOW STEPPER */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <h2 className="text-[15px] font-semibold text-ink mb-2">
           Approval Chain Progression
         </h2>
@@ -321,20 +321,20 @@ export default function ApprovalDetailPage({
       </div>
 
       {/* SECTION 3: AUDIT TRAIL TABLE */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <div className="flex items-center justify-between pb-3 border-b border-ink/6">
           <h2 className="text-[15px] font-semibold text-ink flex items-center gap-2">
             <History className="size-4 text-mist" />
             Audit Trail &amp; Negotiation History
           </h2>
-          <span className="text-[11.5px] text-mist font-mono">
+          <span className="text-[11.5px] text-mist">
             {approvalState.audit.length} immutable events
           </span>
         </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-left text-[13px]">
-            <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+            <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-4 py-2.5">Reviewer / User</th>
                 <th className="px-4 py-2.5">Action</th>
@@ -352,12 +352,12 @@ export default function ApprovalDetailPage({
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
                         entry.action.includes("Approved")
-                          ? "bg-emerald-100 text-emerald-800"
+                          ? "tone-ok text-ok"
                           : entry.action.includes("Returned")
-                          ? "bg-orange-100 text-orange-800"
+                          ? "tone-warn text-warn"
                           : entry.action.includes("Submitted")
                           ? "bg-ink/5 text-ink"
-                          : "bg-rose-100 text-rose-800"
+                          : "tone-bad text-bad"
                       }`}
                     >
                       {entry.action}
@@ -377,7 +377,7 @@ export default function ApprovalDetailPage({
       </div>
 
       {/* SECTION 4: REVIEWER DECISION PANEL (3 Action Buttons) */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <h2 className="text-[15px] font-semibold text-ink">
           Reviewer Decision
         </h2>
@@ -403,7 +403,7 @@ export default function ApprovalDetailPage({
             <button
               type="button"
               onClick={() => handleDecision("RETURN")}
-              className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-4 py-2 text-[13px] font-medium text-amber-900 hover:bg-amber-500/25 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full tone-warn border border-transparent px-4 py-2 text-[13px] font-medium text-warn hover:tone-warn transition-colors"
             >
               <RotateCcw className="size-3.5" />
               Return for Revision
@@ -413,7 +413,7 @@ export default function ApprovalDetailPage({
             <button
               type="button"
               onClick={() => handleDecision("REJECT")}
-              className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 border border-rose-500/30 px-4 py-2 text-[13px] font-medium text-rose-900 hover:bg-rose-500/25 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full tone-bad border border-transparent px-4 py-2 text-[13px] font-medium text-bad hover:tone-bad0/25 transition-colors"
             >
               <X className="size-3.5" />
               Reject
@@ -423,7 +423,7 @@ export default function ApprovalDetailPage({
             <button
               type="button"
               onClick={() => handleDecision("APPROVE")}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 px-5 py-2 text-[13px] font-medium text-white hover:bg-emerald-800 shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-medium text-white hover:fill-ok transition-colors"
             >
               <Check className="size-3.5 stroke-[2.5]" />
               Approve Step 2 &rarr;

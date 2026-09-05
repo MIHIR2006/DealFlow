@@ -1,76 +1,69 @@
 "use client";
 
-import React from "react";
-
-interface MarginBarProps {
-  marginPct: number | string;
-  targetPct?: number;
-  floorPct?: number;
-  showLabels?: boolean;
-  className?: string;
-}
-
 export function MarginBar({
   marginPct,
   targetPct = 25,
   floorPct = 12,
   showLabels = true,
   className = "",
-}: MarginBarProps) {
-  const numericPct = typeof marginPct === "string" ? parseFloat(marginPct) || 0 : marginPct;
+}: {
+  marginPct: number | string;
+  targetPct?: number;
+  floorPct?: number;
+  showLabels?: boolean;
+  className?: string;
+}) {
+  const numericPct =
+    typeof marginPct === "string" ? parseFloat(marginPct) || 0 : marginPct;
   const clampedWidth = Math.max(0, Math.min(100, (numericPct / 40) * 100));
 
-  let statusColor = "bg-emerald-600";
-  let textColor = "text-emerald-700";
+  let fill = "fill-ok";
+  let text = "text-ok";
   let statusText = "Healthy";
 
   if (numericPct < floorPct) {
-    statusColor = "bg-rose-600";
-    textColor = "text-rose-700";
-    statusText = "Danger";
+    fill = "fill-bad";
+    text = "text-bad";
+    statusText = "Below floor";
   } else if (numericPct < 20) {
-    statusColor = "bg-amber-500";
-    textColor = "text-amber-700";
-    statusText = "Moderate";
+    fill = "fill-warn";
+    text = "text-warn";
+    statusText = "Tight";
   }
 
   return (
     <div className={`w-full ${className}`}>
-      {showLabels && (
-        <div className="flex items-center justify-between text-[12.5px] mb-1.5 font-medium">
-          <span className="text-ink/80 flex items-center gap-1.5">
-            Gross Margin
-            <span className={`text-[11px] px-1.5 py-0.2 rounded font-semibold ${textColor} bg-ink/5`}>
-              {statusText}
-            </span>
+      {showLabels ? (
+        <div className="mb-1.5 flex items-center justify-between text-[12.5px] font-medium">
+          <span className="flex items-center gap-1.5 text-ink/80">
+            Gross margin
+            <span className={`rounded-full px-2 py-0.5 text-[11px] ${text}`}>{statusText}</span>
           </span>
-          <span className={`font-mono text-[14px] font-semibold tabular-nums ${textColor}`}>
+          <span className={`text-[14px] font-semibold tabular-nums ${text}`}>
             {numericPct.toFixed(1)}%
           </span>
         </div>
-      )}
+      ) : null}
 
-      {/* Progress Track */}
-      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-ink/10">
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-ink/10">
         <div
-          className={`h-full transition-all duration-500 ease-out rounded-full ${statusColor}`}
+          className={`h-full rounded-full transition-all duration-500 ${fill}`}
           style={{ width: `${clampedWidth}%` }}
         />
-        {/* Target Pin */}
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-ink/40 z-10"
+          className="absolute top-0 bottom-0 w-px bg-ink/30"
           style={{ left: `${(targetPct / 40) * 100}%` }}
-          title={`Target Margin: ${targetPct}%`}
+          title={`Target ${targetPct}%`}
         />
       </div>
 
-      {showLabels && (
-        <div className="flex items-center justify-between text-[11px] text-mist mt-1">
+      {showLabels ? (
+        <div className="mt-1 flex items-center justify-between text-[11px] text-mist">
           <span>0%</span>
-          <span>Target: {targetPct}%</span>
+          <span>Target {targetPct}%</span>
           <span>40%+</span>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

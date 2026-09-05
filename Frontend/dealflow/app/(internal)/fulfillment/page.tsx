@@ -57,17 +57,17 @@ export default function FulfillmentPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[12px] font-medium text-emerald-800 border border-emerald-500/20">
-            <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 rounded-full tone-ok px-3 py-1.5 text-[12px] font-medium text-ok border border-transparent">
+            <span className="size-1.5 rounded-full fill-ok animate-pulse" />
             Stock Synchronized: 3 Depots Live
           </span>
         </div>
       </div>
 
       {/* Orders Table */}
-      <div className="overflow-hidden rounded-[24px] bg-white border border-ink/8 shadow-xs">
+      <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
         <table className="w-full text-left text-[13.5px]">
-          <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+          <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
             <tr>
               <th className="px-6 py-3.5">Order #</th>
               <th className="px-6 py-3.5">Quote Ref</th>
@@ -84,12 +84,12 @@ export default function FulfillmentPage() {
                 key={ord.id}
                 className="hover:bg-cream/40 transition-colors group cursor-pointer"
               >
-                <td className="px-6 py-4 font-mono font-medium text-ink">
+                <td className="px-6 py-4 font-medium text-ink">
                   <Link href={`/fulfillment/${ord.id}`} className="hover:underline">
                     {ord.id}
                   </Link>
                 </td>
-                <td className="px-6 py-4 font-mono text-mist text-[12.5px]">
+                <td className="px-6 py-4 text-mist text-[12.5px]">
                   {ord.quoteRef}
                 </td>
                 <td className="px-6 py-4">
@@ -99,16 +99,16 @@ export default function FulfillmentPage() {
                 <td className="px-6 py-4">
                   <StatusBadge status={ord.status} size="sm" />
                 </td>
-                <td className="px-6 py-4 font-mono text-[13px] text-ink font-semibold">
+                <td className="px-6 py-4 text-[13px] text-ink font-semibold">
                   {ord.shipmentCount} {ord.shipmentCount === 1 ? "depot" : "depots"}
                 </td>
                 <td className="px-6 py-4">
                   {ord.backorderCount > 0 ? (
-                    <span className="text-[12px] font-semibold text-rose-700 font-mono">
+                    <span className="text-[12px] font-semibold text-bad">
                       {ord.backorderCount} line backordered
                     </span>
                   ) : (
-                    <span className="text-[12px] text-emerald-700 font-medium">
+                    <span className="text-[12px] text-ok font-medium">
                       Zero backorder
                     </span>
                   )}
@@ -116,7 +116,7 @@ export default function FulfillmentPage() {
                 <td className="px-6 py-4 text-right">
                   <Link
                     href={`/fulfillment/${ord.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 shadow-xs transition-colors"
+                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors"
                   >
                     Manage Split <ArrowRight className="size-3" />
                   </Link>

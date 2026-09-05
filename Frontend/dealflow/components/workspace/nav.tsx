@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearToken } from "@/lib/api";
-import { UserCheck } from "lucide-react";
+import { UserCheck, ChevronDown, Check } from "lucide-react";
 
 export interface Persona {
   id: string;
@@ -37,8 +37,12 @@ export function WorkspaceNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [activePersona, setActivePersona] = useState<Persona>(PERSONAS[0]);
+  const [mounted, setMounted] = useState(false);
+  const [personaOpen, setPersonaOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     const saved = localStorage.getItem("df360.active_persona");
     if (saved) {
       const match = PERSONAS.find((p) => p.id === saved);
@@ -46,13 +50,21 @@ export function WorkspaceNav() {
     }
   }, []);
 
-  function handlePersonaChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const match = PERSONAS.find((p) => p.id === e.target.value);
-    if (match) {
-      setActivePersona(match);
-      localStorage.setItem("df360.active_persona", match.id);
-      window.dispatchEvent(new Event("df360:persona-changed"));
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setPersonaOpen(false);
+      }
     }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleSelectPersona(p: Persona) {
+    setActivePersona(p);
+    localStorage.setItem("df360.active_persona", p.id);
+    window.dispatchEvent(new Event("df360:persona-changed"));
+    setPersonaOpen(false);
   }
 
   function signOut() {
@@ -60,15 +72,16 @@ export function WorkspaceNav() {
     router.push("/");
   }
 
+  const currentPersona = mounted ? activePersona : PERSONAS[0];
+
   return (
     <header className="sticky top-0 z-40 border-b border-ink/8 bg-cream/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[1400px] items-center gap-3 px-4 py-2.5 sm:px-6">
+      <div className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 py-2.5 sm:px-6">
         <Link
           href="/dashboard"
-          className="font-headline shrink-0 text-[15px] font-semibold tracking-tight text-ink flex items-center gap-2"
+          className="font-headline shrink-0 text-[15px] font-semibold tracking-tight text-ink"
         >
-          <span className="size-2 rounded-full bg-emerald-600 animate-pulse" title="System Connected" />
-          DealFlow<span className="text-ink/60">360</span>
+          DealFlow360
         </Link>
 
         {/* Global Nav Links */}
@@ -80,10 +93,10 @@ export function WorkspaceNav() {
               <Link
                 key={l.href}
                 href={l.href}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[12.5px] transition-colors ${
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[12.5px] transition-colors cursor-pointer whitespace-nowrap ${
                   on
-                    ? "bg-ink text-bone font-medium shadow-xs"
-                    : "text-ink/70 hover:bg-white/80 hover:text-ink"
+                    ? "bg-ink text-bone font-medium"
+                    : "text-ink/70 hover:bg-white hover:text-ink"
                 }`}
               >
                 {l.label}
@@ -94,27 +107,67 @@ export function WorkspaceNav() {
 
         {/* Right Tools: Persona Simulator & Sign Out */}
         <div className="ml-auto flex shrink-0 items-center gap-2.5">
-          {/* Persona Switcher */}
-          <div className="flex items-center gap-1.5 rounded-full border border-ink/10 bg-white/80 px-2.5 py-1 text-[12px] shadow-xs">
-            <UserCheck className="size-3.5 text-emerald-700" />
-            <select
-              value={activePersona.id}
-              onChange={handlePersonaChange}
-              className="bg-transparent font-medium text-ink cursor-pointer focus:outline-hidden"
+          {/* Custom Persona Switcher Dropdown */}
+          <div ref={dropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setPersonaOpen((v) => !v)}
+              className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] card-shadow cursor-pointer border border-ink/10 hover:border-ink/20 transition-all font-medium text-ink"
               title="Switch demo persona to test role-based governance"
             >
-              {PERSONAS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.label})
-                </option>
-              ))}
-            </select>
+              <UserCheck className="size-3.5 text-mist shrink-0" />
+              <span>
+                {currentPersona.name} ({currentPersona.label})
+              </span>
+              <ChevronDown
+                className={`size-3 text-mist transition-transform duration-200 shrink-0 ${
+                  personaOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {personaOpen && (
+              <div className="absolute right-0 top-full mt-2 w-60 rounded-[20px] bg-white p-2 card-shadow border border-ink/10 z-50 animate-in fade-in-50 zoom-in-95">
+                <div className="px-3 py-1.5 text-[10.5px] font-semibold text-mist uppercase tracking-wider border-b border-ink/6 mb-1">
+                  Switch Demo Persona
+                </div>
+                {PERSONAS.map((p) => {
+                  const isSelected = currentPersona.id === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleSelectPersona(p)}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-[12.5px] transition-colors cursor-pointer ${
+                        isSelected
+                          ? "bg-ink text-bone font-semibold"
+                          : "text-ink hover:bg-cream/60 font-medium"
+                      }`}
+                    >
+                      <div>
+                        <p className="leading-tight">{p.name}</p>
+                        <p
+                          className={`text-[11px] ${
+                            isSelected ? "text-bone/75" : "text-mist"
+                          }`}
+                        >
+                          {p.label}
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <Check className="size-3.5 text-bone shrink-0 ml-2" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <button
             type="button"
             onClick={signOut}
-            className="rounded-full px-2.5 py-1 text-[12px] text-mist hover:text-ink transition-colors"
+            className="rounded-full px-2.5 py-1 text-[12px] text-mist hover:text-ink transition-colors cursor-pointer"
           >
             Sign out
           </button>

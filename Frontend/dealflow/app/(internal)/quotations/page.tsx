@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, LayoutList, Columns, Search, Filter } from "lucide-react";
+import { Plus, LayoutList, Columns, Search, Filter, ChevronDown } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { MarginBar } from "@/components/ui/margin-bar";
@@ -11,11 +11,11 @@ import { quotes, QuoteRow } from "@/lib/demo/dashboard";
 type ViewMode = "table" | "kanban";
 
 const KANBAN_COLUMNS = [
-  { id: "Draft", title: "Draft", bg: "bg-ink/[0.02]" },
-  { id: "Pending Approval", title: "Pending Approval", bg: "bg-amber-500/[0.04]" },
-  { id: "Under negotiation", title: "Under Negotiation", bg: "bg-purple-500/[0.04]" },
-  { id: "Approved", title: "Approved / Ready", bg: "bg-blue-500/[0.04]" },
-  { id: "Confirmed", title: "Confirmed / Won", bg: "bg-emerald-500/[0.04]" },
+  { id: "Draft", title: "Draft", bg: "bg-cream/50" },
+  { id: "Pending Approval", title: "Pending Approval", bg: "bg-amber-500/5" },
+  { id: "Under negotiation", title: "Under Negotiation", bg: "bg-purple-500/5" },
+  { id: "Approved", title: "Approved / Ready", bg: "bg-cream/80" },
+  { id: "Confirmed", title: "Confirmed / Won", bg: "bg-emerald-500/5" },
 ];
 
 export default function QuotationsPage() {
@@ -59,13 +59,13 @@ export default function QuotationsPage() {
 
         <div className="flex items-center gap-3">
           {/* View Mode Toggle */}
-          <div className="flex items-center rounded-full border border-ink/10 bg-white/80 p-1 shadow-xs">
+          <div className="flex items-center rounded-full border border-ink/10 bg-white/80 p-1">
             <button
               type="button"
               onClick={() => setViewMode("table")}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
                 viewMode === "table"
-                  ? "bg-ink text-bone shadow-xs"
+                  ? "bg-ink text-bone"
                   : "text-mist hover:text-ink"
               }`}
             >
@@ -77,7 +77,7 @@ export default function QuotationsPage() {
               onClick={() => setViewMode("kanban")}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
                 viewMode === "kanban"
-                  ? "bg-ink text-bone shadow-xs"
+                  ? "bg-ink text-bone"
                   : "text-mist hover:text-ink"
               }`}
             >
@@ -97,7 +97,7 @@ export default function QuotationsPage() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] bg-white p-3 border border-ink/8 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] bg-white p-3 card-shadow">
         <div className="flex flex-1 items-center gap-2 min-w-[260px] max-w-md rounded-full bg-ink/[0.03] px-3.5 py-1.5 border border-ink/6">
           <Search className="size-4 text-mist" />
           <input
@@ -125,7 +125,7 @@ export default function QuotationsPage() {
                 onClick={() => setStageFilter(st.id)}
                 className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
                   stageFilter === st.id
-                    ? "bg-white text-ink shadow-xs"
+                    ? "bg-white text-ink"
                     : "text-mist hover:text-ink"
                 }`}
               >
@@ -135,24 +135,27 @@ export default function QuotationsPage() {
           </div>
 
           {/* Tier Filter */}
-          <select
-            value={tierFilter}
-            onChange={(e) => setTierFilter(e.target.value)}
-            className="rounded-full border border-ink/10 bg-white px-3 py-1.5 text-[12px] text-ink font-medium focus:outline-hidden cursor-pointer"
-          >
-            <option value="ALL">All Customer Tiers</option>
-            <option value="GOLD">Gold Tier (15% Max)</option>
-            <option value="SILVER">Silver Tier (10% Max)</option>
-            <option value="BRONZE">Bronze Tier (5% Max)</option>
-          </select>
+          <div className="relative">
+            <select
+              value={tierFilter}
+              onChange={(e) => setTierFilter(e.target.value)}
+              className="appearance-none rounded-full border border-ink/10 bg-white px-3.5 py-1.5 pr-8 text-[12px] text-ink font-medium focus:outline-hidden cursor-pointer"
+            >
+              <option value="ALL">All Customer Tiers</option>
+              <option value="GOLD">Gold Tier (15% Max)</option>
+              <option value="SILVER">Silver Tier (10% Max)</option>
+              <option value="BRONZE">Bronze Tier (5% Max)</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-mist pointer-events-none" />
+          </div>
         </div>
       </div>
 
       {/* VIEW A: DENSE TABLE */}
       {viewMode === "table" ? (
-        <div className="overflow-hidden rounded-[24px] bg-white border border-ink/8 shadow-xs">
+        <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
           <table className="w-full text-left text-[13.5px]">
-            <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+            <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-6 py-3.5">Quote Ref</th>
                 <th className="px-6 py-3.5">Customer &amp; Tier</th>
@@ -170,7 +173,7 @@ export default function QuotationsPage() {
                   key={q.id}
                   className="hover:bg-cream/40 transition-colors group cursor-pointer"
                 >
-                  <td className="px-6 py-4 font-mono font-medium text-ink">
+                  <td className="px-6 py-4 font-medium text-ink">
                     <Link href={`/quotations/${q.id}`} className="hover:underline">
                       {q.id}
                     </Link>
@@ -178,7 +181,7 @@ export default function QuotationsPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-ink">{q.customer}</span>
-                      <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-800 border border-amber-500/20">
+                      <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded tone-warn text-warn border border-transparent">
                         Gold
                       </span>
                     </div>
@@ -186,7 +189,7 @@ export default function QuotationsPage() {
                   <td className="px-6 py-4">
                     <StatusBadge status={q.status} size="sm" />
                   </td>
-                  <td className="px-6 py-4 font-mono font-semibold tabular-nums text-ink">
+                  <td className="px-6 py-4 font-semibold tabular-nums text-ink">
                     {q.amount}
                   </td>
                   <td className="px-6 py-4">
@@ -232,7 +235,7 @@ export default function QuotationsPage() {
                   <h3 className="text-[13.5px] font-semibold text-ink">
                     {col.title}
                   </h3>
-                  <span className="flex size-5 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-mist shadow-xs">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-mist">
                     {colQuotes.length}
                   </span>
                 </div>
@@ -242,10 +245,10 @@ export default function QuotationsPage() {
                     <Link
                       key={q.id}
                       href={`/quotations/${q.id}`}
-                      className="block rounded-[16px] bg-white p-4 border border-ink/8 shadow-xs hover:border-ink/20 hover:shadow-sm transition-all group"
+                      className="block rounded-[16px] bg-white p-4 card-shadow hover:border-ink/20 hover:shadow-sm transition-all group"
                     >
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-mono font-semibold text-mist group-hover:text-ink">
+                        <span className="font-semibold text-mist group-hover:text-ink">
                           {q.id}
                         </span>
                         <span className="text-mist">{q.updated}</span>
@@ -256,7 +259,7 @@ export default function QuotationsPage() {
                       </p>
 
                       <div className="mt-3 flex items-center justify-between">
-                        <span className="font-mono font-semibold tabular-nums text-[13.5px] text-ink">
+                        <span className="font-semibold tabular-nums text-[13.5px] text-ink">
                           {q.amount}
                         </span>
                         <RiskBadge score={q.risk} size="sm" />

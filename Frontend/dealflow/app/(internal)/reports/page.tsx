@@ -10,6 +10,7 @@ import {
   CheckCircle,
   FileSpreadsheet,
   Printer,
+  ChevronDown,
 } from "lucide-react";
 
 export default function ReportsPage() {
@@ -58,15 +59,15 @@ export default function ReportsPage() {
           <button
             type="button"
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
           >
-            <FileSpreadsheet className="size-3.5 text-emerald-700" /> Export CSV / XLS
+            <FileSpreadsheet className="size-3.5 text-ok" /> Export CSV / XLS
           </button>
 
           <button
             type="button"
             onClick={handleExportPDF}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors"
           >
             <Printer className="size-3.5" />
             {downloading ? "Preparing Report..." : "Export Executive PDF"}
@@ -75,81 +76,93 @@ export default function ReportsPage() {
       </div>
 
       {/* 4 MANDATORY FILTERS (Spec A7) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 rounded-[20px] bg-white p-4 border border-ink/8 shadow-xs">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 rounded-[20px] bg-white p-4 card-shadow">
         {/* Filter 1: Period */}
         <div>
-          <label className="text-[11.5px] font-semibold text-mist uppercase tracking-wider block mb-1">
+          <label className="text-[11.5px] font-semibold text-mist block mb-1">
             Period Date Range
           </label>
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="w-full rounded-xl border border-ink/10 bg-cream/30 p-2 text-[12.5px] font-medium focus:outline-hidden cursor-pointer"
-          >
-            <option value="TODAY">Today (Live)</option>
-            <option value="WEEK">This Week</option>
-            <option value="MONTH">This Month (Trailing 30d)</option>
-            <option value="QUARTER">This Quarter (Q3 2026)</option>
-          </select>
+          <div className="relative">
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
+            >
+              <option value="TODAY">Today (Live)</option>
+              <option value="WEEK">This Week</option>
+              <option value="MONTH">This Month (Trailing 30d)</option>
+              <option value="QUARTER">This Quarter (Q3 2026)</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
+          </div>
         </div>
 
         {/* Filter 2: Sales Team / Rep */}
         <div>
-          <label className="text-[11.5px] font-semibold text-mist uppercase tracking-wider block mb-1">
+          <label className="text-[11.5px] font-semibold text-mist block mb-1">
             Sales Team / Rep
           </label>
-          <select
-            value={rep}
-            onChange={(e) => setRep(e.target.value)}
-            className="w-full rounded-xl border border-ink/10 bg-cream/30 p-2 text-[12.5px] font-medium focus:outline-hidden cursor-pointer"
-          >
-            <option value="ALL">All Sales Teams (Global)</option>
-            <option value="RAO">J. Rao (Enterprise Rep)</option>
-            <option value="MEHTA">A. Mehta (Mid-Market Rep)</option>
-            <option value="IYER">S. Iyer (Commercial Rep)</option>
-          </select>
+          <div className="relative">
+            <select
+              value={rep}
+              onChange={(e) => setRep(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
+            >
+              <option value="ALL">All Sales Teams (Global)</option>
+              <option value="RAO">J. Rao (Enterprise Rep)</option>
+              <option value="MEHTA">A. Mehta (Mid-Market Rep)</option>
+              <option value="IYER">S. Iyer (Commercial Rep)</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
+          </div>
         </div>
 
         {/* Filter 3: Approval Status */}
         <div>
-          <label className="text-[11.5px] font-semibold text-mist uppercase tracking-wider block mb-1">
+          <label className="text-[11.5px] font-semibold text-mist block mb-1">
             Approval Routing Status
           </label>
-          <select
-            value={approvalStatus}
-            onChange={(e) => setApprovalStatus(e.target.value)}
-            className="w-full rounded-xl border border-ink/10 bg-cream/30 p-2 text-[12.5px] font-medium focus:outline-hidden cursor-pointer"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="APPROVED_DIRECT">Direct In-Policy (No Review)</option>
-            <option value="MANAGER_APPROVED">Manager Approved (Tier 1)</option>
-            <option value="FINANCE_APPROVED">Finance Approved (Tier 2)</option>
-            <option value="REJECTED">Rejected Quotations</option>
-          </select>
+          <div className="relative">
+            <select
+              value={approvalStatus}
+              onChange={(e) => setApprovalStatus(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="APPROVED_DIRECT">Direct In-Policy (No Review)</option>
+              <option value="MANAGER_APPROVED">Manager Approved (Tier 1)</option>
+              <option value="FINANCE_APPROVED">Finance Approved (Tier 2)</option>
+              <option value="REJECTED">Rejected Quotations</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
+          </div>
         </div>
 
         {/* Filter 4: Product / Category */}
         <div>
-          <label className="text-[11.5px] font-semibold text-mist uppercase tracking-wider block mb-1">
+          <label className="text-[11.5px] font-semibold text-mist block mb-1">
             Product Category
           </label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-xl border border-ink/10 bg-cream/30 p-2 text-[12.5px] font-medium focus:outline-hidden cursor-pointer"
-          >
-            <option value="ALL">All Categories</option>
-            <option value="HARDWARE">Hardware Products</option>
-            <option value="SERVICE">Professional Services</option>
-            <option value="SUBSCRIPTION">Recurring Subscriptions</option>
-          </select>
+          <div className="relative">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
+            >
+              <option value="ALL">All Categories</option>
+              <option value="HARDWARE">Hardware Products</option>
+              <option value="SERVICE">Professional Services</option>
+              <option value="SUBSCRIPTION">Recurring Subscriptions</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
+          </div>
         </div>
       </div>
 
       {/* ANALYTICS VISUALS */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Visual 1: Discount Distribution & Margin Discipline */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+        <div className="rounded-[24px] bg-white p-6 card-shadow">
           <h3 className="text-[15px] font-semibold text-ink">
             Discount Distribution Histogram
           </h3>
@@ -161,47 +174,47 @@ export default function ReportsPage() {
             <div>
               <div className="flex justify-between text-[12.5px] mb-1 font-medium">
                 <span>0% &ndash; 5% (Within Bronze Ceiling)</span>
-                <span className="font-mono text-ink">14 deals (58%)</span>
+                <span className="text-ink">14 deals (58%)</span>
               </div>
               <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full bg-emerald-600 rounded-full" style={{ width: "58%" }} />
+                <div className="h-full fill-ok rounded-full" style={{ width: "58%" }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-[12.5px] mb-1 font-medium">
                 <span>5% &ndash; 10% (Silver Tier Ceiling)</span>
-                <span className="font-mono text-ink">6 deals (25%)</span>
+                <span className="text-ink">6 deals (25%)</span>
               </div>
               <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full" style={{ width: "25%" }} />
+                <div className="h-full fill-ok rounded-full" style={{ width: "25%" }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-[12.5px] mb-1 font-medium">
                 <span>10% &ndash; 15% (Gold / Manager Approval Zone)</span>
-                <span className="font-mono text-amber-700">3 deals (13%)</span>
+                <span className="text-warn">3 deals (13%)</span>
               </div>
               <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full bg-amber-500 rounded-full" style={{ width: "13%" }} />
+                <div className="h-full fill-warn rounded-full" style={{ width: "13%" }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-[12.5px] mb-1 font-medium">
                 <span>&gt;15% (High Risk / Finance Approval Required)</span>
-                <span className="font-mono text-rose-700 font-bold">1 deal (4%)</span>
+                <span className="text-bad font-bold">1 deal (4%)</span>
               </div>
               <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full bg-rose-600 rounded-full" style={{ width: "4%" }} />
+                <div className="h-full fill-bad rounded-full" style={{ width: "4%" }} />
               </div>
             </div>
           </div>
         </div>
 
         {/* Visual 2: Approval Cycle Velocity */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
           <div>
             <h3 className="text-[15px] font-semibold text-ink">
               Approval Turnaround Velocity
@@ -218,7 +231,7 @@ export default function ReportsPage() {
                 <p className="font-serif text-[32px] font-bold text-ink mt-1 tabular-nums">
                   3.8h
                 </p>
-                <p className="text-[11px] text-emerald-800 mt-0.5 font-medium">
+                <p className="text-[11px] text-ok mt-0.5 font-medium">
                   -1.4h vs last quarter
                 </p>
               </div>

@@ -1,8 +1,6 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 
 export type DealStage =
   | "QUOTE"
@@ -13,69 +11,55 @@ export type DealStage =
   | "BILLING"
   | "PAID";
 
-interface LifecycleBarProps {
-  currentStage: DealStage;
-  quoteId?: string | number;
-  orderId?: string | number;
-  className?: string;
-}
-
 const STAGES: { key: DealStage; label: string; href?: string }[] = [
-  { key: "QUOTE", label: "1. Build Quote", href: "/quotations" },
-  { key: "PRICING", label: "2. Pricing & Margin" },
-  { key: "RISK", label: "3. Blended Risk" },
-  { key: "APPROVAL", label: "4. Approval Chain", href: "/approvals" },
-  { key: "FULFILLMENT", label: "5. Split & Ship", href: "/fulfillment" },
-  { key: "BILLING", label: "6. Invoicing & Sub", href: "/subscriptions" },
-  { key: "PAID", label: "7. Cash Settled", href: "/invoices" },
+  { key: "QUOTE", label: "Quote", href: "/quotations" },
+  { key: "PRICING", label: "Margin" },
+  { key: "RISK", label: "Risk" },
+  { key: "APPROVAL", label: "Approval", href: "/approvals" },
+  { key: "FULFILLMENT", label: "Fulfillment", href: "/fulfillment" },
+  { key: "BILLING", label: "Billing", href: "/subscriptions" },
+  { key: "PAID", label: "Paid", href: "/invoices" },
 ];
 
 export function LifecycleBar({
   currentStage,
   className = "",
-}: LifecycleBarProps) {
+}: {
+  currentStage: DealStage;
+  quoteId?: string | number;
+  orderId?: string | number;
+  className?: string;
+}) {
   const currentIndex = STAGES.findIndex((s) => s.key === currentStage);
 
   return (
     <div
-      className={`flex items-center gap-1 overflow-x-auto rounded-full bg-white px-3 py-1.5 text-[12px] border border-ink/8 shadow-xs ${className}`}
+      className={`flex items-center gap-1 overflow-x-auto rounded-full bg-white px-3 py-1.5 text-[12.5px] card-shadow ${className}`}
     >
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-mist mr-1 shrink-0">
-        Deal Flow:
-      </span>
+      <span className="mr-1 shrink-0 text-mist">Flow</span>
       {STAGES.map((s, idx) => {
         const isDone = idx < currentIndex;
         const isCurrent = idx === currentIndex;
-
-        let style = "text-mist hover:text-ink";
-        if (isCurrent) {
-          style = "bg-ink text-bone font-semibold shadow-xs";
-        } else if (isDone) {
-          style = "text-emerald-800 font-medium";
-        }
+        const style = isCurrent
+          ? "bg-ink text-bone"
+          : isDone
+            ? "text-ink"
+            : "text-mist hover:text-ink";
+        const cls = `flex shrink-0 items-center rounded-full px-2.5 py-0.5 ${style}`;
 
         return (
-          <React.Fragment key={s.key}>
+          <span key={s.key} className="flex items-center gap-1">
             {s.href ? (
-              <Link
-                href={s.href}
-                className={`flex shrink-0 items-center rounded-full px-2.5 py-0.5 transition-colors ${style}`}
-              >
-                {isDone && <span className="mr-1">✓</span>}
+              <Link href={s.href} className={cls}>
                 {s.label}
               </Link>
             ) : (
-              <span
-                className={`flex shrink-0 items-center rounded-full px-2.5 py-0.5 transition-colors ${style}`}
-              >
-                {isDone && <span className="mr-1">✓</span>}
-                {s.label}
-              </span>
+              <span className={cls}>{s.label}</span>
             )}
-            {idx < STAGES.length - 1 && (
-              <ChevronRight className="size-3 text-ink/20 shrink-0" />
-            )}
-          </React.Fragment>
+            {idx < STAGES.length - 1 ? (
+              <span className="text-ink/20">·</span>
+            ) : null}
+          </span>
         );
       })}
     </div>

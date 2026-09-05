@@ -109,13 +109,13 @@ export default function ProductsCatalogPage() {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 rounded-full bg-white p-1 border border-ink/8 shadow-xs">
+        <div className="flex items-center gap-1 rounded-full bg-white p-1 card-shadow">
           <button
             type="button"
             onClick={() => setActiveTab("PRODUCTS")}
             className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
               activeTab === "PRODUCTS"
-                ? "bg-ink text-bone shadow-xs"
+                ? "bg-ink text-bone"
                 : "text-mist hover:text-ink"
             }`}
           >
@@ -126,7 +126,7 @@ export default function ProductsCatalogPage() {
             onClick={() => setActiveTab("WAREHOUSES")}
             className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
               activeTab === "WAREHOUSES"
-                ? "bg-ink text-bone shadow-xs"
+                ? "bg-ink text-bone"
                 : "text-mist hover:text-ink"
             }`}
           >
@@ -137,9 +137,9 @@ export default function ProductsCatalogPage() {
 
       {/* TAB 1: PRODUCT CATALOG */}
       {activeTab === "PRODUCTS" && (
-        <div className="overflow-hidden rounded-[24px] bg-white border border-ink/8 shadow-xs">
+        <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
           <table className="w-full text-left text-[13.5px]">
-            <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+            <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-6 py-3.5">SKU &amp; Product</th>
                 <th className="px-6 py-3.5">Category</th>
@@ -155,25 +155,25 @@ export default function ProductsCatalogPage() {
                 <tr key={p.id} className="hover:bg-cream/40 transition-colors">
                   <td className="px-6 py-4">
                     <p className="font-semibold text-ink">{p.name}</p>
-                    <p className="font-mono text-[11px] text-mist">{p.sku}</p>
+                    <p className="text-[11px] text-mist">{p.sku}</p>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-ink/5 text-mist">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-ink/5 text-mist">
                       {p.category}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-mono font-semibold tabular-nums text-ink">
+                  <td className="px-6 py-4 font-semibold tabular-nums text-ink">
                     {p.unitPrice}
                   </td>
-                  <td className="px-6 py-4 font-mono tabular-nums text-mist">
+                  <td className="px-6 py-4 tabular-nums text-mist">
                     {p.costPrice}
                   </td>
-                  <td className="px-6 py-4 font-mono font-bold text-emerald-800 tabular-nums">
+                  <td className="px-6 py-4 font-bold text-ok tabular-nums">
                     {p.margin}
                   </td>
-                  <td className="px-6 py-4 font-mono tabular-nums">
+                  <td className="px-6 py-4 tabular-nums">
                     {p.stock === 0 ? (
-                      <span className="text-rose-700 font-bold">0 units (Backorder)</span>
+                      <span className="text-bad font-bold">0 units (Backorder)</span>
                     ) : p.stock === 999 ? (
                       <span className="text-mist">Infinite / Virtual</span>
                     ) : (
@@ -181,7 +181,7 @@ export default function ProductsCatalogPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tone-ok text-ok">
                       Active
                     </span>
                   </td>
@@ -198,14 +198,14 @@ export default function ProductsCatalogPage() {
           {warehouses.map((wh) => (
             <div
               key={wh.id}
-              className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between"
+              className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-                  <span className="font-mono text-[12px] font-bold text-ink">
+                  <span className="text-[12px] font-bold text-ink">
                     {wh.code}
                   </span>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tone-ok text-ok">
                     Online
                   </span>
                 </div>
@@ -218,13 +218,13 @@ export default function ProductsCatalogPage() {
                 <div className="mt-4 space-y-2 text-[12.5px] pt-3 border-t border-ink/6">
                   <div className="flex justify-between">
                     <span className="text-mist">Shipping Cost Scalar:</span>
-                    <span className="font-mono font-bold text-ink">
+                    <span className="font-bold text-ink">
                       {wh.shippingWeight.toFixed(1)}x
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-mist">Depot Capacity:</span>
-                    <span className="font-mono text-ink font-medium">
+                    <span className="text-ink font-medium">
                       {wh.stockUtilization}
                     </span>
                   </div>

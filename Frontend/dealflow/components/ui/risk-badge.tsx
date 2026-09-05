@@ -1,52 +1,45 @@
 "use client";
 
-import React from "react";
-
-interface RiskBadgeProps {
-  score: number | string;
-  requiredLevel?: "NONE" | "MANAGER" | "FINANCE" | string;
-  showLevel?: boolean;
-  size?: "sm" | "md";
-}
-
 export function RiskBadge({
   score,
   requiredLevel,
   showLevel = false,
   size = "md",
-}: RiskBadgeProps) {
+}: {
+  score: number | string;
+  requiredLevel?: "NONE" | "MANAGER" | "FINANCE" | string;
+  showLevel?: boolean;
+  size?: "sm" | "md";
+}) {
   const numericScore = typeof score === "string" ? parseFloat(score) || 0 : score;
 
-  let bg = "bg-emerald-500/15 text-emerald-900 border-emerald-500/30";
-  let label = "In Policy";
-  let levelText = "No Approval Required";
+  let tone = "tone-ok";
+  let label = "In policy";
+  let levelText = "No approval required";
 
-  if (requiredLevel === "FINANCE" || numericScore >= 5.0) {
-    bg = "bg-rose-500/15 text-rose-900 border-rose-500/30";
-    label = "High Risk";
-    levelText = "Manager + Finance";
+  if (requiredLevel === "FINANCE" || numericScore >= 5) {
+    tone = "tone-warn";
+    label = "High risk";
+    levelText = "Manager → Finance";
   } else if (requiredLevel === "MANAGER" || numericScore > 0) {
-    bg = "bg-amber-500/15 text-amber-900 border-amber-500/30";
-    label = "Review Needed";
+    tone = "tone-warn";
+    label = "Review needed";
     levelText = "Sales Manager";
   }
 
-  const px = size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-[12px]";
+  const px = size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-[13px]";
 
   return (
-    <div className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1.5">
       <span
-        className={`inline-flex items-center rounded-full border font-medium font-mono tabular-nums ${px} ${bg}`}
-        title={`Blended Risk Score: ${numericScore.toFixed(1)}%`}
+        className={`inline-flex items-center rounded-full font-medium tabular-nums ${px} ${tone}`}
+        title={`Blended risk ${numericScore.toFixed(1)}%`}
       >
-        <span className="size-1.5 rounded-full mr-1 bg-current" />
         {numericScore.toFixed(1)}% {label}
       </span>
-      {showLevel && (
-        <span className="text-[11px] text-mist font-medium">
-          ({levelText})
-        </span>
-      )}
-    </div>
+      {showLevel ? (
+        <span className="text-[12px] text-mist">{levelText}</span>
+      ) : null}
+    </span>
   );
 }

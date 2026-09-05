@@ -1,14 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import { Sparkles, Plus, Check, X } from "lucide-react";
+import { useState } from "react";
+import { Plus, Check, X } from "lucide-react";
 import { UpsellSuggestion } from "@/lib/types";
-
-interface UpsellPanelProps {
-  suggestions?: UpsellSuggestion[];
-  onAddSuggestion: (item: UpsellSuggestion) => void;
-  className?: string;
-}
 
 const DEFAULT_SUGGESTIONS: UpsellSuggestion[] = [
   {
@@ -20,7 +14,7 @@ const DEFAULT_SUGGESTIONS: UpsellSuggestion[] = [
     reason: "Frequently paired with Laptop Pro orders",
     margin_delta_pct: "+2.4%",
     is_promoted: true,
-    tag: "Q3 Campaign",
+    tag: "Q3 campaign",
   },
   {
     product_id: 102,
@@ -28,7 +22,7 @@ const DEFAULT_SUGGESTIONS: UpsellSuggestion[] = [
     category_name: "Hardware",
     sku: "DOCK-U-4K",
     unit_price: "₹18,500",
-    reason: "78% of Gold Tier customers add this accessory",
+    reason: "78% of Gold customers add this accessory",
     margin_delta_pct: "+1.2%",
     is_promoted: false,
   },
@@ -38,10 +32,10 @@ const DEFAULT_SUGGESTIONS: UpsellSuggestion[] = [
     category_name: "Subscription",
     sku: "SUB-LOG-RET",
     unit_price: "₹6,500/mo",
-    reason: "Recurring high-margin SaaS expansion",
+    reason: "Recurring line on the same order",
     margin_delta_pct: "+3.1%",
     is_promoted: true,
-    tag: "Recurring ARR",
+    tag: "Recurring",
   },
 ];
 
@@ -49,32 +43,26 @@ export function UpsellPanel({
   suggestions = DEFAULT_SUGGESTIONS,
   onAddSuggestion,
   className = "",
-}: UpsellPanelProps) {
+}: {
+  suggestions?: UpsellSuggestion[];
+  onAddSuggestion: (item: UpsellSuggestion) => void;
+  className?: string;
+}) {
   const [items, setItems] = useState<UpsellSuggestion[]>(suggestions);
   const [addedIds, setAddedIds] = useState<number[]>([]);
 
-  function handleAdd(item: UpsellSuggestion) {
-    setAddedIds((prev) => [...prev, item.product_id]);
-    onAddSuggestion(item);
-  }
-
-  function handleDismiss(productId: number) {
-    setItems((prev) => prev.filter((i) => i.product_id !== productId));
-  }
-
   return (
-    <div className={`rounded-[20px] bg-white p-4 border border-ink/8 shadow-xs ${className}`}>
-      <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-        <h3 className="text-[13.5px] font-semibold text-ink flex items-center gap-1.5">
-          <Sparkles className="size-4 text-purple-600" />
-          Smart Recommendations
+    <div className={`rounded-[20px] bg-white p-4 card-shadow ${className}`}>
+      <div className="flex items-center justify-between border-b border-ink/6 pb-3">
+        <h3 className="text-[14px] font-semibold text-ink">
+          Upsell and cross-sell
         </h3>
-        <span className="text-[11px] font-semibold text-purple-800 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-          Ranked Affinity
+        <span className="rounded-full bg-cream px-2 py-0.5 text-[11px] text-mist">
+          Ranked by margin
         </span>
       </div>
-      <p className="mt-2 text-[12px] text-mist">
-        Suggestions based on historical co-purchase patterns and promoted margin boosters.
+      <p className="mt-2 text-[12.5px] text-mist">
+        Suggestions from co-purchase rules. Adding one recalculates margin.
       </p>
 
       <div className="mt-3 space-y-2.5">
@@ -83,51 +71,52 @@ export function UpsellPanel({
           return (
             <div
               key={item.product_id}
-              className="relative rounded-[16px] bg-cream/40 p-3 border border-ink/6 hover:border-ink/15 transition-all"
+              className="rounded-[16px] border border-ink/6 bg-cream/40 p-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-medium text-[13px] text-ink">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[13px] font-medium text-ink">
                       {item.product_name}
                     </span>
-                    {item.tag && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.2 rounded bg-purple-100 text-purple-900">
+                    {item.tag ? (
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-mist">
                         {item.tag}
                       </span>
-                    )}
+                    ) : null}
                   </div>
-                  <p className="text-[11px] text-mist mt-0.5">{item.reason}</p>
+                  <p className="mt-0.5 text-[12px] text-mist">{item.reason}</p>
                 </div>
-
                 <button
                   type="button"
-                  onClick={() => handleDismiss(item.product_id)}
-                  className="text-mist hover:text-ink transition-colors p-1"
-                  title="Dismiss suggestion"
+                  onClick={() =>
+                    setItems((prev) => prev.filter((i) => i.product_id !== item.product_id))
+                  }
+                  className="p-1 text-mist hover:text-ink"
+                  title="Dismiss"
                 >
                   <X className="size-3" />
                 </button>
               </div>
 
-              <div className="mt-3 flex items-center justify-between pt-2 border-t border-ink/6">
+              <div className="mt-3 flex items-center justify-between border-t border-ink/6 pt-2">
                 <div>
-                  <span className="font-mono text-[12.5px] font-semibold text-ink">
+                  <span className="text-[13px] font-semibold tabular-nums text-ink">
                     {item.unit_price}
                   </span>
-                  <span className="ml-2 font-mono text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                  <span className="ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium tone-ok">
                     {item.margin_delta_pct} margin
                   </span>
                 </div>
-
                 <button
                   type="button"
                   disabled={isAdded}
-                  onClick={() => handleAdd(item)}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${
-                    isAdded
-                      ? "bg-emerald-600 text-white cursor-default"
-                      : "bg-ink text-bone hover:bg-ink/90"
+                  onClick={() => {
+                    setAddedIds((prev) => [...prev, item.product_id]);
+                    onAddSuggestion(item);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium ${
+                    isAdded ? "tone-ok cursor-default" : "bg-ink text-bone hover:bg-ink/90"
                   }`}
                 >
                   {isAdded ? (
@@ -136,7 +125,7 @@ export function UpsellPanel({
                     </>
                   ) : (
                     <>
-                      <Plus className="size-3" /> Add to Quote
+                      <Plus className="size-3" /> Add to quote
                     </>
                   )}
                 </button>
@@ -145,11 +134,11 @@ export function UpsellPanel({
           );
         })}
 
-        {items.length === 0 && (
-          <p className="text-center py-4 text-[12px] text-mist">
-            No active suggestions for this category mix.
+        {items.length === 0 ? (
+          <p className="py-4 text-center text-[12px] text-mist">
+            No suggestions for this mix.
           </p>
-        )}
+        ) : null}
       </div>
     </div>
   );

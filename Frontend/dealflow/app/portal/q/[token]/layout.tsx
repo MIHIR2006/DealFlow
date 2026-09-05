@@ -16,14 +16,15 @@ export default function CustomerPortalLayout({
             <div className="size-7 rounded-lg bg-ink flex items-center justify-center text-bone font-bold text-[13px]">
               D
             </div>
-            <span className="font-headline font-semibold text-[16px] tracking-tight">
-              DealFlow360 Customer Portal
+            <span className="font-headline text-[15px] font-semibold tracking-tight">
+              DealFlow360
             </span>
+            <span className="text-[13px] text-mist">Portal</span>
           </div>
 
           <div className="flex items-center gap-2 text-[12px] text-mist">
-            <ShieldCheck className="size-4 text-emerald-700" />
-            <span>256-Bit Encrypted Secure Session</span>
+            <ShieldCheck className="size-4" />
+            <span>Token-scoped session</span>
           </div>
         </div>
       </header>

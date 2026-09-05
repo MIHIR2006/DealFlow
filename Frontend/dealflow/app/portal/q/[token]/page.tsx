@@ -144,11 +144,11 @@ export default function CustomerQuotationPortalPage({
   return (
     <div className="space-y-6">
       {/* Quotation Header Card */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="font-mono text-[12px] font-semibold text-mist bg-ink/5 px-2 py-0.5 rounded">
+              <span className="text-[12px] font-semibold text-mist bg-ink/5 px-2 py-0.5 rounded">
                 Ref: Q-1042
               </span>
               <StatusBadge status={status} size="md" />
@@ -181,7 +181,7 @@ export default function CustomerQuotationPortalPage({
             onClick={() => setActiveTab("QUOTE")}
             className={`rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors ${
               activeTab === "QUOTE"
-                ? "bg-ink text-bone shadow-xs"
+                ? "bg-ink text-bone"
                 : "text-mist hover:text-ink"
             }`}
           >
@@ -192,14 +192,14 @@ export default function CustomerQuotationPortalPage({
             onClick={() => setActiveTab("NEGOTIATE")}
             className={`rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors flex items-center gap-1.5 ${
               activeTab === "NEGOTIATE"
-                ? "bg-ink text-bone shadow-xs"
+                ? "bg-ink text-bone"
                 : "text-mist hover:text-ink"
             }`}
           >
             <Sliders className="size-3.5" />
             Negotiate &amp; Request Changes
             {counterHistory.length > 0 && (
-              <span className="size-4 rounded-full bg-purple-600 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="size-4 rounded-full fill-lilac text-white text-[10px] flex items-center justify-center font-bold">
                 {counterHistory.length}
               </span>
             )}
@@ -209,13 +209,13 @@ export default function CustomerQuotationPortalPage({
 
       {/* Awaiting Review Notification Banner */}
       {awaitingReview && !confirmed && (
-        <div className="rounded-[20px] bg-amber-500/10 p-5 border border-amber-500/25 flex items-start gap-3">
-          <Clock className="size-5 text-amber-800 shrink-0 mt-0.5" />
-          <div className="text-[13px] text-amber-950">
+        <div className="rounded-[20px] tone-warn p-5 border border-transparent flex items-start gap-3">
+          <Clock className="size-5 text-warn shrink-0 mt-0.5" />
+          <div className="text-[13px] text-warn">
             <p className="font-semibold">
               Counter-Offer Submitted &mdash; Under Executive Review
             </p>
-            <p className="mt-0.5 text-amber-900/90 leading-relaxed">
+            <p className="mt-0.5 text-warn/90 leading-relaxed">
               Your proposed <strong>{proposedDiscount}% discount</strong> on Setup &amp; Migration Service exceeds standard rep discretion. It has been automatically routed to senior sales management for commercial authorization. You will be notified the moment terms are finalized.
             </p>
           </div>
@@ -223,11 +223,11 @@ export default function CustomerQuotationPortalPage({
       )}
 
       {confirmed && (
-        <div className="rounded-[20px] bg-emerald-500/10 p-5 border border-emerald-500/25 flex items-start gap-3">
-          <CheckCircle className="size-5 text-emerald-800 shrink-0 mt-0.5" />
-          <div className="text-[13px] text-emerald-950">
+        <div className="rounded-[20px] tone-ok p-5 border border-transparent flex items-start gap-3">
+          <CheckCircle className="size-5 text-ok shrink-0 mt-0.5" />
+          <div className="text-[13px] text-ok">
             <p className="font-semibold">Quotation Officially Confirmed &amp; Accepted!</p>
-            <p className="mt-0.5 text-emerald-900/90 leading-relaxed">
+            <p className="mt-0.5 text-ok/90 leading-relaxed">
               Thank you for confirming order Q-1042. Sales order <strong>SO-9042</strong> has been generated and dispatched to our regional fulfillment centers. Invoices and tracking numbers will be delivered to your registered billing email.
             </p>
           </div>
@@ -237,9 +237,9 @@ export default function CustomerQuotationPortalPage({
       {/* TAB 1: CLEAN QUOTATION TABLE (CUSTOMER-01) */}
       {activeTab === "QUOTE" && (
         <div className="space-y-6">
-          <div className="rounded-[24px] bg-white border border-ink/8 shadow-xs overflow-hidden">
+          <div className="rounded-[24px] bg-white card-shadow overflow-hidden">
             <table className="w-full text-left text-[13.5px]">
-              <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+              <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
                 <tr>
                   <th className="px-6 py-3.5">Item Description</th>
                   <th className="px-6 py-3.5">Type</th>
@@ -254,21 +254,21 @@ export default function CustomerQuotationPortalPage({
                   <tr key={line.id} className="hover:bg-cream/20">
                     <td className="px-6 py-4">
                       <p className="font-semibold text-ink">{line.name}</p>
-                      <p className="font-mono text-[11px] text-mist">{line.sku}</p>
+                      <p className="text-[11px] text-mist">{line.sku}</p>
                     </td>
                     <td className="px-6 py-4 text-[12px] text-mist">
                       {line.type}
                     </td>
-                    <td className="px-6 py-4 font-mono font-medium text-ink">
+                    <td className="px-6 py-4 font-medium text-ink">
                       {line.qty}
                     </td>
-                    <td className="px-6 py-4 font-mono tabular-nums text-mist">
+                    <td className="px-6 py-4 tabular-nums text-mist">
                       &#8377;{line.unitPrice.toLocaleString("en-IN")}
                     </td>
-                    <td className="px-6 py-4 font-mono tabular-nums text-emerald-800 font-semibold">
+                    <td className="px-6 py-4 tabular-nums text-ok font-semibold">
                       {line.discountPct > 0 ? `${line.discountPct}%` : "—"}
                     </td>
-                    <td className="px-6 py-4 text-right font-mono font-semibold tabular-nums text-ink">
+                    <td className="px-6 py-4 text-right font-semibold tabular-nums text-ink">
                       &#8377;{line.netAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                     </td>
                   </tr>
@@ -280,19 +280,19 @@ export default function CustomerQuotationPortalPage({
             <div className="p-6 bg-ink/[0.01] border-t border-ink/6 flex flex-col items-end text-[13px] space-y-2">
               <div className="flex justify-between w-64 text-mist">
                 <span>Subtotal (Excl. Tax):</span>
-                <span className="font-mono tabular-nums font-medium text-ink">
+                <span className="tabular-nums font-medium text-ink">
                   &#8377;{subtotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="flex justify-between w-64 text-mist">
                 <span>Applicable GST (18%):</span>
-                <span className="font-mono tabular-nums font-medium text-ink">
+                <span className="tabular-nums font-medium text-ink">
                   &#8377;{totalTax.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="pt-2 border-t border-ink/8 flex justify-between w-64 text-[16px] font-semibold text-ink">
                 <span>Total Amount:</span>
-                <span className="font-mono tabular-nums">
+                <span className="tabular-nums">
                   &#8377;{grandTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -301,7 +301,7 @@ export default function CustomerQuotationPortalPage({
 
           {/* Action Footer */}
           {!confirmed && (
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-[20px] bg-white border border-ink/8 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-[20px] bg-white card-shadow">
               <button
                 type="button"
                 onClick={() => setActiveTab("NEGOTIATE")}
@@ -313,7 +313,7 @@ export default function CustomerQuotationPortalPage({
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-6 py-2.5 text-[13.5px] font-semibold text-white hover:bg-emerald-800 shadow-sm transition-all"
+                className="inline-flex items-center gap-2 rounded-full fill-ok px-6 py-2.5 text-[13.5px] font-semibold text-white hover:fill-ok shadow-sm transition-all"
               >
                 <CheckCircle className="size-4" /> Accept Terms &amp; Confirm Quotation
               </button>
@@ -326,7 +326,7 @@ export default function CustomerQuotationPortalPage({
       {activeTab === "NEGOTIATE" && (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           {/* Left: Counter-Discount Proposal Tool (6 cols) */}
-          <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs md:col-span-6 flex flex-col justify-between">
+          <div className="rounded-[24px] bg-white p-6 card-shadow md:col-span-6 flex flex-col justify-between">
             <div>
               <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
                 Propose Counter-Discount
@@ -350,7 +350,7 @@ export default function CustomerQuotationPortalPage({
                 <div>
                   <div className="flex items-center justify-between text-[12.5px] font-medium mb-1.5">
                     <span className="text-ink">Proposed Discount:</span>
-                    <span className="font-mono text-[14px] font-bold text-purple-800">
+                    <span className="text-[14px] font-bold text-lilac">
                       {proposedDiscount}%
                     </span>
                   </div>
@@ -384,7 +384,7 @@ export default function CustomerQuotationPortalPage({
                 </div>
 
                 {proposedDiscount > 10 && (
-                  <div className="rounded-xl bg-amber-50 p-3 text-[12px] text-amber-900 border border-amber-200">
+                  <div className="rounded-xl tone-warn p-3 text-[12px] text-warn border border-transparent">
                     <strong>Notice:</strong> An 18% discount on services exceeds standard field discretion. Submitting this proposal will trigger automated managerial and financial approval routing.
                   </div>
                 )}
@@ -403,7 +403,7 @@ export default function CustomerQuotationPortalPage({
           </div>
 
           {/* Right: Negotiation Thread (6 cols) */}
-          <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs md:col-span-6 flex flex-col justify-between">
+          <div className="rounded-[24px] bg-white p-6 card-shadow md:col-span-6 flex flex-col justify-between">
             <div>
               <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6 flex items-center gap-2">
                 <MessageSquare className="size-4 text-mist" />
@@ -416,7 +416,7 @@ export default function CustomerQuotationPortalPage({
                     key={msg.id}
                     className={`rounded-[16px] p-3.5 text-[13px] ${
                       msg.role === "Client"
-                        ? "bg-purple-50 text-purple-950 ml-6 border border-purple-200"
+                        ? "tone-lilac text-lilac ml-6 border border-transparent"
                         : "bg-cream/50 text-ink mr-6 border border-ink/8"
                     }`}
                   >
@@ -467,19 +467,19 @@ export default function CustomerQuotationPortalPage({
             <div className="mt-4 rounded-xl bg-cream/50 p-4 border border-ink/8 text-[13px] space-y-2">
               <div className="flex justify-between">
                 <span className="text-mist">Total One-Time Charges:</span>
-                <span className="font-mono font-semibold text-ink">
+                <span className="font-semibold text-ink">
                   &#8377;{subtotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-mist">Ongoing Monthly Support:</span>
-                <span className="font-mono font-semibold text-emerald-800">
+                <span className="font-semibold text-ok">
                   &#8377;59,000 / month
                 </span>
               </div>
               <div className="pt-2 border-t border-ink/8 flex justify-between font-bold text-[14px]">
                 <span>Immediate Payment Due:</span>
-                <span className="font-mono">
+                <span className="tabular-nums">
                   &#8377;{grandTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -510,7 +510,7 @@ export default function CustomerQuotationPortalPage({
                 type="button"
                 disabled={!agreeTerms}
                 onClick={handleConfirmQuotation}
-                className="rounded-full bg-emerald-700 text-white px-5 py-2 text-[13px] font-semibold hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs transition-colors"
+                className="rounded-full fill-ok text-white px-5 py-2 text-[13px] font-semibold hover:fill-ok disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Confirm Quotation &rarr;
               </button>

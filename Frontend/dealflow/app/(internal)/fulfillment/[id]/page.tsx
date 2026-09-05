@@ -49,7 +49,7 @@ export default function WarehouseSplitDetailPage({
         <div className="flex items-center gap-3">
           <Link
             href="/fulfillment"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white shadow-xs hover:bg-cream transition-colors text-ink"
+            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
           >
             <ArrowLeft className="size-4" />
           </Link>
@@ -74,7 +74,7 @@ export default function WarehouseSplitDetailPage({
           <button
             type="button"
             onClick={() => setOverrideModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
           >
             <Sliders className="size-3.5" />
             Manual Override
@@ -84,9 +84,9 @@ export default function WarehouseSplitDetailPage({
             type="button"
             disabled={splitAccepted}
             onClick={handleAcceptSplit}
-            className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-[13px] font-semibold shadow-xs transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-[13px] font-semibold transition-colors ${
               splitAccepted
-                ? "bg-emerald-700 text-white cursor-default"
+                ? "fill-ok text-white cursor-default"
                 : "bg-ink text-bone hover:bg-ink/90"
             }`}
           >
@@ -99,8 +99,8 @@ export default function WarehouseSplitDetailPage({
       <LifecycleBar currentStage="FULFILLMENT" />
 
       {/* Heuristic Evaluation Callout */}
-      <div className="rounded-[20px] bg-white p-5 border border-ink/8 shadow-xs flex items-start gap-3">
-        <Sparkles className="size-5 text-emerald-700 shrink-0 mt-0.5" />
+      <div className="rounded-[20px] bg-white p-5 card-shadow flex items-start gap-3">
+        <Sparkles className="size-5 text-ok shrink-0 mt-0.5" />
         <div className="text-[13px] text-ink">
           <p className="font-semibold">
             Heuristic Warehouse Split Decision (Objective: Fewest Shipments)
@@ -113,14 +113,14 @@ export default function WarehouseSplitDetailPage({
 
       {/* Reactive Backorder Stock Arrival Notification (Spec B6) */}
       {stockArrivalTriggered && !backorderConsolidated && (
-        <div className="rounded-[20px] bg-emerald-500/10 p-4 border border-emerald-500/25 flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-[20px] tone-ok p-4 border border-transparent flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Package className="size-5 text-emerald-700" />
+            <Package className="size-5 text-ok" />
             <div className="text-[13px]">
-              <span className="font-semibold text-emerald-950">
+              <span className="font-semibold text-ok">
                 New Stock Received Mid-Fulfillment:
               </span>{" "}
-              <span className="text-emerald-900">
+              <span className="text-ok">
                 5 units of <em>Docking Station Ultra Dual-4K</em> just arrived at Main Warehouse (Mumbai).
               </span>
             </div>
@@ -129,7 +129,7 @@ export default function WarehouseSplitDetailPage({
           <button
             type="button"
             onClick={handleConsolidateBackorder}
-            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 text-white px-3.5 py-1.5 text-[12px] font-semibold hover:bg-emerald-800 shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full fill-ok text-white px-3.5 py-1.5 text-[12px] font-semibold hover:fill-ok transition-colors"
           >
             Consolidate Remaining Backorder &rarr;
           </button>
@@ -137,8 +137,8 @@ export default function WarehouseSplitDetailPage({
       )}
 
       {backorderConsolidated && (
-        <div className="rounded-[18px] bg-emerald-100/80 p-3.5 border border-emerald-300 text-[12.5px] text-emerald-950 font-medium flex items-center gap-2">
-          <CheckCircle className="size-4 text-emerald-700" />
+        <div className="rounded-[18px] tone-ok p-3.5 text-[12.5px] font-medium flex items-center gap-2">
+          <CheckCircle className="size-4 text-ok" />
           Backorder consolidated! All docking station units merged into Shipment 1 (Main Warehouse). Total freight cost saved: ₹1,400.
         </div>
       )}
@@ -146,14 +146,14 @@ export default function WarehouseSplitDetailPage({
       {/* THREE DISPATCH CARDS */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* Shipment 1: Main Warehouse */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-ink/6">
               <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
                 <Warehouse className="size-4 text-ink/70" />
                 Main Warehouse
               </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tone-ok text-ok border border-transparent">
                 Mumbai Depot
               </span>
             </div>
@@ -164,23 +164,23 @@ export default function WarehouseSplitDetailPage({
                   Laptop Pro 16&quot;
                 </p>
                 <div className="mt-1 flex items-center justify-between text-[12px]">
-                  <span className="font-mono text-ink font-semibold">
+                  <span className="text-ink font-semibold">
                     Qty: {mumbaiQty} units
                   </span>
-                  <span className="text-emerald-700 font-medium">In Stock</span>
+                  <span className="text-ok font-medium">In Stock</span>
                 </div>
               </div>
 
               {backorderConsolidated && (
-                <div className="rounded-[16px] bg-emerald-50/70 p-3 border border-emerald-200">
+                <div className="rounded-[16px] tone-ok p-3 border border-transparent">
                   <p className="text-[13px] font-medium text-ink">
                     Docking Station Ultra Dual-4K
                   </p>
                   <div className="mt-1 flex items-center justify-between text-[12px]">
-                    <span className="font-mono text-emerald-900 font-semibold">
+                    <span className="text-ok font-semibold">
                       Qty: 5 units (Merged)
                     </span>
-                    <span className="text-emerald-800 font-medium">Stock Arrived</span>
+                    <span className="text-ok font-medium">Stock Arrived</span>
                   </div>
                 </div>
               )}
@@ -191,21 +191,21 @@ export default function WarehouseSplitDetailPage({
             <span className="flex items-center gap-1">
               <Truck className="size-3.5" /> Shipment #1
             </span>
-            <span className="font-mono font-semibold text-ink">
+            <span className="font-semibold text-ink">
               Est. Freight: ₹3,200
             </span>
           </div>
         </div>
 
         {/* Shipment 2: East Depot */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-ink/6">
               <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
                 <Warehouse className="size-4 text-ink/70" />
                 East Depot
               </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-cream text-ink">
                 Kolkata Depot
               </span>
             </div>
@@ -216,10 +216,10 @@ export default function WarehouseSplitDetailPage({
                   Laptop Pro 16&quot;
                 </p>
                 <div className="mt-1 flex items-center justify-between text-[12px]">
-                  <span className="font-mono text-ink font-semibold">
+                  <span className="text-ink font-semibold">
                     Qty: {eastQty} units
                   </span>
-                  <span className="text-blue-700 font-medium">In Stock</span>
+                  <span className="text-ink font-medium">In Stock</span>
                 </div>
               </div>
             </div>
@@ -229,36 +229,36 @@ export default function WarehouseSplitDetailPage({
             <span className="flex items-center gap-1">
               <Truck className="size-3.5" /> Shipment #2
             </span>
-            <span className="font-mono font-semibold text-ink">
+            <span className="font-semibold text-ink">
               Est. Freight: ₹2,800
             </span>
           </div>
         </div>
 
         {/* Shipment 3: Backorder Queue */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-ink/6">
               <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
                 <Layers className="size-4 text-ink/70" />
                 Backorder Queue
               </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200">
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tone-bad text-bad border border-transparent">
                 {backorderConsolidated ? "Zero Pending" : "1 Item Shortfall"}
               </span>
             </div>
 
             <div className="mt-4 space-y-3">
               {!backorderConsolidated ? (
-                <div className="rounded-[16px] bg-rose-50/50 p-3 border border-rose-200">
+                <div className="rounded-[16px] tone-bad p-3 border border-transparent">
                   <p className="text-[13px] font-medium text-ink">
                     Docking Station Ultra Dual-4K
                   </p>
                   <div className="mt-1 flex items-center justify-between text-[12px]">
-                    <span className="font-mono text-rose-900 font-semibold">
+                    <span className="text-bad font-semibold">
                       Qty: 5 units
                     </span>
-                    <span className="text-rose-700 font-medium">
+                    <span className="text-bad font-medium">
                       Est. Restock: Aug 26
                     </span>
                   </div>
@@ -302,7 +302,7 @@ export default function WarehouseSplitDetailPage({
                   max="10"
                   value={mumbaiQty}
                   onChange={(e) => setMumbaiQty(parseInt(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 font-mono text-[13.5px] font-semibold"
+                  className="w-full rounded-xl border border-ink/15 p-2.5 text-[13.5px] font-semibold"
                 />
               </div>
 
@@ -316,11 +316,11 @@ export default function WarehouseSplitDetailPage({
                   max="10"
                   value={eastQty}
                   onChange={(e) => setEastQty(parseInt(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 font-mono text-[13.5px] font-semibold"
+                  className="w-full rounded-xl border border-ink/15 p-2.5 text-[13.5px] font-semibold"
                 />
               </div>
 
-              <div className="rounded-xl bg-amber-500/10 p-3 text-[12px] text-amber-950 border border-amber-500/20">
+              <div className="rounded-xl tone-warn p-3 text-[12px] text-warn border border-transparent">
                 <strong>Cost Consequence:</strong> Overriding the automatic split preserves manual quantities, but may increase total freight charges by up to <strong>₹1,800</strong>.
               </div>
             </div>

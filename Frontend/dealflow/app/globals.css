@@ -198,6 +198,57 @@ body {
   box-shadow: var(--shadow-card);
 }
 
+.tone-ok {
+  background: var(--color-status-ok-bg);
+  color: var(--color-status-ok);
+}
+.tone-warn {
+  background: var(--color-status-warn-bg);
+  color: var(--color-status-warn);
+}
+.tone-bad {
+  background: var(--color-status-bad-bg);
+  color: var(--color-status-bad);
+}
+.tone-lilac {
+  background: color-mix(in oklch, var(--color-chart-lilac) 16%, white);
+  color: var(--color-chart-lilac);
+}
+.fill-ink {
+  background: var(--color-ink);
+  color: var(--color-bone);
+}
+.fill-ok {
+  background: var(--color-status-ok);
+  color: #fff;
+}
+.fill-warn {
+  background: var(--color-status-warn);
+  color: var(--color-ink);
+}
+.fill-bad {
+  background: var(--color-status-bad);
+  color: #fff;
+}
+.fill-lilac {
+  background: var(--color-chart-lilac);
+}
+.fill-terracotta {
+  background: var(--color-chart-terracotta);
+}
+.text-ok {
+  color: var(--color-status-ok);
+}
+.text-warn {
+  color: var(--color-status-warn);
+}
+.text-bad {
+  color: var(--color-status-bad);
+}
+.text-lilac {
+  color: var(--color-chart-lilac);
+}
+
 .art-frame {
   overflow: hidden;
 }
@@ -417,5 +468,16 @@ body {
   }
   html {
     @apply font-sans;
+  }
+  button,
+  a,
+  select,
+  summary,
+  [role="button"] {
+    cursor: pointer;
+  }
+  button:disabled,
+  a[aria-disabled="true"] {
+    cursor: not-allowed;
   }
 }

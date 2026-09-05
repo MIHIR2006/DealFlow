@@ -54,14 +54,14 @@ export default function GovernanceConfigPage() {
       </div>
 
       {savedNotice && (
-        <div className="rounded-[18px] bg-emerald-500/10 p-4 border border-emerald-500/20 text-[13px] text-emerald-950 font-medium flex items-center gap-2.5">
-          <CheckCircle2 className="size-4 text-emerald-700 shrink-0" />
+        <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex items-center gap-2.5">
+          <CheckCircle2 className="size-4 text-ok shrink-0" />
           Governance rules committed to database! In-memory engine cache snapshot invalidated (v2026.08 updated).
         </div>
       )}
 
       {/* MATRIX 1: CUSTOMER TIER CEILINGS */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
           1. Customer Tier Discount Ceilings
         </h2>
@@ -71,7 +71,7 @@ export default function GovernanceConfigPage() {
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
-            <span className="font-semibold text-[13.5px] text-amber-900">
+            <span className="font-semibold text-[13.5px] text-warn">
               Bronze Tier Customer
             </span>
             <div className="mt-2 flex items-center gap-2">
@@ -80,9 +80,9 @@ export default function GovernanceConfigPage() {
                 step="0.5"
                 value={tierBronze}
                 onChange={(e) => setTierBronze(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-mono font-bold text-center text-[15px]"
+                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
               />
-              <span className="font-mono text-mist font-semibold">% Max</span>
+              <span className="text-mist font-semibold">% Max</span>
             </div>
             <p className="text-[11px] text-mist mt-1.5">Default entry account tier</p>
           </div>
@@ -97,15 +97,15 @@ export default function GovernanceConfigPage() {
                 step="0.5"
                 value={tierSilver}
                 onChange={(e) => setTierSilver(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-mono font-bold text-center text-[15px]"
+                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
               />
-              <span className="font-mono text-mist font-semibold">% Max</span>
+              <span className="text-mist font-semibold">% Max</span>
             </div>
             <p className="text-[11px] text-mist mt-1.5">Mid-market recurring accounts</p>
           </div>
 
           <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
-            <span className="font-semibold text-[13.5px] text-amber-800">
+            <span className="font-semibold text-[13.5px] text-warn">
               Gold Tier Customer
             </span>
             <div className="mt-2 flex items-center gap-2">
@@ -114,9 +114,9 @@ export default function GovernanceConfigPage() {
                 step="0.5"
                 value={tierGold}
                 onChange={(e) => setTierGold(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-mono font-bold text-center text-[15px]"
+                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
               />
-              <span className="font-mono text-mist font-semibold">% Max</span>
+              <span className="text-mist font-semibold">% Max</span>
             </div>
             <p className="text-[11px] text-mist mt-1.5">Enterprise key accounts</p>
           </div>
@@ -124,7 +124,7 @@ export default function GovernanceConfigPage() {
       </div>
 
       {/* MATRIX 2: CATEGORY SPECIFIC CEILINGS */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
           2. Product Category Discount Ceilings
         </h2>
@@ -143,17 +143,17 @@ export default function GovernanceConfigPage() {
                 step="0.5"
                 value={catHardware}
                 onChange={(e) => setCatHardware(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-mono font-bold text-center text-[15px]"
+                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
               />
-              <span className="font-mono text-mist font-semibold">% Limit</span>
+              <span className="text-mist font-semibold">% Limit</span>
             </div>
             <p className="text-[11px] text-mist mt-1.5">Laptops, Servers, Accessories</p>
           </div>
 
-          <div className="p-4 rounded-[18px] bg-rose-50/70 border border-rose-200">
-            <span className="font-semibold text-[13.5px] text-rose-950 flex items-center gap-1.5">
+          <div className="p-4 rounded-[18px] tone-bad border border-transparent">
+            <span className="font-semibold text-[13.5px] text-bad flex items-center gap-1.5">
               Professional Services
-              <span className="text-[10px] bg-rose-200 text-rose-900 px-1 rounded font-bold">Strict</span>
+              <span className="text-[10px] tone-bad px-1.5 py-0.5 rounded-full font-medium">Strict</span>
             </span>
             <div className="mt-2 flex items-center gap-2">
               <input
@@ -161,11 +161,11 @@ export default function GovernanceConfigPage() {
                 step="0.5"
                 value={catServices}
                 onChange={(e) => setCatServices(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-rose-300 bg-white p-2 font-mono font-bold text-center text-[15px] text-rose-950"
+                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px] text-bad"
               />
-              <span className="font-mono text-mist font-semibold">% Limit</span>
+              <span className="text-mist font-semibold">% Limit</span>
             </div>
-            <p className="text-[11px] text-rose-900/80 mt-1.5">Thin margins; Setup &amp; Migration</p>
+            <p className="text-[11px] text-bad/80 mt-1.5">Thin margins; Setup &amp; Migration</p>
           </div>
 
           <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
@@ -178,9 +178,9 @@ export default function GovernanceConfigPage() {
                 step="0.5"
                 value={catSubscriptions}
                 onChange={(e) => setCatSubscriptions(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-mono font-bold text-center text-[15px]"
+                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
               />
-              <span className="font-mono text-mist font-semibold">% Limit</span>
+              <span className="text-mist font-semibold">% Limit</span>
             </div>
             <p className="text-[11px] text-mist mt-1.5">High margin cloud licenses</p>
           </div>
@@ -188,7 +188,7 @@ export default function GovernanceConfigPage() {
       </div>
 
       {/* MATRIX 3: APPROVAL CHAIN ROUTING POLICY */}
-      <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs">
+      <div className="rounded-[24px] bg-white p-6 card-shadow">
         <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
           3. Automated Approval Routing Rules
         </h2>
@@ -212,18 +212,18 @@ export default function GovernanceConfigPage() {
                 step="0.1"
                 value={singleLineMgr}
                 onChange={(e) => setSingleLineMgr(parseFloat(e.target.value) || 0)}
-                className="w-20 rounded-lg border border-ink/15 bg-white p-1.5 font-mono font-bold text-center"
+                className="w-20 rounded-lg border border-ink/15 bg-white p-1.5 font-bold text-center"
               />
-              <span className="font-mono text-mist">points</span>
+              <span className="text-mist">points</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between p-3.5 rounded-[16px] bg-rose-50/60 border border-rose-200 text-[13px]">
+          <div className="flex flex-wrap items-center justify-between p-3.5 rounded-[16px] tone-bad border border-transparent text-[13px]">
             <div>
-              <span className="font-semibold text-rose-950">
+              <span className="font-semibold text-bad">
                 Finance Review (Tier 2 Trigger &mdash; Blended Risk):
               </span>
-              <p className="text-[12px] text-rose-900/80">
+              <p className="text-[12px] text-bad/80">
                 Weighted blended risk score across the entire order exceeds:
               </p>
             </div>
@@ -233,18 +233,18 @@ export default function GovernanceConfigPage() {
                 step="0.1"
                 value={blendedFinance}
                 onChange={(e) => setBlendedFinance(parseFloat(e.target.value) || 0)}
-                className="w-20 rounded-lg border border-rose-300 bg-white p-1.5 font-mono font-bold text-center text-rose-950"
+                className="w-20 rounded-lg border border-ink/15 bg-white p-1.5 font-bold text-center text-bad"
               />
-              <span className="font-mono text-rose-900">% score</span>
+              <span className="text-bad">% score</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between p-3.5 rounded-[16px] bg-rose-50/60 border border-rose-200 text-[13px]">
+          <div className="flex flex-wrap items-center justify-between p-3.5 rounded-[16px] tone-bad border border-transparent text-[13px]">
             <div>
-              <span className="font-semibold text-rose-950">
+              <span className="font-semibold text-bad">
                 Finance Review (Tier 2 Trigger &mdash; Maximum Single-Line Overage):
               </span>
-              <p className="text-[12px] text-rose-900/80">
+              <p className="text-[12px] text-bad/80">
                 Any single line item exceeds allowed discretion by at least:
               </p>
             </div>
@@ -254,9 +254,9 @@ export default function GovernanceConfigPage() {
                 step="0.1"
                 value={singleLineFinance}
                 onChange={(e) => setSingleLineFinance(parseFloat(e.target.value) || 0)}
-                className="w-20 rounded-lg border border-rose-300 bg-white p-1.5 font-mono font-bold text-center text-rose-950"
+                className="w-20 rounded-lg border border-ink/15 bg-white p-1.5 font-bold text-center text-bad"
               />
-              <span className="font-mono text-rose-900">points</span>
+              <span className="text-bad">points</span>
             </div>
           </div>
         </div>

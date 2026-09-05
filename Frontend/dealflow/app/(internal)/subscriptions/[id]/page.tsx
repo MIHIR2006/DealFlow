@@ -61,7 +61,7 @@ export default function SubscriptionBillingDetailPage({
         <div className="flex items-center gap-3">
           <Link
             href="/subscriptions"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white shadow-xs hover:bg-cream transition-colors text-ink"
+            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
           >
             <ArrowLeft className="size-4" />
           </Link>
@@ -70,8 +70,8 @@ export default function SubscriptionBillingDetailPage({
               <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
                 Hybrid Billing: {subId} (Acme Corp)
               </h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                <span className="size-1.5 rounded-full bg-emerald-600 mr-1.5" />
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tone-ok text-ok border border-transparent">
+                <span className="size-1.5 rounded-full fill-ok mr-1.5" />
                 Active Subscription
               </span>
             </div>
@@ -89,7 +89,7 @@ export default function SubscriptionBillingDetailPage({
               setTargetSeats(seats + 2);
               setProrationModalOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors"
           >
             <Plus className="size-3.5" /> Modify Seats &amp; Prorate
           </button>
@@ -99,22 +99,22 @@ export default function SubscriptionBillingDetailPage({
       <LifecycleBar currentStage="BILLING" />
 
       {modificationApplied && (
-        <div className="rounded-[18px] bg-emerald-500/10 p-4 border border-emerald-500/20 text-[13px] text-emerald-950 font-medium flex items-center justify-between">
+        <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex items-center justify-between">
           <span>
             Mid-cycle modification applied! {seats} active seats. Prorated delta of &#8377;{proratedCharge.toLocaleString("en-IN")} added to next scheduled invoice.
           </span>
-          <span className="text-[11px] font-mono text-emerald-800">
+          <span className="text-[11px] text-ok">
             Day-count proration factor: {prorationFactor.toFixed(2)}
           </span>
         </div>
       )}
 
       {creditNoteGenerated && (
-        <div className="rounded-[18px] bg-amber-500/10 p-4 border border-amber-500/25 text-[13px] text-amber-950 font-medium flex items-center justify-between">
+        <div className="rounded-[18px] tone-warn p-4 border border-transparent text-[13px] text-warn font-medium flex items-center justify-between">
           <span>
             Formal Credit Note Issued: <strong>CN-2026-001</strong> for unearned revenue refund: <strong>&#8377;10,000</strong>.
           </span>
-          <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+          <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full tone-warn text-warn">
             Credit Note Recorded
           </span>
         </div>
@@ -123,7 +123,7 @@ export default function SubscriptionBillingDetailPage({
       {/* TWO SEPARATE TRACKS: ONE-TIME VS RECURRING */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* TRACK 1: ONE-TIME INVOICE (4 cols) */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs lg:col-span-4 flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-ink/6">
               <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
@@ -135,7 +135,7 @@ export default function SubscriptionBillingDetailPage({
 
             <div className="mt-4 space-y-3">
               <div className="rounded-[16px] bg-cream/40 p-3.5 border border-ink/6">
-                <p className="font-mono text-[11px] text-mist">
+                <p className="text-[11px] text-mist">
                   Invoice Ref: INV-9042-OT
                 </p>
                 <p className="font-serif text-[22px] font-semibold text-ink mt-1 tabular-nums">
@@ -153,7 +153,7 @@ export default function SubscriptionBillingDetailPage({
                 </div>
                 <div className="flex justify-between">
                   <span>Settlement:</span>
-                  <span className="text-emerald-800 font-semibold">100% Paid (NEFT)</span>
+                  <span className="text-ok font-semibold">100% Paid (NEFT)</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Shipment Split:</span>
@@ -174,12 +174,12 @@ export default function SubscriptionBillingDetailPage({
         </div>
 
         {/* TRACK 2: RECURRING SUBSCRIPTION SCHEDULE (8 cols) */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs lg:col-span-8 flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-8 flex flex-col justify-between">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
               <div>
                 <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
-                  <Repeat className="size-4 text-purple-700" />
+                  <Repeat className="size-4 text-lilac" />
                   Track 2: Recurring Subscription Timeline
                 </span>
                 <p className="text-[12px] text-mist mt-0.5">
@@ -191,7 +191,7 @@ export default function SubscriptionBillingDetailPage({
                 <span className="text-[11px] uppercase font-semibold text-mist">
                   Current MRR
                 </span>
-                <p className="font-mono text-[18px] font-semibold text-emerald-800 tabular-nums">
+                <p className="text-[18px] font-semibold text-ok tabular-nums">
                   &#8377;{(seats * unitRate).toLocaleString("en-IN")}/mo
                 </p>
               </div>
@@ -239,7 +239,7 @@ export default function SubscriptionBillingDetailPage({
                     className="flex items-center justify-between p-3 rounded-[16px] bg-cream/30 border border-ink/6 text-[12.5px]"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="size-6 flex items-center justify-center rounded-full bg-white font-mono text-[11px] font-semibold text-ink shadow-2xs">
+                      <span className="size-6 flex items-center justify-center rounded-full bg-white text-[11px] font-semibold text-ink">
                         {idx + 1}
                       </span>
                       <div>
@@ -251,13 +251,13 @@ export default function SubscriptionBillingDetailPage({
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <span className="font-mono font-semibold tabular-nums text-ink">
+                      <span className="font-semibold tabular-nums text-ink">
                         {item.amt}
                       </span>
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                           item.status === "PAID"
-                            ? "bg-emerald-100 text-emerald-800"
+                            ? "tone-ok text-ok"
                             : "bg-ink/5 text-mist"
                         }`}
                       >
@@ -275,11 +275,11 @@ export default function SubscriptionBillingDetailPage({
             <button
               type="button"
               onClick={handleCancelOrDowngrade}
-              className="text-[12px] font-medium text-rose-700 hover:text-rose-900 transition-colors"
+              className="text-[12px] font-medium text-bad hover:text-bad transition-colors"
             >
               Cancel Subscription / Issue Partial Credit Note
             </button>
-            <span className="text-[11.5px] text-mist font-mono">
+            <span className="text-[11.5px] text-mist">
               Day-count method: Actual/30
             </span>
           </div>
@@ -337,17 +337,17 @@ export default function SubscriptionBillingDetailPage({
               </div>
 
               {/* Exact Formula Breakdown Box */}
-              <div className="rounded-xl bg-purple-50 p-3.5 border border-purple-200 text-[12px] space-y-1.5 text-purple-950">
-                <p className="font-semibold flex items-center gap-1.5 text-purple-900">
+              <div className="rounded-xl tone-lilac p-3.5 border border-transparent text-[12px] space-y-1.5 text-lilac">
+                <p className="font-semibold flex items-center gap-1.5 text-lilac">
                   <Sparkles className="size-3.5" /> Proration Mathematical Formula:
                 </p>
-                <div className="font-mono text-[11.5px] space-y-1 pt-1">
+                <div className="text-[11.5px] space-y-1 pt-1">
                   <p>Days Elapsed: 18 / 30 &middot; Days Remaining: 12 / 30</p>
                   <p>Proration Factor: 12 &divide; 30 = 0.40</p>
-                  <p className="text-purple-900 font-bold">
+                  <p className="text-lilac font-bold">
                     Adjustment: {deltaSeats} additional seats &times; &#8377;25,000 &times; 0.40 = +&#8377;{proratedCharge.toLocaleString("en-IN")}
                   </p>
-                  <p className="pt-1 border-t border-purple-200/60">
+                  <p className="pt-1 border-t border-transparent/60">
                     Next Full Month: &#8377;{nextCycleTotal.toLocaleString("en-IN")}/mo
                   </p>
                 </div>

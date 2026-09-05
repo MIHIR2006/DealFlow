@@ -76,14 +76,14 @@ export default function InvoicesPage() {
 
         {/* Financial Summary */}
         <div className="flex items-center gap-3">
-          <div className="rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-semibold text-ink shadow-xs">
-            Outstanding AR: <span className="text-amber-800 font-mono">₹3,45,000</span>
+          <div className="rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-semibold text-ink">
+            Outstanding AR: <span className="text-warn">₹3,45,000</span>
           </div>
         </div>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-1 rounded-full bg-white p-1 border border-ink/8 shadow-xs w-fit">
+      <div className="flex items-center gap-1 rounded-full bg-white p-1 card-shadow w-fit">
         {[
           { id: "ALL", label: `All Invoices (${INVOICES.length})` },
           { id: "POSTED", label: "Unpaid / Posted" },
@@ -94,9 +94,9 @@ export default function InvoicesPage() {
             key={f.id}
             type="button"
             onClick={() => setFilter(f.id)}
-            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${
+            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
               filter === f.id
-                ? "bg-ink text-bone shadow-xs"
+                ? "bg-ink text-bone"
                 : "text-mist hover:text-ink"
             }`}
           >
@@ -106,9 +106,9 @@ export default function InvoicesPage() {
       </div>
 
       {/* Invoices Table */}
-      <div className="overflow-hidden rounded-[24px] bg-white border border-ink/8 shadow-xs">
+      <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
         <table className="w-full text-left text-[13.5px]">
-          <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+          <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
             <tr>
               <th className="px-6 py-3.5">Invoice #</th>
               <th className="px-6 py-3.5">Customer &amp; Type</th>
@@ -125,7 +125,7 @@ export default function InvoicesPage() {
                 key={inv.id}
                 className="hover:bg-cream/40 transition-colors group cursor-pointer"
               >
-                <td className="px-6 py-4 font-mono font-medium text-ink">
+                <td className="px-6 py-4 font-medium text-ink">
                   <Link href={`/invoices/${inv.id}`} className="hover:underline">
                     {inv.id}
                   </Link>
@@ -137,19 +137,19 @@ export default function InvoicesPage() {
                 <td className="px-6 py-4">
                   <StatusBadge status={inv.status} size="sm" />
                 </td>
-                <td className="px-6 py-4 font-mono font-semibold tabular-nums text-ink">
+                <td className="px-6 py-4 font-semibold tabular-nums text-ink">
                   {inv.grandTotal}
                 </td>
-                <td className="px-6 py-4 font-mono tabular-nums text-emerald-800">
+                <td className="px-6 py-4 tabular-nums text-ok">
                   {inv.paidAmount}
                 </td>
-                <td className="px-6 py-4 font-mono font-bold tabular-nums text-ink">
+                <td className="px-6 py-4 font-bold tabular-nums text-ink">
                   {inv.balanceDue}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <Link
                     href={`/invoices/${inv.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 shadow-xs transition-colors"
+                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors whitespace-nowrap cursor-pointer"
                   >
                     Record Payment <ArrowRight className="size-3" />
                   </Link>

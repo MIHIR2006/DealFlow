@@ -84,7 +84,7 @@ export default function InvoiceDetailPage({
         <div className="flex items-center gap-3">
           <Link
             href="/invoices"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white shadow-xs hover:bg-cream transition-colors text-ink"
+            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
           >
             <ArrowLeft className="size-4" />
           </Link>
@@ -106,7 +106,7 @@ export default function InvoiceDetailPage({
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
           >
             <Printer className="size-3.5" /> Print Invoice
           </button>
@@ -118,7 +118,7 @@ export default function InvoiceDetailPage({
                 setAmountInput(String(balanceDue));
                 setPaymentModalOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 px-5 py-2 text-[13px] font-semibold text-white hover:bg-emerald-800 shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-semibold text-white hover:fill-ok transition-colors"
             >
               <CreditCard className="size-3.5" /> Record Payment
             </button>
@@ -129,14 +129,14 @@ export default function InvoiceDetailPage({
       <LifecycleBar currentStage="PAID" />
 
       {/* Main Invoice Card */}
-      <div className="rounded-[24px] bg-white p-8 border border-ink/8 shadow-xs space-y-6 max-w-4xl mx-auto">
+      <div className="rounded-[24px] bg-white p-8 card-shadow space-y-6 max-w-4xl mx-auto">
         {/* Invoice Header Details */}
         <div className="flex flex-wrap justify-between gap-4 pb-6 border-b border-ink/8">
           <div>
             <h2 className="font-headline font-bold text-[20px] text-ink">
               Tax Invoice
             </h2>
-            <p className="font-mono text-[13px] text-mist mt-0.5">
+            <p className="text-[13px] text-mist mt-0.5">
               Invoice Ref: {invoice.id}
             </p>
             <div className="mt-3 text-[12.5px] text-ink/80">
@@ -144,7 +144,7 @@ export default function InvoiceDetailPage({
               <p>{invoice.customer}</p>
               <p>7th Block, Koramangala Industrial Area</p>
               <p>Bengaluru, Karnataka 560095</p>
-              <p className="font-mono text-[11.5px] text-mist mt-1">
+              <p className="text-[11.5px] text-mist mt-1">
                 GSTIN: 29AAACA1234F1Z5
               </p>
             </div>
@@ -172,7 +172,7 @@ export default function InvoiceDetailPage({
 
         {/* Invoice Items Table */}
         <table className="w-full text-left text-[13px]">
-          <thead className="text-[11px] font-semibold uppercase tracking-wider text-mist border-b border-ink/8">
+          <thead className="text-[11px] font-semibold text-mist border-b border-ink/8">
             <tr>
               <th className="py-2.5">Item Description</th>
               <th className="py-2.5">Qty</th>
@@ -184,22 +184,22 @@ export default function InvoiceDetailPage({
             <tr>
               <td className="py-3.5">
                 <p className="font-medium text-ink">Laptop Pro 16&quot;</p>
-                <p className="font-mono text-[11px] text-mist">HW-LP-16 (12% Discount Applied)</p>
+                <p className="text-[11px] text-mist">HW-LP-16 (12% Discount Applied)</p>
               </td>
-              <td className="py-3.5 font-mono">2</td>
-              <td className="py-3.5 font-mono">&#8377;1,93,600</td>
-              <td className="py-3.5 text-right font-mono font-semibold text-ink">
+              <td className="py-3.5">2</td>
+              <td className="py-3.5">&#8377;1,93,600</td>
+              <td className="py-3.5 text-right font-semibold text-ink">
                 &#8377;3,87,200
               </td>
             </tr>
             <tr>
               <td className="py-3.5">
                 <p className="font-medium text-ink">Setup &amp; Migration Service</p>
-                <p className="font-mono text-[11px] text-mist">SRV-SETUP-PRO (18% Discount Approved)</p>
+                <p className="text-[11px] text-mist">SRV-SETUP-PRO (18% Discount Approved)</p>
               </td>
-              <td className="py-3.5 font-mono">1</td>
-              <td className="py-3.5 font-mono">&#8377;36,900</td>
-              <td className="py-3.5 text-right font-mono font-semibold text-ink">
+              <td className="py-3.5">1</td>
+              <td className="py-3.5">&#8377;36,900</td>
+              <td className="py-3.5 text-right font-semibold text-ink">
                 &#8377;36,900
               </td>
             </tr>
@@ -210,25 +210,25 @@ export default function InvoiceDetailPage({
         <div className="pt-4 border-t border-ink/8 flex flex-col items-end text-[13px] space-y-1.5">
           <div className="flex justify-between w-64 text-mist">
             <span>Taxable Subtotal:</span>
-            <span className="font-mono font-medium text-ink">
+            <span className="font-medium text-ink">
               &#8377;{invoice.subtotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex justify-between w-64 text-mist">
             <span>GST (18%):</span>
-            <span className="font-mono font-medium text-ink">
+            <span className="font-medium text-ink">
               &#8377;{invoice.taxTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex justify-between w-64 text-[15px] font-bold text-ink pt-1.5 border-t border-ink/6">
             <span>Invoice Total:</span>
-            <span className="font-mono">
+            <span className="tabular-nums">
               &#8377;{invoice.grandTotal.toLocaleString("en-IN")}
             </span>
           </div>
-          <div className="flex justify-between w-64 text-emerald-800 font-semibold pt-1">
+          <div className="flex justify-between w-64 text-ok font-semibold pt-1">
             <span>Total Paid to Date:</span>
-            <span className="font-mono tabular-nums">
+            <span className="tabular-nums">
               &#8377;{invoice.paidAmount.toLocaleString("en-IN")}
             </span>
           </div>
@@ -242,7 +242,7 @@ export default function InvoiceDetailPage({
 
           <div className="rounded-[16px] bg-cream/30 border border-ink/6 overflow-hidden">
             <table className="w-full text-left text-[12.5px]">
-              <thead className="text-[11px] text-mist border-b border-ink/6 bg-ink/[0.02]">
+              <thead className="text-[11px] text-mist border-b border-ink/6 bg-cream/50">
                 <tr>
                   <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2">Method</th>
@@ -255,8 +255,8 @@ export default function InvoiceDetailPage({
                   <tr key={p.id}>
                     <td className="px-4 py-2.5 text-mist">{p.date}</td>
                     <td className="px-4 py-2.5 font-medium text-ink">{p.method}</td>
-                    <td className="px-4 py-2.5 font-mono text-mist">{p.reference}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-emerald-800">
+                    <td className="px-4 py-2.5 text-mist">{p.reference}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-ok">
                       &#8377;{p.amount.toLocaleString("en-IN")}
                     </td>
                   </tr>
@@ -287,7 +287,7 @@ export default function InvoiceDetailPage({
                   type="number"
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 font-mono text-[14px] font-bold"
+                  className="w-full rounded-xl border border-ink/15 p-2.5 text-[14px] font-bold"
                 />
                 <span className="text-[11px] text-mist mt-1 block">
                   Remaining balance due: &#8377;{balanceDue.toLocaleString("en-IN")}
@@ -317,7 +317,7 @@ export default function InvoiceDetailPage({
                   type="text"
                   value={paymentRef}
                   onChange={(e) => setPaymentRef(e.target.value)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 font-mono text-[13px]"
+                  className="w-full rounded-xl border border-ink/15 p-2.5 text-[13px]"
                 />
               </div>
             </div>
@@ -333,7 +333,7 @@ export default function InvoiceDetailPage({
               <button
                 type="button"
                 onClick={handleRecordPayment}
-                className="rounded-full bg-emerald-700 text-white px-5 py-2 text-[13px] font-semibold hover:bg-emerald-800 shadow-xs"
+                className="rounded-full fill-ok text-white px-5 py-2 text-[13px] font-semibold hover:fill-ok"
               >
                 Post Payment &rarr;
               </button>

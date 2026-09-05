@@ -57,16 +57,16 @@ export default function SubscriptionsPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="rounded-full border border-ink/10 bg-white px-3.5 py-1.5 text-[12.5px] font-semibold text-ink shadow-xs">
-            Total Active MRR: <span className="text-emerald-800 font-mono">₹2,32,500</span>
+          <div className="rounded-full border border-ink/10 bg-white px-3.5 py-1.5 text-[12.5px] font-semibold text-ink">
+            Total Active MRR: <span className="text-ok">₹2,32,500</span>
           </div>
         </div>
       </div>
 
       {/* Subscriptions Table */}
-      <div className="overflow-hidden rounded-[24px] bg-white border border-ink/8 shadow-xs">
+      <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
         <table className="w-full text-left text-[13.5px]">
-          <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+          <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
             <tr>
               <th className="px-6 py-3.5">Subscription #</th>
               <th className="px-6 py-3.5">Customer</th>
@@ -84,7 +84,7 @@ export default function SubscriptionsPage() {
                 key={sub.id}
                 className="hover:bg-cream/40 transition-colors group cursor-pointer"
               >
-                <td className="px-6 py-4 font-mono font-medium text-ink">
+                <td className="px-6 py-4 font-medium text-ink">
                   <Link href={`/subscriptions/${sub.id}`} className="hover:underline">
                     {sub.id}
                   </Link>
@@ -96,25 +96,25 @@ export default function SubscriptionsPage() {
                   <p className="font-medium text-ink">{sub.planName}</p>
                   <p className="text-[11.5px] text-mist">{sub.cadence} billing</p>
                 </td>
-                <td className="px-6 py-4 font-mono tabular-nums text-ink font-semibold">
+                <td className="px-6 py-4 tabular-nums text-ink font-semibold">
                   {sub.qty} seats
                 </td>
-                <td className="px-6 py-4 font-mono font-semibold tabular-nums text-emerald-800">
+                <td className="px-6 py-4 font-semibold tabular-nums text-ok">
                   {sub.mrr}
                 </td>
                 <td className="px-6 py-4 text-mist text-[12.5px]">
                   {sub.nextBillingDate}
                 </td>
                 <td className="px-6 py-4">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    <span className="size-1.5 rounded-full bg-emerald-600 mr-1.5" />
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tone-ok text-ok border border-transparent">
+                    <span className="size-1.5 rounded-full fill-ok mr-1.5" />
                     {sub.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <Link
                     href={`/subscriptions/${sub.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 shadow-xs transition-colors"
+                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors whitespace-nowrap cursor-pointer"
                   >
                     Manage &amp; Prorate <ArrowRight className="size-3" />
                   </Link>
