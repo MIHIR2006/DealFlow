@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.shots
 
 # next.js
 /.next/
