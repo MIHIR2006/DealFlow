@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/platform/apierr"
@@ -44,18 +45,18 @@ func (h billingHandler) generate(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	endpoint := fmt.Sprintf("POST /orders/%d/invoices", id)
-	status, body, err := h.idem.Do(ctx, key, endpoint, []byte("{}"), func() (int, any, error) {
+	status, body, raw, replayed, err := h.idem.Do(ctx, key, endpoint, []byte("{}"), func() (int, any, error) {
 		view, err := h.svc.Generate(ctx, actor, id)
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusOK, billingViewDTO(view), nil
+		return http.StatusCreated, billingViewDTO(view), nil
 	})
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	OK(c, status, body)
+	writeIdempotentResponse(c, status, body, raw, replayed)
 }
 
 func (h billingHandler) getForOrder(c *gin.Context) {
@@ -102,23 +103,35 @@ func (h billingHandler) changeSubscription(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	raw, _ := json.Marshal(req)
+	reqBytes, _ := json.Marshal(req)
 	endpoint := fmt.Sprintf("POST /orders/%d/subscriptions/%d/change", id, lineID)
-	status, body, err := h.idem.Do(ctx, key, endpoint, raw, func() (int, any, error) {
+	status, body, raw, replayed, err := h.idem.Do(ctx, key, endpoint, reqBytes, func() (int, any, error) {
 		result, err := h.svc.ChangeSubscription(ctx, actor, id, lineID, qty)
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusOK, dto.SubscriptionChangeResponse{
-			Kind: string(result.Kind), Amount: result.Amount.String(), Factor: result.Factor.String(),
+		resp := dto.SubscriptionChangeResponse{
+			Proration: dto.Proration{
+				DaysInPeriod: result.Proration.DaysInPeriod, DaysRemaining: result.Proration.DaysRemaining,
+				Factor: result.Proration.Factor.String(), Amount: result.Proration.Amount.String(),
+				Kind: string(result.Proration.Kind),
+			},
 			Billing: billingViewDTO(result.View),
-		}, nil
+		}
+		if result.CreditNote != nil {
+			cn := result.CreditNote
+			resp.CreditNote = &dto.CreditNote{
+				ID: cn.ID, Reference: cn.Reference, Amount: cn.Amount.String(),
+				Reason: cn.Reason, Status: cn.Status, CreatedAt: iso(cn.CreatedAt),
+			}
+		}
+		return http.StatusOK, resp, nil
 	})
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	OK(c, status, body)
+	writeIdempotentResponse(c, status, body, raw, replayed)
 }
 
 func (h billingHandler) listInvoices(c *gin.Context) {
@@ -203,19 +216,32 @@ func (h billingHandler) recordPayment(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	raw, _ := json.Marshal(req)
+	reqBytes, _ := json.Marshal(req)
 	endpoint := fmt.Sprintf("POST /invoices/%d/payments", id)
-	status, body, err := h.idem.Do(ctx, key, endpoint, raw, func() (int, any, error) {
+	status, body, raw, replayed, err := h.idem.Do(ctx, key, endpoint, reqBytes, func() (int, any, error) {
 		detail, err := h.svc.RecordPayment(ctx, actor, id, service.PaymentInput{
 			Amount: amount, Method: req.Method, Reference: req.Reference,
 		})
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusCreated, invoiceDetailDTO(detail), nil
+		return http.StatusOK, invoiceDetailDTO(detail), nil
 	})
 	if err != nil {
 		Fail(c, err)
+		return
+	}
+	writeIdempotentResponse(c, status, body, raw, replayed)
+}
+
+// writeIdempotentResponse renders an idempotency-guarded result. A replay
+// writes the exact bytes stored from the original response, so a retried
+// request gets a byte-for-byte identical reply; a fresh result is encoded
+// normally.
+func writeIdempotentResponse(c *gin.Context, status int, body any, raw []byte, replayed bool) {
+	if replayed {
+		c.Header("Idempotent-Replay", "true")
+		c.Data(status, "application/json; charset=utf-8", raw)
 		return
 	}
 	OK(c, status, body)
@@ -231,9 +257,17 @@ func billingViewDTO(v service.BillingView) dto.OrderBilling {
 		Schedules:   make([]dto.BillingSchedule, 0, len(v.Schedules)),
 		CreditNotes: make([]dto.CreditNote, 0, len(v.CreditNotes)),
 	}
+	oneTime := decimal.Zero
 	for _, i := range v.Invoices {
 		out.Invoices = append(out.Invoices, invoiceDTO(i))
+		if i.Kind == "ONETIME" {
+			oneTime = oneTime.Add(i.Total)
+		}
 	}
+	out.OneTimeTotal = oneTime.String()
+	// The first period of every recurring line, summed, is the steady-state
+	// charge the customer will see repeat each billing period.
+	perPeriod := decimal.Zero
 	for _, s := range v.Schedules {
 		row := dto.BillingSchedule{
 			ID: s.ID, QuotationLineID: s.QuotationLineID, PlanName: s.PlanName,
@@ -243,7 +277,11 @@ func billingViewDTO(v service.BillingView) dto.OrderBilling {
 			Status: s.Status,
 		}
 		out.Schedules = append(out.Schedules, row)
+		if s.Seq == 1 {
+			perPeriod = perPeriod.Add(s.Amount)
+		}
 	}
+	out.RecurringTotalPerPeriod = perPeriod.String()
 	for _, cn := range v.CreditNotes {
 		out.CreditNotes = append(out.CreditNotes, dto.CreditNote{
 			ID: cn.ID, Reference: cn.Reference, Amount: cn.Amount.String(),
@@ -259,7 +297,8 @@ func invoiceDTO(i sqlcgen.Invoice) dto.Invoice {
 		Kind: i.Kind, Status: i.Status, IssueDate: i.IssueDate.Format("2006-01-02"),
 		Subtotal: i.Subtotal.String(), TaxTotal: i.TaxTotal.String(),
 		Total: i.Total.String(), AmountPaid: i.AmountPaid.String(),
-		CreatedAt: iso(i.CreatedAt),
+		Outstanding: i.Total.Sub(i.AmountPaid).String(),
+		CreatedAt:   iso(i.CreatedAt),
 	}
 	if i.DueDate != nil {
 		out.DueDate = i.DueDate.Format("2006-01-02")
@@ -275,7 +314,8 @@ func invoiceDetailDTO(d service.InvoiceDetail) dto.InvoiceDetail {
 		IssueDate: d.Invoice.IssueDate.Format("2006-01-02"),
 		Subtotal:  d.Invoice.Subtotal.String(), TaxTotal: d.Invoice.TaxTotal.String(),
 		Total: d.Invoice.Total.String(), AmountPaid: d.Invoice.AmountPaid.String(),
-		CreatedAt: iso(d.Invoice.CreatedAt),
+		Outstanding: d.Invoice.Total.Sub(d.Invoice.AmountPaid).String(),
+		CreatedAt:   iso(d.Invoice.CreatedAt),
 	}
 	if d.Invoice.DueDate != nil {
 		inv.DueDate = d.Invoice.DueDate.Format("2006-01-02")

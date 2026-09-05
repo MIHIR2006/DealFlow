@@ -4,11 +4,11 @@ on:
   push:
     branches: [backend, main]
     paths:
-      - 'backend/**'
+      - 'Backend/**'
       - '.github/workflows/backend.yml'
   pull_request:
     paths:
-      - 'backend/**'
+      - 'Backend/**'
       - '.github/workflows/backend.yml'
 
 concurrency:
@@ -17,7 +17,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: backend
+    working-directory: Backend
 
 jobs:
   build:
@@ -32,15 +32,15 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: backend/go.mod
+          go-version-file: Backend/go.mod
           cache: true
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: Backend/go.sum
 
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          key: go-mod-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
+          key: go-mod-${{ runner.os }}-${{ hashFiles('Backend/go.sum') }}
 
       - name: Download dependencies
         run: go mod download
@@ -61,7 +61,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          working-directory: backend
+          working-directory: Backend
 
       - name: Architecture guard
         run: make arch
@@ -116,15 +116,15 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: backend/go.mod
+          go-version-file: Backend/go.mod
           cache: true
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: Backend/go.sum
 
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          key: go-mod-schema-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
+          key: go-mod-schema-${{ runner.os }}-${{ hashFiles('Backend/go.sum') }}
 
       - name: Apply and roll back migrations
         run: |
@@ -141,9 +141,6 @@ jobs:
         run: make seed
 
       - name: Integration tests
-<<<<<<< HEAD
-        run: go test -tags=integration ./... -race -count=1 -p 1
-=======
         run: go test -tags=integration ./... -race -count=1 -p 1
 
       # The problem statement's own eight-step walkthrough, run against a
@@ -159,4 +156,3 @@ jobs:
             sleep 0.5
           done
           ./scripts/acceptance.sh http://localhost:8080
->>>>>>> f637f58db39e975e5685ebabc709ecbe549d01c5

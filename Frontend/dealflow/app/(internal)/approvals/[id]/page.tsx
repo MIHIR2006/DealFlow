@@ -1,16 +1,13 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ShieldAlert,
   Check,
   RotateCcw,
   X,
-  FileText,
-  AlertTriangle,
   History,
   Info,
 } from "lucide-react";
@@ -18,174 +15,106 @@ import { LifecycleBar } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { ApprovalStepper } from "@/components/ui/approval-stepper";
+import { QuotationApi, ApprovalApi, ApiError } from "@/lib/api";
+import { inr } from "@/lib/hooks";
+import type { Quotation } from "@/lib/types";
 
 export default function ApprovalDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const resolvedParams = use(params);
-  const router = useRouter();
-  const quoteId = resolvedParams.id || "Q-1042";
+  const { id: idParam } = use(params);
+  const quotationId = Number(idParam);
 
-  // Decision note state
+  const [quote, setQuote] = useState<Quotation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [actionDone, setActionDone] = useState<string | null>(null);
 
-  // Mocked state mirroring the exact spec §10 & Mockup Screen 6
-  const [approvalState, setApprovalState] = useState({
-    quoteRef: quoteId,
-    customer: "Acme Corp",
-    tier: "Gold",
-    grandTotal: "₹4,82,000",
-    blendedRiskScore: "5.6%",
-    status: "Pending Finance", // After Manager approved step 1
-    steps: [
-      {
-        id: 1,
-        round: 1,
-        step: 1,
-        required_role: "MANAGER",
-        status: "APPROVED" as const,
-        actor_name: "M. Shah (Sales Manager)",
-        reason: "Reviewed setup service discount. Margin maintained via warranty line.",
-        decided_at: "Aug 21, 14:15",
-        created_at: "Aug 20, 11:00",
-      },
-      {
-        id: 2,
-        round: 1,
-        step: 2,
-        required_role: "FINANCE",
-        status: "PENDING" as const,
-        reason: "",
-        created_at: "Aug 21, 14:15",
-      },
-    ],
-    audit: [
-      {
-        id: 1,
-        actor: "J. Rao (Sales Rep)",
-        action: "Submitted",
-        date: "Aug 20, 11:00",
-        note: "Initial 12% discount on hardware, 18% on service to win account against competitor.",
-      },
-      {
-        id: 2,
-        actor: "M. Shah (Sales Manager)",
-        action: "Returned for Revision",
-        date: "Aug 21, 09:30",
-        note: "Service margin too thin at 18%. Either lower discount or attach high-margin recurring line.",
-      },
-      {
-        id: 3,
-        actor: "J. Rao (Sales Rep)",
-        action: "Resubmitted",
-        date: "Aug 21, 11:45",
-        note: "Bundled 3-year enterprise warranty and 24/7 cloud support plan. Overall margin back at 21.4%.",
-      },
-      {
-        id: 4,
-        actor: "M. Shah (Sales Manager)",
-        action: "Approved Step 1",
-        date: "Aug 21, 14:15",
-        note: "Tier 1 manager sign-off granted. Escalating to Finance due to 5.6% blended score.",
-      },
-    ],
-    flaggedLines: [
-      {
-        id: "l1",
-        name: "Laptop Pro 16\" (Hardware)",
-        category: "Hardware",
-        givenDiscount: "12.0%",
-        limitAllowed: "15.0% (Gold Tier)",
-        overage: "0.0 pt OK",
-        isOver: false,
-        value: "₹4,40,000",
-      },
-      {
-        id: "l2",
-        name: "Setup & Migration Service (Service)",
-        category: "Service",
-        givenDiscount: "18.0%",
-        limitAllowed: "10.0% (Service Limit)",
-        overage: "+8.0 pt OVER",
-        isOver: true,
-        value: "₹45,000",
-      },
-      {
-        id: "l3",
-        name: "Enterprise Cloud Support 24/7",
-        category: "Subscription",
-        givenDiscount: "5.0%",
-        limitAllowed: "20.0% (Sub Limit)",
-        overage: "0.0 pt OK",
-        isOver: false,
-        value: "₹25,000",
-      },
-    ],
-  });
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const q = await QuotationApi.get(quotationId);
+      setQuote(q);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load this quotation.");
+    } finally {
+      setLoading(false);
+    }
+  }, [quotationId]);
 
-  function handleDecision(decision: "APPROVE" | "RETURN" | "REJECT") {
-    if (decision === "APPROVE") {
-      setApprovalState((prev) => ({
-        ...prev,
-        status: "Approved",
-        steps: prev.steps.map((s) =>
-          s.required_role === "FINANCE"
-            ? { ...s, status: "APPROVED", decided_at: "Just now", actor_name: "P. Nair (Finance)" }
-            : s
-        ),
-        audit: [
-          ...prev.audit,
-          {
-            id: prev.audit.length + 1,
-            actor: "P. Nair (Finance Reviewer)",
-            action: "Approved Step 2 (Final)",
-            date: "Just now",
-            note: note || "Final commercial risk sign-off granted. Ready for fulfillment.",
-          },
-        ],
-      }));
-      setActionDone("Quotation fully approved! Order ready to split across warehouses.");
-    } else if (decision === "RETURN") {
-      setApprovalState((prev) => ({
-        ...prev,
-        status: "Draft",
-        audit: [
-          ...prev.audit,
-          {
-            id: prev.audit.length + 1,
-            actor: "Reviewer",
-            action: "Returned for Revision",
-            date: "Just now",
-            note: note || "Returned to rep with revision instructions.",
-          },
-        ],
-      }));
-      setActionDone("Quotation returned to Draft status. Rep notified with revision note.");
-    } else {
-      setApprovalState((prev) => ({
-        ...prev,
-        status: "Rejected",
-        audit: [
-          ...prev.audit,
-          {
-            id: prev.audit.length + 1,
-            actor: "Reviewer",
-            action: "Rejected",
-            date: "Just now",
-            note: note || "Commercial terms unacceptable under current margin threshold.",
-          },
-        ],
-      }));
-      setActionDone("Quotation permanently rejected.");
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // The step at the head of the queue is the only one anyone can act on —
+  // approving/returning/rejecting anything else is rejected server-side too.
+  const pendingStep = quote?.approvals?.find((s) => s.status === "PENDING");
+
+  async function decide(action: "approve" | "return" | "reject") {
+    if (!pendingStep) return;
+    if ((action === "return" || action === "reject") && !note.trim()) {
+      setError("A reason is required to return or reject a step.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const fn =
+        action === "approve"
+          ? ApprovalApi.approve(pendingStep.id, note || undefined)
+          : action === "return"
+            ? ApprovalApi.returnForRevision(pendingStep.id, note)
+            : ApprovalApi.reject(pendingStep.id, note);
+      const updated = await fn;
+      setQuote(updated);
+      setNote("");
+      if (action === "approve") {
+        setActionDone(
+          updated.status === "APPROVED"
+            ? "Quotation fully approved. Order is ready to move to fulfillment."
+            : "Step approved. Escalated to the next reviewer.",
+        );
+      } else if (action === "return") {
+        setActionDone("Quotation returned to Draft. The rep has been notified to revise it.");
+      } else {
+        setActionDone("Quotation rejected.");
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not record that decision.");
+    } finally {
+      setBusy(false);
     }
   }
 
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="size-6 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!quote) {
+    return (
+      <div className="mx-auto max-w-[480px] py-16 text-center">
+        <p className="text-[14px] font-medium text-rose-800">{error ?? "Quotation not found."}</p>
+        <Link href="/approvals" className="mt-3 inline-block text-[13px] text-ink underline">
+          Back to approvals
+        </Link>
+      </div>
+    );
+  }
+
+  const risk = quote.risk;
+  const blended = parseFloat(risk.blended_score) || 0;
+
   return (
     <div className="space-y-6">
-      {/* Top Breadcrumb & Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -195,42 +124,43 @@ export default function ApprovalDetailPage({
             <ArrowLeft className="size-4" />
           </Link>
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
-                Approval Detail: {approvalState.quoteRef} ({approvalState.customer})
-              </h1>
-            </div>
+            <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
+              Approval Detail: {quote.reference} ({quote.customer_name})
+            </h1>
             <p className="text-[12.5px] text-mist">
-              Order Value:{" "}
-              <strong className="text-ink">
-                {approvalState.grandTotal}
-              </strong>{" "}
-              &middot; Customer Tier: <strong>Gold (15% Max)</strong>
+              Order value: <strong className="text-ink">{inr(quote.totals.grand_total)}</strong>
+              &middot; Customer tier: <strong>{quote.customer_tier}</strong>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <RiskBadge score={approvalState.blendedRiskScore} requiredLevel="FINANCE" size="md" />
-          <StatusBadge status={approvalState.status} size="md" />
+          <RiskBadge score={blended} requiredLevel={risk.required_level} size="md" />
+          <StatusBadge status={quote.status} size="md" />
         </div>
       </div>
 
-      <LifecycleBar currentStage="APPROVAL" quoteId={quoteId} />
+      <LifecycleBar currentStage="APPROVAL" />
 
-      {actionDone && (
+      {error ? (
+        <div className="rounded-[18px] tone-bad p-4 text-[13px] text-bad">{error}</div>
+      ) : null}
+
+      {actionDone ? (
         <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex items-center justify-between">
           <span>{actionDone}</span>
-          <Link
-            href={`/fulfillment/${quoteId}`}
-            className="rounded-full fill-ok text-white px-3 py-1 text-[12px] font-semibold hover:fill-ok transition-colors"
-          >
-            Go to Fulfillment &rarr;
-          </Link>
+          {quote.status === "APPROVED" ? (
+            <Link
+              href={`/quotations/${quote.id}`}
+              className="rounded-full fill-ok text-white px-3 py-1 text-[12px] font-semibold"
+            >
+              Open quotation &rarr;
+            </Link>
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {/* SECTION 1: "WHY THIS QUOTE WAS FLAGGED" TABLE (Exact Mockup Screen 6) */}
+      {/* "Why This Quote Was Flagged" — the mockup's core artifact */}
       <div className="rounded-[24px] bg-white p-6 card-shadow">
         <div className="flex items-center justify-between pb-3 border-b border-ink/6">
           <div>
@@ -239,11 +169,11 @@ export default function ApprovalDetailPage({
               Why This Quote Was Flagged
             </h2>
             <p className="text-[12.5px] text-mist">
-              Line-by-line breakdown comparing applied discounts against category and customer tier discretion.
+              Line-by-line breakdown comparing applied discounts against category and tier discretion.
             </p>
           </div>
           <span className="text-[11.5px] text-mist font-medium">
-            Rule Version: v2026.08 (Active)
+            Config v{risk.config_version}
           </span>
         </div>
 
@@ -251,124 +181,104 @@ export default function ApprovalDetailPage({
           <table className="w-full text-left text-[13.5px]">
             <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
-                <th className="px-5 py-3">Line Item</th>
+                <th className="px-5 py-3">Line</th>
                 <th className="px-5 py-3">Category</th>
                 <th className="px-5 py-3">Discount Given</th>
                 <th className="px-5 py-3">Limit Allowed</th>
-                <th className="px-5 py-3">Overage</th>
+                <th className="px-5 py-3">Over By</th>
                 <th className="px-5 py-3 text-right">Line Value</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">
-              {approvalState.flaggedLines.map((line) => (
-                <tr
-                  key={line.id}
-                  className={line.isOver ? "tone-warn0/[0.04]" : "hover:bg-cream/40"}
-                >
-                  <td className="px-5 py-3.5 font-medium text-ink">
-                    {line.name}
-                  </td>
-                  <td className="px-5 py-3.5 text-mist text-[12.5px]">
-                    {line.category}
-                  </td>
-                  <td className="px-5 py-3.5 font-semibold tabular-nums text-ink">
-                    {line.givenDiscount}
-                  </td>
-                  <td className="px-5 py-3.5 text-mist text-[12.5px]">
-                    {line.limitAllowed}
-                  </td>
+              {risk.breakdown.map((line) => (
+                <tr key={line.line_id} className={line.is_over ? "bg-amber-500/5" : "hover:bg-cream/40"}>
+                  <td className="px-5 py-3.5 font-medium text-ink">{line.product_name}</td>
+                  <td className="px-5 py-3.5 text-mist text-[12.5px]">{line.category_name}</td>
+                  <td className="px-5 py-3.5 font-semibold tabular-nums text-ink">{line.given_pct}%</td>
+                  <td className="px-5 py-3.5 text-mist text-[12.5px]">{line.allowed_pct}%</td>
                   <td className="px-5 py-3.5">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold ${
-                        line.isOver
-                          ? "tone-bad text-bad border border-transparent"
-                          : "tone-ok text-ok"
+                        line.is_over ? "tone-bad text-bad" : "tone-ok text-ok"
                       }`}
                     >
-                      {line.overage}
+                      {line.is_over ? `+${line.overage_pts} pt OVER` : "0 pt OK"}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right tabular-nums text-mist">
-                    {line.value}
-                  </td>
+                  <td className="px-5 py-3.5 text-right tabular-nums text-mist">{inr(line.list_value)}</td>
                 </tr>
               ))}
+              {risk.breakdown.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-center text-mist">
+                    No lines exceed their discount ceiling.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
 
-        {/* Yellow Callout Explaining the Blended Rationale */}
-        <div className="mt-5 rounded-[18px] tone-warn p-4 border border-transparent flex items-start gap-3">
+        <div className="mt-5 rounded-[18px] tone-warn p-4 flex items-start gap-3">
           <Info className="size-5 text-warn shrink-0 mt-0.5" />
           <div className="text-[12.5px] leading-relaxed text-warn">
             <strong className="font-semibold block mb-0.5">
-              Blended Risk Calculation Rationale (Score: 5.6%):
+              Blended risk rationale (score: {risk.blended_score}%):
             </strong>
-            Even though the customer holds <strong>Gold Tier</strong> status (normally granting up to 15% discretion), the Service line exceeded its stricter category ceiling (18% given vs 10% allowed, <strong>+8 percentage points over limit</strong>). Because the blended risk score of 5.6% crosses the 5.0% policy threshold, this deal cannot be approved by Sales Manager alone and requires mandatory Finance sign-off.
+            {risk.rationale}
           </div>
         </div>
       </div>
 
-      {/* SECTION 2: VISUAL WORKFLOW STEPPER */}
       <div className="rounded-[24px] bg-white p-6 card-shadow">
-        <h2 className="text-[15px] font-semibold text-ink mb-2">
-          Approval Chain Progression
-        </h2>
-        <ApprovalStepper
-          steps={approvalState.steps as any}
-          currentStatus={approvalState.status}
-        />
+        <h2 className="text-[15px] font-semibold text-ink mb-2">Approval chain progression</h2>
+        <ApprovalStepper steps={quote.approvals ?? []} currentStatus={quote.status} />
       </div>
 
-      {/* SECTION 3: AUDIT TRAIL TABLE */}
       <div className="rounded-[24px] bg-white p-6 card-shadow">
         <div className="flex items-center justify-between pb-3 border-b border-ink/6">
           <h2 className="text-[15px] font-semibold text-ink flex items-center gap-2">
             <History className="size-4 text-mist" />
-            Audit Trail &amp; Negotiation History
+            Audit trail
           </h2>
-          <span className="text-[11.5px] text-mist">
-            {approvalState.audit.length} immutable events
-          </span>
+          <span className="text-[11.5px] text-mist">{quote.audit?.length ?? 0} events</span>
         </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-left text-[13px]">
             <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
-                <th className="px-4 py-2.5">Reviewer / User</th>
+                <th className="px-4 py-2.5">User</th>
                 <th className="px-4 py-2.5">Action</th>
-                <th className="px-4 py-2.5">Timestamp</th>
-                <th className="px-4 py-2.5">Reason &amp; Notes</th>
+                <th className="px-4 py-2.5">Date</th>
+                <th className="px-4 py-2.5">Note</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">
-              {approvalState.audit.map((entry) => (
+              {(quote.audit ?? []).map((entry) => (
                 <tr key={entry.id} className="hover:bg-cream/30">
-                  <td className="px-4 py-3 font-medium text-ink">
-                    {entry.actor}
-                  </td>
+                  <td className="px-4 py-3 font-medium text-ink">{entry.actor_label}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                        entry.action.includes("Approved")
+                        entry.action.includes("APPROVED")
                           ? "tone-ok text-ok"
-                          : entry.action.includes("Returned")
-                          ? "tone-warn text-warn"
-                          : entry.action.includes("Submitted")
-                          ? "bg-ink/5 text-ink"
-                          : "tone-bad text-bad"
+                          : entry.action.includes("RETURN")
+                            ? "tone-warn text-warn"
+                            : entry.action.includes("SUBMIT")
+                              ? "bg-ink/5 text-ink"
+                              : entry.action.includes("REJECT")
+                                ? "tone-bad text-bad"
+                                : "bg-ink/5 text-ink"
                       }`}
                     >
-                      {entry.action}
+                      {entry.action.replace(/_/g, " ")}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-mist text-[12px] whitespace-nowrap">
-                    {entry.date}
+                    {new Date(entry.created_at).toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-ink/80 text-[12.5px] max-w-[420px]">
-                    {entry.note}
-                  </td>
+                  <td className="px-4 py-3 text-ink/80 text-[12.5px] max-w-[420px]">{entry.note}</td>
                 </tr>
               ))}
             </tbody>
@@ -376,61 +286,60 @@ export default function ApprovalDetailPage({
         </div>
       </div>
 
-      {/* SECTION 4: REVIEWER DECISION PANEL (3 Action Buttons) */}
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
-        <h2 className="text-[15px] font-semibold text-ink">
-          Reviewer Decision
-        </h2>
-        <p className="text-[12.5px] text-mist mt-0.5">
-          Record justification or return conditions for the sales rep.
-        </p>
+      {pendingStep ? (
+        <div className="rounded-[24px] bg-white p-6 card-shadow">
+          <h2 className="text-[15px] font-semibold text-ink">
+            Reviewer decision &middot; {pendingStep.required_role} step
+          </h2>
+          <p className="text-[12.5px] text-mist mt-0.5">
+            Record justification or return conditions for the sales rep. A reason is required to
+            return or reject.
+          </p>
 
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Enter authorization notes, required revision clauses, or commercial rejection reasoning..."
-          rows={3}
-          className="mt-3 w-full rounded-[16px] border border-ink/12 bg-cream/30 p-3.5 text-[13px] placeholder:text-mist focus:outline-hidden focus:border-ink/30"
-        />
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Enter authorization notes, required revision clauses, or rejection reasoning..."
+            rows={3}
+            disabled={busy}
+            className="mt-3 w-full rounded-[16px] border border-ink/12 bg-cream/30 p-3.5 text-[13px] placeholder:text-mist focus:outline-hidden focus:border-ink/30"
+          />
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-ink/6">
-          <div className="text-[12px] text-mist">
-            Logged with: <strong>P. Nair (Finance &amp; Operations)</strong>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            {/* Return for Revision */}
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-ink/6">
             <button
               type="button"
-              onClick={() => handleDecision("RETURN")}
-              className="inline-flex items-center gap-1.5 rounded-full tone-warn border border-transparent px-4 py-2 text-[13px] font-medium text-warn hover:tone-warn transition-colors"
+              onClick={() => decide("return")}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-full tone-warn px-4 py-2 text-[13px] font-medium text-warn transition-colors disabled:opacity-50"
             >
               <RotateCcw className="size-3.5" />
               Return for Revision
             </button>
-
-            {/* Reject */}
             <button
               type="button"
-              onClick={() => handleDecision("REJECT")}
-              className="inline-flex items-center gap-1.5 rounded-full tone-bad border border-transparent px-4 py-2 text-[13px] font-medium text-bad hover:tone-bad0/25 transition-colors"
+              onClick={() => decide("reject")}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-full tone-bad px-4 py-2 text-[13px] font-medium text-bad transition-colors disabled:opacity-50"
             >
               <X className="size-3.5" />
               Reject
             </button>
-
-            {/* Approve */}
             <button
               type="button"
-              onClick={() => handleDecision("APPROVE")}
-              className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-medium text-white hover:fill-ok transition-colors"
+              onClick={() => decide("approve")}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-medium text-white transition-colors disabled:opacity-50"
             >
               <Check className="size-3.5 stroke-[2.5]" />
-              Approve Step 2 &rarr;
+              Approve
             </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-[24px] bg-white p-6 card-shadow text-[13px] text-mist">
+          No step is currently awaiting a decision on this quotation.
+        </div>
+      )}
     </div>
   );
 }

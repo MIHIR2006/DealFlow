@@ -58,6 +58,30 @@ func (q *Queries) CancelRemainingSchedules(ctx context.Context, quotationLineID 
 	return result.RowsAffected(), nil
 }
 
+const cancelScheduleAmountsFrom = `-- name: CancelScheduleAmountsFrom :execrows
+UPDATE billing_schedules
+SET amount = 0, status = 'CANCELLED'
+WHERE quotation_line_id = $1
+  AND status = 'SCHEDULED'
+  AND seq > $2::int
+`
+
+type CancelScheduleAmountsFromParams struct {
+	QuotationLineID int64
+	AfterSeq        int32
+}
+
+// A subscription reduced to zero seats stops billing outright: every future
+// period is marked CANCELLED rather than merely re-priced to zero, so the
+// schedule reads as "this stopped" rather than "this happens to cost nothing".
+func (q *Queries) CancelScheduleAmountsFrom(ctx context.Context, arg CancelScheduleAmountsFromParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelScheduleAmountsFrom, arg.QuotationLineID, arg.AfterSeq)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createCreditNote = `-- name: CreateCreditNote :one
 INSERT INTO credit_notes
     (reference, sales_order_id, billing_schedule_id, quotation_line_id,

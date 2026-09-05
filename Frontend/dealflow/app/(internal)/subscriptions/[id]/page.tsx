@@ -1,23 +1,22 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useMemo, useState, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Calendar,
-  CreditCard,
   FileText,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Plus,
-  Minus,
+  Repeat,
   RotateCcw,
   Sparkles,
-  Repeat,
+  ReceiptText,
 } from "lucide-react";
 import { LifecycleBar } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useFetch } from "@/lib/hooks";
+import { inr } from "@/lib/hooks";
+import { OrderApi } from "@/lib/api";
+import { ApiError } from "@/lib/api";
+import type { SalesOrder, OrderBilling, BillingSchedule, SubscriptionChangeResponse } from "@/lib/types";
 
 export default function SubscriptionBillingDetailPage({
   params,
@@ -25,34 +24,113 @@ export default function SubscriptionBillingDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = use(params);
-  const subId = resolvedParams.id || "SUB-8021";
+  const orderId = resolvedParams.id;
+  const orderIdNum = Number(orderId);
 
-  // Subscription state
-  const [seats, setSeats] = useState(2);
-  const [unitRate] = useState(25000); // ₹25,000 per seat/month
-  const [prorationModalOpen, setProrationModalOpen] = useState(false);
-  const [targetSeats, setTargetSeats] = useState(4);
-  const [creditNoteGenerated, setCreditNoteGenerated] = useState(false);
-  const [modificationApplied, setModificationApplied] = useState(false);
+  const orderFetch = useFetch<SalesOrder>(`/v1/orders/${orderId}`);
+  const billingFetch = useFetch<OrderBilling>(`/v1/orders/${orderId}/billing`);
 
-  // 30-day cycle simulation: 18 days elapsed, 12 days remaining
-  const daysInPeriod = 30;
-  const daysRemaining = 12;
-  const prorationFactor = daysRemaining / daysInPeriod; // 0.40
-
-  const deltaSeats = targetSeats - seats;
-  const proratedCharge = deltaSeats * unitRate * prorationFactor;
-  const nextCycleTotal = targetSeats * unitRate;
-
-  function applyProration() {
-    setSeats(targetSeats);
-    setProrationModalOpen(false);
-    setModificationApplied(true);
+  // Local billing override — set wholesale with whatever the server returns
+  // after a mutation (generate, change quantity). We never patch it by hand.
+  // Until a mutation happens, the effective view is just what was fetched.
+  const [billingOverride, setBillingOverride] = useState<OrderBilling | null>(null);
+  const billing = billingOverride ?? billingFetch.data ?? null;
+  function setBilling(next: OrderBilling) {
+    setBillingOverride(next);
   }
 
-  function handleCancelOrDowngrade() {
-    setCreditNoteGenerated(true);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const result = await OrderApi.generateInvoice(orderIdNum);
+      setBilling(result);
+    } catch (e) {
+      setGenerateError(e instanceof ApiError ? e.message : "Failed to generate invoice and billing schedule.");
+    } finally {
+      setGenerating(false);
+    }
   }
+
+  // Mid-cycle quantity change, per recurring line.
+  const [qtyDrafts, setQtyDrafts] = useState<Record<number, string>>({});
+  const [changingLineId, setChangingLineId] = useState<number | null>(null);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [changeResult, setChangeResult] = useState<SubscriptionChangeResponse | null>(null);
+
+  async function handleChangeQty(lineId: number) {
+    const draft = (qtyDrafts[lineId] ?? "").trim();
+    if (!draft) return;
+    setChangingLineId(lineId);
+    setChangeError(null);
+    setChangeResult(null);
+    try {
+      const result = await OrderApi.changeSubscription(orderIdNum, lineId, draft);
+      setBilling(result.billing);
+      setChangeResult(result);
+      setQtyDrafts((prev) => ({ ...prev, [lineId]: "" }));
+    } catch (e) {
+      setChangeError(e instanceof ApiError ? e.message : "Failed to change subscription quantity.");
+    } finally {
+      setChangingLineId(null);
+    }
+  }
+
+  const scheduleGroups = useMemo(() => {
+    const map = new Map<number, BillingSchedule[]>();
+    for (const s of billing?.schedules ?? []) {
+      const arr = map.get(s.quotation_line_id) ?? [];
+      arr.push(s);
+      map.set(s.quotation_line_id, arr);
+    }
+    return Array.from(map.entries()).map(([lineId, schedules]) => ({
+      lineId,
+      schedules: [...schedules].sort((a, b) => a.seq - b.seq),
+    }));
+  }, [billing]);
+
+  const oneTimeInvoices = billing?.invoices.filter((i) => i.kind === "ONETIME") ?? [];
+  const hasNoBillingYet = !!billing && billing.invoices.length === 0 && billing.schedules.length === 0;
+
+  const loading = orderFetch.loading || billingFetch.loading;
+  const fatalError = orderFetch.error ?? billingFetch.error;
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-center">
+          <div className="size-6 border-2 border-ink border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="mt-3 text-[13px] text-mist font-medium">Loading billing detail...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (fatalError) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-center">
+          <p className="text-[14px] font-medium text-bad">Failed to load this order</p>
+          <p className="text-[12px] text-mist mt-1">{fatalError.message}</p>
+          <button
+            type="button"
+            onClick={() => {
+              orderFetch.refetch();
+              billingFetch.refetch();
+            }}
+            className="mt-3 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bone"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const order = orderFetch.data!;
 
   return (
     <div className="space-y-6">
@@ -68,308 +146,261 @@ export default function SubscriptionBillingDetailPage({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
-                Hybrid Billing: {subId} (Acme Corp)
+                Billing: {order.reference} ({order.customer_name})
               </h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tone-ok text-ok border border-transparent">
-                <span className="size-1.5 rounded-full fill-ok mr-1.5" />
-                Active Subscription
-              </span>
+              <StatusBadge status={order.status} size="sm" />
             </div>
             <p className="text-[12.5px] text-mist">
-              Associated Order: <strong>SO-9042</strong> &middot; Plan:{" "}
-              <strong>Enterprise Cloud Support 24/7 (Monthly)</strong>
+              Quotation: <strong>{order.quotation_reference}</strong>
+              {order.promised_date ? (
+                <>
+                  {" "}
+                  &middot; Promised: <strong>{order.promised_date}</strong>
+                </>
+              ) : null}
             </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => {
-              setTargetSeats(seats + 2);
-              setProrationModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors"
-          >
-            <Plus className="size-3.5" /> Modify Seats &amp; Prorate
-          </button>
         </div>
       </div>
 
       <LifecycleBar currentStage="BILLING" />
 
-      {modificationApplied && (
-        <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex items-center justify-between">
+      {changeResult && (
+        <div
+          className={`rounded-[18px] p-4 text-[13px] font-medium flex items-center justify-between gap-3 ${
+            changeResult.proration.kind === "CREDIT" ? "tone-warn text-warn" : "tone-ok text-ok"
+          }`}
+        >
           <span>
-            Mid-cycle modification applied! {seats} active seats. Prorated delta of &#8377;{proratedCharge.toLocaleString("en-IN")} added to next scheduled invoice.
+            {changeResult.proration.kind === "CHARGE" &&
+              `Mid-cycle change applied — prorated charge of ${inr(changeResult.proration.amount)} added.`}
+            {changeResult.proration.kind === "CREDIT" &&
+              `Mid-cycle change applied — a credit note for ${inr(changeResult.proration.amount)} was issued.`}
+            {changeResult.proration.kind === "NONE" && "Mid-cycle change applied — no charge or credit was due."}
           </span>
-          <span className="text-[11px] text-ok">
-            Day-count proration factor: {prorationFactor.toFixed(2)}
-          </span>
+          <span className="text-[11px]">Proration factor: {changeResult.proration.factor}</span>
         </div>
       )}
 
-      {creditNoteGenerated && (
-        <div className="rounded-[18px] tone-warn p-4 border border-transparent text-[13px] text-warn font-medium flex items-center justify-between">
-          <span>
-            Formal Credit Note Issued: <strong>CN-2026-001</strong> for unearned revenue refund: <strong>&#8377;10,000</strong>.
-          </span>
-          <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full tone-warn text-warn">
-            Credit Note Recorded
-          </span>
+      {changeError && (
+        <div className="rounded-[18px] tone-bad p-4 border border-transparent text-[13px] text-bad font-medium">
+          {changeError}
         </div>
       )}
 
-      {/* TWO SEPARATE TRACKS: ONE-TIME VS RECURRING */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* TRACK 1: ONE-TIME INVOICE (4 cols) */}
-        <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-              <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
-                <FileText className="size-4 text-ink/70" />
-                Track 1: One-Time Invoice
-              </span>
-              <StatusBadge status="PAID" size="sm" />
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[16px] bg-cream/40 p-3.5 border border-ink/6">
-                <p className="text-[11px] text-mist">
-                  Invoice Ref: INV-9042-OT
-                </p>
-                <p className="font-serif text-[22px] font-semibold text-ink mt-1 tabular-nums">
-                  &#8377;4,85,000
-                </p>
-                <p className="text-[12px] text-mist mt-0.5">
-                  Hardware (Laptops) + Setup &amp; Migration Service
-                </p>
-              </div>
-
-              <div className="text-[12.5px] space-y-1.5 text-mist pt-1">
-                <div className="flex justify-between">
-                  <span>Billing Date:</span>
-                  <span className="text-ink font-medium">Aug 22, 2026</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Settlement:</span>
-                  <span className="text-ok font-semibold">100% Paid (NEFT)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Shipment Split:</span>
-                  <span className="text-ink font-medium">Main Depot + East Depot</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-ink/6">
-            <Link
-              href="/invoices/INV-9042-OT"
-              className="inline-flex w-full items-center justify-center rounded-full border border-ink/10 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
-            >
-              View Full One-Time Invoice &rarr;
-            </Link>
-          </div>
+      {hasNoBillingYet ? (
+        <div className="rounded-[24px] bg-white p-8 card-shadow text-center">
+          <Sparkles className="size-6 text-lilac mx-auto" />
+          <h3 className="mt-3 text-[17px] font-semibold text-ink">
+            No billing set up for this order yet
+          </h3>
+          <p className="mt-1.5 text-[13px] text-mist max-w-md mx-auto">
+            Generate the one-time invoice and the recurring billing schedule for this order in a single step.
+          </p>
+          {generateError && (
+            <p className="mt-3 text-[12.5px] text-bad font-medium">{generateError}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generating}
+            className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {generating ? (
+              <>
+                <span className="size-3.5 border-2 border-bone/40 border-t-bone rounded-full animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <ReceiptText className="size-3.5" /> Generate Invoice &amp; Billing Schedule
+              </>
+            )}
+          </button>
         </div>
-
-        {/* TRACK 2: RECURRING SUBSCRIPTION SCHEDULE (8 cols) */}
-        <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-8 flex flex-col justify-between">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
-              <div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* TRACK 1: ONE-TIME INVOICES */}
+          <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-ink/6">
                 <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
-                  <Repeat className="size-4 text-lilac" />
-                  Track 2: Recurring Subscription Timeline
+                  <FileText className="size-4 text-ink/70" />
+                  One-Time Invoices
                 </span>
-                <p className="text-[12px] text-mist mt-0.5">
-                  Monthly billing cadence with automated proration logic
-                </p>
               </div>
 
-              <div className="text-right">
-                <span className="text-[11px] uppercase font-semibold text-mist">
-                  Current MRR
-                </span>
-                <p className="text-[18px] font-semibold text-ok tabular-nums">
-                  &#8377;{(seats * unitRate).toLocaleString("en-IN")}/mo
+              {oneTimeInvoices.length === 0 ? (
+                <p className="mt-4 text-[12.5px] text-mist">
+                  This order has no one-time invoice.
                 </p>
-              </div>
-            </div>
-
-            {/* 12-Month Schedule Timeline */}
-            <div className="mt-5">
-              <h3 className="text-[13px] font-semibold text-ink mb-3">
-                Upcoming 12-Month Billing Schedule
-              </h3>
-
-              <div className="space-y-2.5">
-                {[
-                  {
-                    period: "Period 1",
-                    date: "Aug 22, 2026",
-                    amt: "₹50,000",
-                    status: "PAID",
-                    inv: "INV-SUB-1",
-                  },
-                  {
-                    period: "Period 2",
-                    date: "Sep 22, 2026",
-                    amt: `₹${(seats * unitRate).toLocaleString("en-IN")}`,
-                    status: "SCHEDULED",
-                    inv: "Scheduled",
-                  },
-                  {
-                    period: "Period 3",
-                    date: "Oct 22, 2026",
-                    amt: `₹${(seats * unitRate).toLocaleString("en-IN")}`,
-                    status: "SCHEDULED",
-                    inv: "Scheduled",
-                  },
-                  {
-                    period: "Period 4",
-                    date: "Nov 22, 2026",
-                    amt: `₹${(seats * unitRate).toLocaleString("en-IN")}`,
-                    status: "SCHEDULED",
-                    inv: "Scheduled",
-                  },
-                ].map((item, idx) => (
-                  <div
-                    key={item.period}
-                    className="flex items-center justify-between p-3 rounded-[16px] bg-cream/30 border border-ink/6 text-[12.5px]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="size-6 flex items-center justify-center rounded-full bg-white text-[11px] font-semibold text-ink">
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <span className="font-medium text-ink">{item.period}</span>
-                        <span className="text-mist ml-2 text-[11.5px]">
-                          Due: {item.date}
-                        </span>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {oneTimeInvoices.map((inv) => (
+                    <Link
+                      key={inv.id}
+                      href={`/invoices/${inv.id}`}
+                      className="block rounded-[16px] bg-cream/40 p-3.5 border border-ink/6 hover:bg-cream/60 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-mist">Invoice Ref: {inv.reference}</p>
+                        <StatusBadge status={inv.status} size="sm" />
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <span className="font-semibold tabular-nums text-ink">
-                        {item.amt}
-                      </span>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                          item.status === "PAID"
-                            ? "tone-ok text-ok"
-                            : "bg-ink/5 text-mist"
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      <p className="font-serif text-[22px] font-semibold text-ink mt-1 tabular-nums">
+                        {inr(inv.total)}
+                      </p>
+                      <div className="text-[12px] text-mist mt-1.5 space-y-0.5">
+                        <div className="flex justify-between">
+                          <span>Issue Date:</span>
+                          <span className="text-ink font-medium">{inv.issue_date}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Paid:</span>
+                          <span className="text-ok font-semibold">{inr(inv.amount_paid)}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Downgrade & Cancel Controls */}
-          <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={handleCancelOrDowngrade}
-              className="text-[12px] font-medium text-bad hover:text-bad transition-colors"
-            >
-              Cancel Subscription / Issue Partial Credit Note
-            </button>
-            <span className="text-[11.5px] text-mist">
-              Day-count method: Actual/30
-            </span>
+          {/* TRACK 2: RECURRING SUBSCRIPTION SCHEDULE */}
+          <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-8 flex flex-col justify-between">
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
+                <div>
+                  <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
+                    <Repeat className="size-4 text-lilac" />
+                    Recurring Billing Schedule
+                  </span>
+                  <p className="text-[12px] text-mist mt-0.5">
+                    One-time and recurring lines are billed separately on this order.
+                  </p>
+                </div>
+              </div>
+
+              {scheduleGroups.length === 0 ? (
+                <p className="mt-4 text-[12.5px] text-mist">
+                  This order has no recurring lines.
+                </p>
+              ) : (
+                <div className="mt-5 space-y-5">
+                  {scheduleGroups.map((group) => {
+                    const first = group.schedules[0];
+                    return (
+                      <div key={group.lineId} className="rounded-[18px] border border-ink/8 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="font-medium text-ink text-[13.5px]">{first.product_name}</p>
+                            <p className="text-[11.5px] text-mist">{first.plan_name}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          {group.schedules.map((s) => (
+                            <div
+                              key={s.id}
+                              className="flex items-center justify-between p-3 rounded-[14px] bg-cream/30 border border-ink/6 text-[12.5px]"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="size-6 flex items-center justify-center rounded-full bg-white text-[11px] font-semibold text-ink">
+                                  {s.seq}
+                                </span>
+                                <div>
+                                  <span className="font-medium text-ink">Period {s.seq}</span>
+                                  <span className="text-mist ml-2 text-[11.5px]">
+                                    {s.period_start} &ndash; {s.period_end}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                <span className="font-semibold tabular-nums text-ink">
+                                  {inr(s.amount)}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                    s.status === "PAID"
+                                      ? "tone-ok text-ok"
+                                      : s.status === "INVOICED"
+                                        ? "tone-warn text-warn"
+                                        : "bg-ink/5 text-mist"
+                                  }`}
+                                >
+                                  {s.status}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Change quantity / cancel control */}
+                        <div className="mt-3 pt-3 border-t border-ink/6 flex flex-wrap items-center gap-2.5">
+                          <label className="text-[11.5px] font-medium text-mist">
+                            Change quantity (0 to cancel this line):
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="1"
+                            placeholder="New qty"
+                            value={qtyDrafts[group.lineId] ?? ""}
+                            onChange={(e) =>
+                              setQtyDrafts((prev) => ({ ...prev, [group.lineId]: e.target.value }))
+                            }
+                            className="w-24 rounded-lg border border-ink/15 px-2.5 py-1.5 text-[12.5px]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleChangeQty(group.lineId)}
+                            disabled={changingLineId === group.lineId || !(qtyDrafts[group.lineId] ?? "").trim()}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {changingLineId === group.lineId ? (
+                              <>
+                                <span className="size-3 border-2 border-bone/40 border-t-bone rounded-full animate-spin" />
+                                Applying...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="size-3" /> Apply Proration
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Mid-Cycle Proration Simulator Modal */}
-      {prorationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-[24px] bg-white p-6 shadow-2xl border border-ink/10">
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-              <h3 className="text-[17px] font-semibold text-ink">
-                Mid-Cycle Day-Count Proration
-              </h3>
-              <button
-                type="button"
-                onClick={() => setProrationModalOpen(false)}
-                className="text-mist hover:text-ink text-[13px]"
-              >
-                &times;
-              </button>
-            </div>
-
-            <p className="text-[12.5px] text-mist mt-2 leading-relaxed">
-              Adjust seat count mid-cycle. The billing engine calculates the exact pro-rata fee for the remaining days of the current 30-day period.
-            </p>
-
-            <div className="mt-4 space-y-4">
-              {/* Seat Stepper */}
-              <div>
-                <label className="text-[12px] font-semibold text-ink block mb-1">
-                  Adjust Subscription Seats
-                </label>
-                <div className="flex items-center justify-between rounded-xl border border-ink/15 p-2 bg-cream/40">
-                  <span className="text-[13px] font-medium text-ink">
-                    Seats: {targetSeats}
+      {/* Credit Notes */}
+      {billing && billing.credit_notes.length > 0 && (
+        <div className="rounded-[24px] bg-white p-6 card-shadow">
+          <h3 className="text-[14px] font-semibold text-ink pb-3 border-b border-ink/6">
+            Credit Notes
+          </h3>
+          <div className="mt-3 divide-y divide-ink/5">
+            {billing.credit_notes.map((cn) => (
+              <div key={cn.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[12.5px]">
+                <div>
+                  <p className="font-medium text-ink">{cn.reference}</p>
+                  <p className="text-mist text-[11.5px]">{cn.reason}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold tabular-nums text-warn">{inr(cn.amount)}</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tone-warn text-warn">
+                    {cn.status}
                   </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setTargetSeats(Math.max(1, targetSeats - 1))}
-                      className="size-7 flex items-center justify-center rounded-lg bg-white border border-ink/10 text-ink hover:bg-cream"
-                    >
-                      <Minus className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTargetSeats(targetSeats + 1)}
-                      className="size-7 flex items-center justify-center rounded-lg bg-white border border-ink/10 text-ink hover:bg-cream"
-                    >
-                      <Plus className="size-3.5" />
-                    </button>
-                  </div>
                 </div>
               </div>
-
-              {/* Exact Formula Breakdown Box */}
-              <div className="rounded-xl tone-lilac p-3.5 border border-transparent text-[12px] space-y-1.5 text-lilac">
-                <p className="font-semibold flex items-center gap-1.5 text-lilac">
-                  <Sparkles className="size-3.5" /> Proration Mathematical Formula:
-                </p>
-                <div className="text-[11.5px] space-y-1 pt-1">
-                  <p>Days Elapsed: 18 / 30 &middot; Days Remaining: 12 / 30</p>
-                  <p>Proration Factor: 12 &divide; 30 = 0.40</p>
-                  <p className="text-lilac font-bold">
-                    Adjustment: {deltaSeats} additional seats &times; &#8377;25,000 &times; 0.40 = +&#8377;{proratedCharge.toLocaleString("en-IN")}
-                  </p>
-                  <p className="pt-1 border-t border-transparent/60">
-                    Next Full Month: &#8377;{nextCycleTotal.toLocaleString("en-IN")}/mo
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-ink/8">
-              <button
-                type="button"
-                onClick={() => setProrationModalOpen(false)}
-                className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={applyProration}
-                className="rounded-full bg-ink text-bone px-5 py-2 text-[13px] font-semibold hover:bg-ink/90"
-              >
-                Confirm &amp; Apply Proration
-              </button>
-            </div>
+            ))}
           </div>
         </div>
       )}

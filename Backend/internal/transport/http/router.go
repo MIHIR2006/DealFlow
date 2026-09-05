@@ -116,7 +116,7 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	authGroup := rg.Group("/auth")
 	authGroup.Use(middleware.RateLimit(30, 10, Fail))
 	{
-		authGroup.POST("/signup", ah.signup)
+		authGroup.POST("/signup", adminSignupGuard(queries, signer), ah.signup)
 		authGroup.POST("/login", ah.login)
 		authGroup.GET("/me", authed, ah.me)
 	}
@@ -130,6 +130,12 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	ch := configHandler{svc: service.NewConfigService(queries, cfgCache)}
 	cfg := rg.Group("", authed)
 	{
+		// Every quotation is built for a customer, so any signed-in rep can
+		// read the customer list and onboard a new account inline. This is
+		// deliberately not adminOnly like the catalogue and governance writes.
+		cfg.GET("/customers", staff, ch.listCustomers)
+		cfg.POST("/customers", staff, ch.createCustomer)
+
 		cfg.GET("/categories", staff, ch.listCategories)
 		cfg.POST("/categories", adminOnly, ch.createCategory)
 

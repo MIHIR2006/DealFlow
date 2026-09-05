@@ -2,18 +2,16 @@
 
 import React, { useState, use } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  CreditCard,
-  DollarSign,
-  CheckCircle,
-  FileText,
-  Clock,
-  Printer,
-  ShieldCheck,
-} from "lucide-react";
-import { LifecycleBar } from "@/components/workspace/lifecycle-bar";
+import { ArrowLeft, CreditCard, Printer } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useFetch, inr } from "@/lib/hooks";
+import { InvoiceApi, ApiError } from "@/lib/api";
+import type { InvoiceDetail } from "@/lib/types";
+
+const PAYMENT_METHODS = [
+  { value: "CASH", label: "Cash" },
+  { value: "BANK", label: "Bank Transfer" },
+];
 
 export default function InvoiceDetailPage({
   params,
@@ -21,60 +19,82 @@ export default function InvoiceDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = use(params);
-  const invoiceId = resolvedParams.id || "INV-9042-OT";
+  const invoiceId = resolvedParams.id;
+
+  const { data, loading, error, refetch } = useFetch<InvoiceDetail>(`/v1/invoices/${invoiceId}`);
+
+  // Local invoice override — set wholesale with the server's response after
+  // a payment is recorded. Never patched by hand: amount_paid and status are
+  // server-computed (a partial payment correctly yields PARTIAL, not PAID).
+  // Until a payment is recorded, the effective view is just what was fetched.
+  const [invoiceOverride, setInvoice] = useState<InvoiceDetail | null>(null);
+  const invoice = invoiceOverride ?? data ?? null;
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [amountInput, setAmountInput] = useState("235000");
-  const [paymentMethod, setPaymentMethod] = useState("NEFT");
-  const [paymentRef, setPaymentRef] = useState("UTR-2026-991823");
+  const [amountInput, setAmountInput] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("BANK");
+  const [paymentRef, setPaymentRef] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Invoice state
-  const [invoice, setInvoice] = useState({
-    id: invoiceId,
-    customer: "Acme Corporation",
-    orderRef: "SO-9042",
-    date: "Aug 22, 2026",
-    dueDate: "Sep 15, 2026",
-    subtotal: 411016.95,
-    taxTotal: 73983.05,
-    grandTotal: 485000,
-    paidAmount: 250000,
-    status: "PARTIAL" as "POSTED" | "PARTIAL" | "PAID",
-    payments: [
-      {
-        id: "pay_1",
-        date: "Aug 22, 2026",
-        amount: 250000,
-        method: "Bank Transfer (NEFT)",
-        reference: "UTR-8391024",
-      },
-    ],
-  });
+  const balanceDue = invoice
+    ? Math.max(0, parseFloat(invoice.total) - parseFloat(invoice.amount_paid))
+    : 0;
 
-  const balanceDue = Math.max(0, invoice.grandTotal - invoice.paidAmount);
+  function openPaymentModal() {
+    setAmountInput(balanceDue > 0 ? balanceDue.toString() : "");
+    setPaymentMethod("BANK");
+    setPaymentRef("");
+    setSubmitError(null);
+    setPaymentModalOpen(true);
+  }
 
-  function handleRecordPayment() {
-    const amt = parseFloat(amountInput) || 0;
-    const newPaid = invoice.paidAmount + amt;
-    const newStatus = newPaid >= invoice.grandTotal ? "PAID" : "PARTIAL";
+  async function handleRecordPayment() {
+    if (!invoice) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const updated = await InvoiceApi.recordPayment(invoice.id, {
+        amount: amountInput,
+        method: paymentMethod,
+        reference: paymentRef || undefined,
+      });
+      setInvoice(updated);
+      setPaymentModalOpen(false);
+    } catch (e) {
+      setSubmitError(e instanceof ApiError ? e.message : "Failed to record payment.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-    setInvoice((prev) => ({
-      ...prev,
-      paidAmount: newPaid,
-      status: newStatus,
-      payments: [
-        ...prev.payments,
-        {
-          id: `pay_${Date.now()}`,
-          date: "Today, Just now",
-          amount: amt,
-          method: paymentMethod,
-          reference: paymentRef,
-        },
-      ],
-    }));
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-center">
+          <div className="size-6 border-2 border-ink border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="mt-3 text-[13px] text-mist font-medium">Loading invoice...</p>
+        </div>
+      </div>
+    );
+  }
 
-    setPaymentModalOpen(false);
+  if (error || !invoice) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-center">
+          <p className="text-[14px] font-medium text-bad">Failed to load invoice</p>
+          <p className="text-[12px] text-mist mt-1">{error?.message ?? "Invoice not found."}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="mt-3 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bone"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -91,13 +111,13 @@ export default function InvoiceDetailPage({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
-                {invoice.id}
+                {invoice.reference}
               </h1>
               <StatusBadge status={invoice.status} size="sm" />
             </div>
             <p className="text-[12.5px] text-mist">
-              Customer: <strong>{invoice.customer}</strong> &middot; Order:{" "}
-              <strong>{invoice.orderRef}</strong>
+              Customer: <strong>{invoice.customer_name ?? "—"}</strong> &middot; Order:{" "}
+              <strong>{invoice.order_reference ?? "—"}</strong>
             </p>
           </div>
         </div>
@@ -114,10 +134,7 @@ export default function InvoiceDetailPage({
           {invoice.status !== "PAID" && (
             <button
               type="button"
-              onClick={() => {
-                setAmountInput(String(balanceDue));
-                setPaymentModalOpen(true);
-              }}
+              onClick={openPaymentModal}
               className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-semibold text-white hover:fill-ok transition-colors"
             >
               <CreditCard className="size-3.5" /> Record Payment
@@ -126,45 +143,32 @@ export default function InvoiceDetailPage({
         </div>
       </div>
 
-      <LifecycleBar currentStage="PAID" />
-
       {/* Main Invoice Card */}
       <div className="rounded-[24px] bg-white p-8 card-shadow space-y-6 max-w-4xl mx-auto">
         {/* Invoice Header Details */}
         <div className="flex flex-wrap justify-between gap-4 pb-6 border-b border-ink/8">
           <div>
-            <h2 className="font-headline font-bold text-[20px] text-ink">
-              Tax Invoice
-            </h2>
-            <p className="text-[13px] text-mist mt-0.5">
-              Invoice Ref: {invoice.id}
-            </p>
+            <h2 className="font-headline font-bold text-[20px] text-ink">Tax Invoice</h2>
+            <p className="text-[13px] text-mist mt-0.5">Invoice Ref: {invoice.reference}</p>
             <div className="mt-3 text-[12.5px] text-ink/80">
               <p className="font-semibold text-ink">Billed To:</p>
-              <p>{invoice.customer}</p>
-              <p>7th Block, Koramangala Industrial Area</p>
-              <p>Bengaluru, Karnataka 560095</p>
-              <p className="text-[11.5px] text-mist mt-1">
-                GSTIN: 29AAACA1234F1Z5
-              </p>
+              <p>{invoice.customer_name ?? "—"}</p>
             </div>
           </div>
 
           <div className="text-right text-[12.5px] space-y-1.5 text-mist">
             <div>
-              <span>Issue Date:</span>{" "}
-              <strong className="text-ink">{invoice.date}</strong>
+              <span>Issue Date:</span> <strong className="text-ink">{invoice.issue_date}</strong>
             </div>
             <div>
-              <span>Due Date:</span>{" "}
-              <strong className="text-ink">{invoice.dueDate}</strong>
+              <span>Due Date:</span> <strong className="text-ink">{invoice.due_date ?? "—"}</strong>
             </div>
             <div className="pt-2">
               <span className="text-[11px] uppercase font-semibold text-mist block">
                 Balance Outstanding
               </span>
               <p className="font-serif text-[26px] font-bold text-ink tabular-nums mt-0.5">
-                &#8377;{balanceDue.toLocaleString("en-IN")}
+                {inr(balanceDue)}
               </p>
             </div>
           </div>
@@ -181,28 +185,26 @@ export default function InvoiceDetailPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-ink/5">
-            <tr>
-              <td className="py-3.5">
-                <p className="font-medium text-ink">Laptop Pro 16&quot;</p>
-                <p className="text-[11px] text-mist">HW-LP-16 (12% Discount Applied)</p>
-              </td>
-              <td className="py-3.5">2</td>
-              <td className="py-3.5">&#8377;1,93,600</td>
-              <td className="py-3.5 text-right font-semibold text-ink">
-                &#8377;3,87,200
-              </td>
-            </tr>
-            <tr>
-              <td className="py-3.5">
-                <p className="font-medium text-ink">Setup &amp; Migration Service</p>
-                <p className="text-[11px] text-mist">SRV-SETUP-PRO (18% Discount Approved)</p>
-              </td>
-              <td className="py-3.5">1</td>
-              <td className="py-3.5">&#8377;36,900</td>
-              <td className="py-3.5 text-right font-semibold text-ink">
-                &#8377;36,900
-              </td>
-            </tr>
+            {invoice.lines.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-4 text-mist text-[12.5px]">
+                  No line items on this invoice.
+                </td>
+              </tr>
+            ) : (
+              invoice.lines.map((line) => (
+                <tr key={line.id}>
+                  <td className="py-3.5">
+                    <p className="font-medium text-ink">{line.description}</p>
+                  </td>
+                  <td className="py-3.5">{line.qty}</td>
+                  <td className="py-3.5">{inr(line.unit_price)}</td>
+                  <td className="py-3.5 text-right font-semibold text-ink">
+                    {inr(line.net_amount)}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
 
@@ -210,35 +212,25 @@ export default function InvoiceDetailPage({
         <div className="pt-4 border-t border-ink/8 flex flex-col items-end text-[13px] space-y-1.5">
           <div className="flex justify-between w-64 text-mist">
             <span>Taxable Subtotal:</span>
-            <span className="font-medium text-ink">
-              &#8377;{invoice.subtotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-            </span>
+            <span className="font-medium text-ink">{inr(invoice.subtotal)}</span>
           </div>
           <div className="flex justify-between w-64 text-mist">
-            <span>GST (18%):</span>
-            <span className="font-medium text-ink">
-              &#8377;{invoice.taxTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-            </span>
+            <span>Tax:</span>
+            <span className="font-medium text-ink">{inr(invoice.tax_total)}</span>
           </div>
           <div className="flex justify-between w-64 text-[15px] font-bold text-ink pt-1.5 border-t border-ink/6">
             <span>Invoice Total:</span>
-            <span className="tabular-nums">
-              &#8377;{invoice.grandTotal.toLocaleString("en-IN")}
-            </span>
+            <span className="tabular-nums">{inr(invoice.total)}</span>
           </div>
           <div className="flex justify-between w-64 text-ok font-semibold pt-1">
             <span>Total Paid to Date:</span>
-            <span className="tabular-nums">
-              &#8377;{invoice.paidAmount.toLocaleString("en-IN")}
-            </span>
+            <span className="tabular-nums">{inr(invoice.amount_paid)}</span>
           </div>
         </div>
 
         {/* Payments Applied History Table */}
         <div className="pt-6 border-t border-ink/8">
-          <h3 className="text-[14px] font-semibold text-ink mb-3">
-            Payments Applied History
-          </h3>
+          <h3 className="text-[14px] font-semibold text-ink mb-3">Payments Applied History</h3>
 
           <div className="rounded-[16px] bg-cream/30 border border-ink/6 overflow-hidden">
             <table className="w-full text-left text-[12.5px]">
@@ -251,16 +243,24 @@ export default function InvoiceDetailPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink/5">
-                {invoice.payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="px-4 py-2.5 text-mist">{p.date}</td>
-                    <td className="px-4 py-2.5 font-medium text-ink">{p.method}</td>
-                    <td className="px-4 py-2.5 text-mist">{p.reference}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-ok">
-                      &#8377;{p.amount.toLocaleString("en-IN")}
+                {invoice.payments.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-3 text-mist text-[12px]">
+                      No payments recorded yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  invoice.payments.map((p) => (
+                    <tr key={p.id}>
+                      <td className="px-4 py-2.5 text-mist">{p.received_at}</td>
+                      <td className="px-4 py-2.5 font-medium text-ink">{p.method}</td>
+                      <td className="px-4 py-2.5 text-mist">{p.reference || "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-ok">
+                        {inr(p.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -271,12 +271,17 @@ export default function InvoiceDetailPage({
       {paymentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="w-full max-w-md rounded-[24px] bg-white p-6 shadow-2xl border border-ink/10">
-            <h3 className="text-[17px] font-semibold text-ink">
-              Record Commercial Payment
-            </h3>
+            <h3 className="text-[17px] font-semibold text-ink">Record Payment</h3>
             <p className="text-[12.5px] text-mist mt-1">
-              Apply customer funds against invoice {invoice.id}. Partial payments will update status to <strong>PARTIAL</strong>.
+              Apply customer funds against invoice {invoice.reference}. Partial payments will
+              update status to <strong>PARTIAL</strong>.
             </p>
+
+            {submitError && (
+              <div className="mt-3 rounded-lg tone-bad p-2.5 text-[12px] text-bad font-medium">
+                {submitError}
+              </div>
+            )}
 
             <div className="mt-5 space-y-4">
               <div>
@@ -285,12 +290,14 @@ export default function InvoiceDetailPage({
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
                   className="w-full rounded-xl border border-ink/15 p-2.5 text-[14px] font-bold"
                 />
                 <span className="text-[11px] text-mist mt-1 block">
-                  Remaining balance due: &#8377;{balanceDue.toLocaleString("en-IN")}
+                  Remaining balance due: {inr(balanceDue)}
                 </span>
               </div>
 
@@ -303,20 +310,23 @@ export default function InvoiceDetailPage({
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   className="w-full rounded-xl border border-ink/15 p-2.5 text-[13px] bg-cream/30"
                 >
-                  <option value="NEFT">Bank Transfer (NEFT / RTGS)</option>
-                  <option value="CARD">Corporate Credit Card</option>
-                  <option value="CHEQUE">Cheque / Demand Draft</option>
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label className="text-[12px] font-semibold text-ink block mb-1">
-                  Transaction / UTR Reference
+                  Reference (optional)
                 </label>
                 <input
                   type="text"
                   value={paymentRef}
                   onChange={(e) => setPaymentRef(e.target.value)}
+                  placeholder="UTR / transaction reference"
                   className="w-full rounded-xl border border-ink/15 p-2.5 text-[13px]"
                 />
               </div>
@@ -326,16 +336,25 @@ export default function InvoiceDetailPage({
               <button
                 type="button"
                 onClick={() => setPaymentModalOpen(false)}
-                className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink"
+                disabled={submitting}
+                className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleRecordPayment}
-                className="rounded-full fill-ok text-white px-5 py-2 text-[13px] font-semibold hover:fill-ok"
+                disabled={submitting || !amountInput.trim()}
+                className="rounded-full fill-ok text-white px-5 py-2 text-[13px] font-semibold hover:fill-ok disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
               >
-                Post Payment &rarr;
+                {submitting ? (
+                  <>
+                    <span className="size-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  <>Post Payment &rarr;</>
+                )}
               </button>
             </div>
           </div>

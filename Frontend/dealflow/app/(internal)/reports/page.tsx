@@ -1,37 +1,113 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  BarChart3,
   Download,
-  Filter,
-  Calendar,
-  User,
-  CheckCircle,
   FileSpreadsheet,
   Printer,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
+import { useFetch, inr } from "@/lib/hooks";
+import type { Category, Page, SalesReport } from "@/lib/types";
+
+const STATUS_OPTIONS = [
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "APPROVED",
+  "SENT",
+  "UNDER_NEGOTIATION",
+  "CONFIRMED",
+  "REJECTED",
+];
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
+
+function csvEscape(value: string | number): string {
+  const str = String(value);
+  if (/[",\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
 
 export default function ReportsPage() {
-  const [period, setPeriod] = useState("MONTH");
-  const [rep, setRep] = useState("ALL");
-  const [approvalStatus, setApprovalStatus] = useState("ALL");
-  const [category, setCategory] = useState("ALL");
+  // Draft filter inputs (only take effect once "Apply filters" is pressed).
+  const [fromInput, setFromInput] = useState("");
+  const [toInput, setToInput] = useState("");
+  const [salesTeamInput, setSalesTeamInput] = useState("");
+  const [statusInput, setStatusInput] = useState("ALL");
+  const [categoryInput, setCategoryInput] = useState("ALL");
 
-  const [downloading, setDownloading] = useState(false);
+  // Applied filters — this is what actually drives the fetch.
+  const [applied, setApplied] = useState({
+    from: "",
+    to: "",
+    sales_team: "",
+    status: "",
+    category_id: "",
+  });
 
-  function handleExportPDF() {
-    setDownloading(true);
-    setTimeout(() => {
-      setDownloading(false);
-      window.print();
-    }, 800);
+  const { data: categoriesPage } = useFetch<Page<Category>>("/v1/categories");
+  const categories = categoriesPage?.data ?? [];
+
+  const reportPath = useMemo(
+    () => `/v1/reports${buildQuery(applied)}`,
+    [applied],
+  );
+
+  const {
+    data: report,
+    loading,
+    error,
+    refetch,
+  } = useFetch<SalesReport>(reportPath);
+
+  function applyFilters() {
+    setApplied({
+      from: fromInput,
+      to: toInput,
+      sales_team: salesTeamInput,
+      status: statusInput === "ALL" ? "" : statusInput,
+      category_id: categoryInput === "ALL" ? "" : categoryInput,
+    });
   }
 
   function handleExportCSV() {
-    const csvContent =
-      "data:text/csv;charset=utf-8,Quote Ref,Customer,Grand Total,Margin %,Blended Risk,Status\nQ-1042,Acme Corp,482000,21.4,5.6,Approved\nQ-1031,Beta Industries,240000,28.0,3.2,Under negotiation\nQ-1018,Northwind Trading,110000,14.0,14.0,Stalled";
+    const rows = report?.rows ?? [];
+    const header = [
+      "Rep",
+      "Sales Team",
+      "Category",
+      "Quotation Count",
+      "Net Revenue",
+      "Margin",
+      "Discount Given",
+    ];
+    const lines = [header.map(csvEscape).join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          r.rep_name,
+          r.sales_team,
+          r.category_name,
+          r.quotation_count,
+          r.net_revenue,
+          r.margin,
+          r.discount_given,
+        ]
+          .map(csvEscape)
+          .join(","),
+      );
+    }
+    const csvContent = "data:text/csv;charset=utf-8," + lines.join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -40,6 +116,18 @@ export default function ReportsPage() {
     link.click();
     document.body.removeChild(link);
   }
+
+  function handleExportPDF() {
+    window.print();
+  }
+
+  const appliedCategoryName = useMemo(() => {
+    if (!report?.applied_filter.category_id) return null;
+    return (
+      categories.find((c) => c.id === report.applied_filter.category_id)?.name ??
+      `#${report.applied_filter.category_id}`
+    );
+  }, [report, categories]);
 
   return (
     <div className="space-y-6">
@@ -51,7 +139,8 @@ export default function ReportsPage() {
             Executive Sales &amp; Governance Reports
           </h1>
           <p className="mt-1 text-[14.5px] text-mist max-w-[620px]">
-            Comprehensive reporting across discount discipline, approval velocity, gross margin health, and product revenue mix.
+            Aggregate performance across sales teams, reps, and product categories, computed
+            server-side over the current filter set.
           </p>
         </div>
 
@@ -59,7 +148,8 @@ export default function ReportsPage() {
           <button
             type="button"
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
+            disabled={!report}
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50"
           >
             <FileSpreadsheet className="size-3.5 text-ok" /> Export CSV / XLS
           </button>
@@ -67,195 +157,236 @@ export default function ReportsPage() {
           <button
             type="button"
             onClick={handleExportPDF}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors"
+            disabled={!report}
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
           >
             <Printer className="size-3.5" />
-            {downloading ? "Preparing Report..." : "Export Executive PDF"}
+            Export Executive PDF
           </button>
         </div>
       </div>
 
       {/* 4 MANDATORY FILTERS (Spec A7) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 rounded-[20px] bg-white p-4 card-shadow">
-        {/* Filter 1: Period */}
-        <div>
-          <label className="text-[11.5px] font-semibold text-mist block mb-1">
-            Period Date Range
-          </label>
-          <div className="relative">
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
-            >
-              <option value="TODAY">Today (Live)</option>
-              <option value="WEEK">This Week</option>
-              <option value="MONTH">This Month (Trailing 30d)</option>
-              <option value="QUARTER">This Quarter (Q3 2026)</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Filter 2: Sales Team / Rep */}
-        <div>
-          <label className="text-[11.5px] font-semibold text-mist block mb-1">
-            Sales Team / Rep
-          </label>
-          <div className="relative">
-            <select
-              value={rep}
-              onChange={(e) => setRep(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
-            >
-              <option value="ALL">All Sales Teams (Global)</option>
-              <option value="RAO">J. Rao (Enterprise Rep)</option>
-              <option value="MEHTA">A. Mehta (Mid-Market Rep)</option>
-              <option value="IYER">S. Iyer (Commercial Rep)</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Filter 3: Approval Status */}
-        <div>
-          <label className="text-[11.5px] font-semibold text-mist block mb-1">
-            Approval Routing Status
-          </label>
-          <div className="relative">
-            <select
-              value={approvalStatus}
-              onChange={(e) => setApprovalStatus(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="APPROVED_DIRECT">Direct In-Policy (No Review)</option>
-              <option value="MANAGER_APPROVED">Manager Approved (Tier 1)</option>
-              <option value="FINANCE_APPROVED">Finance Approved (Tier 2)</option>
-              <option value="REJECTED">Rejected Quotations</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Filter 4: Product / Category */}
-        <div>
-          <label className="text-[11.5px] font-semibold text-mist block mb-1">
-            Product Category
-          </label>
-          <div className="relative">
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
-            >
-              <option value="ALL">All Categories</option>
-              <option value="HARDWARE">Hardware Products</option>
-              <option value="SERVICE">Professional Services</option>
-              <option value="SUBSCRIPTION">Recurring Subscriptions</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
-          </div>
-        </div>
-      </div>
-
-      {/* ANALYTICS VISUALS */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Visual 1: Discount Distribution & Margin Discipline */}
-        <div className="rounded-[24px] bg-white p-6 card-shadow">
-          <h3 className="text-[15px] font-semibold text-ink">
-            Discount Distribution Histogram
-          </h3>
-          <p className="text-[12.5px] text-mist mt-0.5">
-            Quotation clustering against allowed ceilings (10% &amp; 15% thresholds).
-          </p>
-
-          <div className="mt-6 space-y-3">
-            <div>
-              <div className="flex justify-between text-[12.5px] mb-1 font-medium">
-                <span>0% &ndash; 5% (Within Bronze Ceiling)</span>
-                <span className="text-ink">14 deals (58%)</span>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full fill-ok rounded-full" style={{ width: "58%" }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-[12.5px] mb-1 font-medium">
-                <span>5% &ndash; 10% (Silver Tier Ceiling)</span>
-                <span className="text-ink">6 deals (25%)</span>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full fill-ok rounded-full" style={{ width: "25%" }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-[12.5px] mb-1 font-medium">
-                <span>10% &ndash; 15% (Gold / Manager Approval Zone)</span>
-                <span className="text-warn">3 deals (13%)</span>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full fill-warn rounded-full" style={{ width: "13%" }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-[12.5px] mb-1 font-medium">
-                <span>&gt;15% (High Risk / Finance Approval Required)</span>
-                <span className="text-bad font-bold">1 deal (4%)</span>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-cream/80 overflow-hidden">
-                <div className="h-full fill-bad rounded-full" style={{ width: "4%" }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Visual 2: Approval Cycle Velocity */}
-        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
+      <div className="rounded-[20px] bg-white p-4 card-shadow space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+          {/* Filter 1: Period */}
           <div>
-            <h3 className="text-[15px] font-semibold text-ink">
-              Approval Turnaround Velocity
-            </h3>
-            <p className="text-[12.5px] text-mist mt-0.5">
-              Average elapsed hours from rep submission to final decision.
-            </p>
+            <label className="text-[11.5px] font-semibold text-mist block mb-1">
+              Period &mdash; From
+            </label>
+            <input
+              type="date"
+              value={fromInput}
+              onChange={(e) => setFromInput(e.target.value)}
+              className="w-full rounded-xl border border-ink/10 bg-cream/30 p-2 text-[12.5px] font-medium focus:outline-hidden text-ink"
+            />
+          </div>
+          <div>
+            <label className="text-[11.5px] font-semibold text-mist block mb-1">
+              Period &mdash; To
+            </label>
+            <input
+              type="date"
+              value={toInput}
+              onChange={(e) => setToInput(e.target.value)}
+              className="w-full rounded-xl border border-ink/10 bg-cream/30 p-2 text-[12.5px] font-medium focus:outline-hidden text-ink"
+            />
+          </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6 text-center">
-                <span className="text-[11.5px] text-mist uppercase font-semibold">
-                  Tier 1: Manager
-                </span>
-                <p className="font-serif text-[32px] font-bold text-ink mt-1 tabular-nums">
-                  3.8h
-                </p>
-                <p className="text-[11px] text-ok mt-0.5 font-medium">
-                  -1.4h vs last quarter
-                </p>
-              </div>
+          {/* Filter 2: Sales Team / Rep */}
+          <div>
+            <label className="text-[11.5px] font-semibold text-mist block mb-1">
+              Sales Team / Rep
+            </label>
+            <input
+              type="text"
+              value={salesTeamInput}
+              onChange={(e) => setSalesTeamInput(e.target.value)}
+              placeholder="e.g. Enterprise"
+              className="w-full rounded-xl border border-ink/10 bg-cream/30 p-2 text-[12.5px] font-medium focus:outline-hidden text-ink"
+            />
+          </div>
 
-              <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6 text-center">
-                <span className="text-[11.5px] text-mist uppercase font-semibold">
-                  Tier 2: Finance
-                </span>
-                <p className="font-serif text-[32px] font-bold text-ink mt-1 tabular-nums">
-                  11.2h
-                </p>
-                <p className="text-[11px] text-mist mt-0.5">
-                  Target SLA: &lt;24 hours
-                </p>
-              </div>
+          {/* Filter 3: Approval Status */}
+          <div>
+            <label className="text-[11.5px] font-semibold text-mist block mb-1">
+              Approval / Quotation Status
+            </label>
+            <div className="relative">
+              <select
+                value={statusInput}
+                onChange={(e) => setStatusInput(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
+              >
+                <option value="ALL">All Statuses</option>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+          {/* Filter 4: Product / Category */}
+          <div>
+            <label className="text-[11.5px] font-semibold text-mist block mb-1">
+              Product Category
+            </label>
+            <div className="relative">
+              <select
+                value={categoryInput}
+                onChange={(e) => setCategoryInput(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-ink/10 bg-cream/30 p-2 pr-8 text-[12.5px] font-medium focus:outline-hidden cursor-pointer text-ink"
+              >
+                <option value="ALL">All Categories</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-mist pointer-events-none" />
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span>Governance Integrity: 100% Policy Adherence</span>
-            <span>Zero manual overrides bypassed</span>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={applyFilters}
+              className="w-full rounded-xl bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors"
+            >
+              Apply Filters
+            </button>
           </div>
         </div>
+
+        {report && (
+          <p className="text-[12px] text-mist pt-1">
+            Showing: {report.applied_filter.from || "any date"} &ndash;{" "}
+            {report.applied_filter.to || "any date"} &middot; Team:{" "}
+            {report.applied_filter.sales_team || "All"} &middot; Status:{" "}
+            {report.applied_filter.status || "All"} &middot; Category:{" "}
+            {appliedCategoryName || "All"}
+          </p>
+        )}
       </div>
+
+      {error && (
+        <div className="rounded-[18px] tone-bad p-4 border border-transparent flex items-center justify-between gap-3">
+          <p className="text-[13px] text-bad font-medium">
+            Failed to load report: {error.message}
+          </p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-bad hover:bg-white/80 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading && !report && (
+        <div className="flex h-40 items-center justify-center rounded-[24px] bg-white card-shadow">
+          <Loader2 className="size-6 animate-spin text-mist" />
+        </div>
+      )}
+
+      {report && (
+        <>
+          {/* Summary KPIs */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-[20px] bg-white p-5 card-shadow">
+              <p className="text-[12.5px] font-medium text-mist">Quotations</p>
+              <p className="mt-2 text-[26px] font-serif tracking-tight text-ink tabular-nums">
+                {report.summary.total_quotations}
+              </p>
+            </div>
+            <div className="rounded-[20px] bg-white p-5 card-shadow">
+              <p className="text-[12.5px] font-medium text-mist">Pipeline Value</p>
+              <p className="mt-2 text-[26px] font-serif tracking-tight text-ink tabular-nums">
+                {inr(report.summary.pipeline_value)}
+              </p>
+            </div>
+            <div className="rounded-[20px] bg-white p-5 card-shadow">
+              <p className="text-[12.5px] font-medium text-mist">Won Value</p>
+              <p className="mt-2 text-[26px] font-serif tracking-tight text-ok tabular-nums">
+                {inr(report.summary.won_value)}
+              </p>
+            </div>
+            <div className="rounded-[20px] bg-white p-5 card-shadow">
+              <p className="text-[12.5px] font-medium text-mist">Avg Margin</p>
+              <p className="mt-2 text-[26px] font-serif tracking-tight text-ok tabular-nums">
+                {report.summary.avg_margin_pct}%
+              </p>
+            </div>
+          </div>
+
+          {/* Rows table */}
+          <div className="rounded-[24px] bg-white card-shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-ink/6">
+              <h2 className="text-[17px] font-semibold tracking-tight text-ink">
+                Performance by Rep, Team &amp; Category
+              </h2>
+              <p className="text-[12.5px] text-mist">
+                {report.rows.length} row{report.rows.length === 1 ? "" : "s"} matching the current
+                filters.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13px]">
+                <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
+                  <tr>
+                    <th className="px-6 py-3">Rep</th>
+                    <th className="px-6 py-3">Sales Team</th>
+                    <th className="px-6 py-3">Category</th>
+                    <th className="px-6 py-3 text-right">Quotations</th>
+                    <th className="px-6 py-3 text-right">Net Revenue</th>
+                    <th className="px-6 py-3 text-right">Margin</th>
+                    <th className="px-6 py-3 text-right">Discount Given</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink/5">
+                  {report.rows.map((r, idx) => (
+                    <tr key={idx} className="hover:bg-cream/40 transition-colors">
+                      <td className="px-6 py-3.5 font-medium text-ink">{r.rep_name}</td>
+                      <td className="px-6 py-3.5 text-mist">{r.sales_team}</td>
+                      <td className="px-6 py-3.5 text-mist">{r.category_name}</td>
+                      <td className="px-6 py-3.5 text-right tabular-nums text-ink">
+                        {r.quotation_count}
+                      </td>
+                      <td className="px-6 py-3.5 text-right tabular-nums font-semibold text-ink">
+                        {inr(r.net_revenue)}
+                      </td>
+                      <td className="px-6 py-3.5 text-right tabular-nums text-ok">{r.margin}%</td>
+                      <td className="px-6 py-3.5 text-right tabular-nums text-warn">
+                        {r.discount_given}%
+                      </td>
+                    </tr>
+                  ))}
+
+                  {report.rows.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-mist">
+                        <Download className="size-8 mx-auto mb-2 opacity-40" />
+                        <p className="font-medium text-[14px] text-ink">No data for this filter</p>
+                        <p className="text-[12px] mt-0.5">
+                          Try widening the date range or clearing a filter.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

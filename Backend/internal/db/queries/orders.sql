@@ -28,6 +28,16 @@ RETURNING *;
 -- name: GetFulfillmentForOrder :one
 SELECT * FROM fulfillments WHERE sales_order_id = $1 ORDER BY id DESC LIMIT 1;
 
+-- Consolidating a backorder adds shipments to the order's one fulfillment
+-- record rather than opening a second one, so a single GET always shows
+-- every line ever allocated to the order in one place.
+-- name: AddToFulfillmentTotals :one
+UPDATE fulfillments
+SET shipment_count = shipment_count + sqlc.arg('added_shipments')::int,
+    estimated_cost = estimated_cost + sqlc.arg('added_cost')::numeric
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
 -- Bulk insert of the split result. One statement for every allocation,
 -- never one insert per warehouse line.
 -- name: InsertFulfillmentLines :copyfrom

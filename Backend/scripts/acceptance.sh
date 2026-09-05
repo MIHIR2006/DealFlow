@@ -102,8 +102,8 @@ curl -sf -X POST "$BASE/quotations/$Q3/lines" -H "$AR" -H "$JSON" \
 curl -sf -X POST "$BASE/quotations/$Q3/submit" -H "$AR" >/dev/null
 O3=$(curl -sf -X POST "$BASE/quotations/$Q3/confirm" -H "$AR" | jqf "d['id']")
 PLANNED=$(curl -sf -X POST "$BASE/orders/$O3/fulfillment" -H "$AR")
-check "warehouses used" "$(echo "$PLANNED" | jqf "d['plan']['shipment_count']")" "2"
-check "backordered"     "$(echo "$PLANNED" | jqf "sum(b['qty'] for b in d['plan']['backorders'])")" "1"
+check "warehouses used" "$(echo "$PLANNED" | jqf "d['fulfillment']['shipment_count']")" "2"
+check "backordered"     "$(echo "$PLANNED" | jqf "sum(b['qty'] for b in d['backorders'])")" "1"
 
 step "Step 6 — one-time and recurring lines bill correctly and separately"
 Q4=$(curl -sf -X POST "$BASE/quotations" -H "$AR" -H "$JSON" -d "{\"customer_id\":$CUST}" | jqf "d['id']")
@@ -113,9 +113,9 @@ curl -sf -X POST "$BASE/quotations/$Q4/lines" -H "$AR" -H "$JSON" \
   -d "{\"product_id\":$SUPPORT,\"qty\":\"3\",\"discount_pct\":\"0\",\"plan_id\":$PLAN}" >/dev/null
 curl -sf -X POST "$BASE/quotations/$Q4/submit" -H "$AR" >/dev/null
 O4=$(curl -sf -X POST "$BASE/quotations/$Q4/confirm" -H "$AR" | jqf "d['id']")
-BILL=$(curl -sf -X POST "$BASE/orders/$O4/invoices" -H "$AR")
+BILL=$(curl -sf -X POST "$BASE/orders/$O4/invoices" -H "$AR" -H "$JSON" -H "Idempotency-Key: acceptance-bill-$O4" -d "{}")
 check "one-time invoices"  "$(echo "$BILL" | jqf "len([i for i in d['invoices'] if i['kind']=='ONETIME'])")" "1"
-check "recurring periods"  "$(echo "$BILL" | jqf "len(d['schedule'])")" "12"
+check "recurring periods"  "$(echo "$BILL" | jqf "len(d['schedules'])")" "12"
 check "per-period amount"  "$(echo "$BILL" | jqf "d['recurring_total_per_period']")" "15000"
 
 step "Step 7 — a portal counter-offer sends the quote back for approval"
@@ -133,10 +133,10 @@ check "no staff action needed"     "$(curl -sf "$BASE/approvals?limit=100" -H "A
 
 step "Step 8 — payment is recorded and the invoice status updates"
 INV=$(curl -sf "$BASE/orders/$O4/billing" -H "$AR" | jqf "d['invoices'][0]['id']")
-TOTAL=$(curl -sf "$BASE/invoices/$INV" -H "$AR" | jqf "d['invoice']['total']")
+TOTAL=$(curl -sf "$BASE/invoices/$INV" -H "$AR" | jqf "d['total']")
 HALF=$(python3 -c "from decimal import Decimal;print(Decimal('$TOTAL')/2)")
 PART=$(curl -sf -X POST "$BASE/invoices/$INV/payments" -H "$AR" -H "$JSON" \
-  -d "{\"amount\":\"$HALF\",\"method\":\"BANK\"}")
+  -H "Idempotency-Key: acceptance-partial-$INV" -d "{\"amount\":\"$HALF\",\"method\":\"BANK\"}")
 check "after a part payment" "$(echo "$PART" | jqf "d['status']")" "PARTIAL"
 REST=$(python3 -c "from decimal import Decimal;print(Decimal('$TOTAL')-Decimal('$HALF'))")
 FULL=$(curl -sf -X POST "$BASE/invoices/$INV/payments" -H "$AR" -H "$JSON" \

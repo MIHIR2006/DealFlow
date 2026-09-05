@@ -120,6 +120,16 @@ WHERE quotation_line_id = sqlc.arg('quotation_line_id')
   AND status = 'SCHEDULED'
   AND seq > sqlc.arg('after_seq')::int;
 
+-- name: CancelScheduleAmountsFrom :execrows
+-- A subscription reduced to zero seats stops billing outright: every future
+-- period is marked CANCELLED rather than merely re-priced to zero, so the
+-- schedule reads as "this stopped" rather than "this happens to cost nothing".
+UPDATE billing_schedules
+SET amount = 0, status = 'CANCELLED'
+WHERE quotation_line_id = sqlc.arg('quotation_line_id')
+  AND status = 'SCHEDULED'
+  AND seq > sqlc.arg('after_seq')::int;
+
 -- name: AdjustScheduleAmount :one
 UPDATE billing_schedules
 SET amount = amount + sqlc.arg('delta')::numeric

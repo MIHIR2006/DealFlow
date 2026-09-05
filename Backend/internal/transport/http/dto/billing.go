@@ -16,6 +16,7 @@ type Invoice struct {
 	TaxTotal       string `json:"tax_total"`
 	Total          string `json:"total"`
 	AmountPaid     string `json:"amount_paid"`
+	Outstanding    string `json:"outstanding"`
 	CreatedAt      string `json:"created_at"`
 }
 
@@ -76,6 +77,13 @@ type OrderBilling struct {
 	Invoices    []Invoice         `json:"invoices"`
 	Schedules   []BillingSchedule `json:"schedules"`
 	CreditNotes []CreditNote      `json:"credit_notes"`
+	// OneTimeTotal is the sum of every one-time invoice's total.
+	OneTimeTotal string `json:"one_time_total"`
+	// RecurringTotalPerPeriod is the sum of every recurring line's amount
+	// for its first billing period — what the customer will see repeat each
+	// period once the schedule is running. "0.00" when the order has no
+	// recurring lines.
+	RecurringTotalPerPeriod string `json:"recurring_total_per_period"`
 }
 
 // RecordPaymentRequest records a payment against an invoice.
@@ -90,10 +98,19 @@ type ChangeSubscriptionRequest struct {
 	Qty string `json:"qty" binding:"required"`
 }
 
+// Proration is the day-count adjustment a mid-cycle subscription quantity
+// change produced for the period it landed in.
+type Proration struct {
+	DaysInPeriod  int    `json:"days_in_period"`
+	DaysRemaining int    `json:"days_remaining"`
+	Factor        string `json:"factor"`
+	Amount        string `json:"amount"`
+	Kind          string `json:"kind"`
+}
+
 // SubscriptionChangeResponse is what a mid-cycle quantity change produced.
 type SubscriptionChangeResponse struct {
-	Kind    string       `json:"kind"`
-	Amount  string       `json:"amount"`
-	Factor  string       `json:"factor"`
-	Billing OrderBilling `json:"billing"`
+	Proration  Proration    `json:"proration"`
+	CreditNote *CreditNote  `json:"credit_note"`
+	Billing    OrderBilling `json:"billing"`
 }

@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -94,6 +96,11 @@ func newHarness(t *testing.T) *harness {
 	}
 }
 
+// idemSeq gives every request its own Idempotency-Key so a plain do() call
+// never collides with another. Tests that exercise idempotency itself build
+// their own request with an explicit key via request()/send() instead.
+var idemSeq atomic.Int64
+
 func (h *harness) do(method, path, token string, body any) *httptest.ResponseRecorder {
 	var buf io.Reader
 	if body != nil {
@@ -108,6 +115,7 @@ func (h *harness) do(method, path, token string, body any) *httptest.ResponseRec
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("test-%d", idemSeq.Add(1)))
 
 	w := httptest.NewRecorder()
 	h.router.ServeHTTP(w, req)

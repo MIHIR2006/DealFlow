@@ -10,6 +10,22 @@ type Category struct {
 	Name string `json:"name"`
 }
 
+// Customer is a B2B account a quotation can be built for.
+type Customer struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Tier     string `json:"tier"`
+	IsActive bool   `json:"is_active"`
+}
+
+// CreateCustomerRequest onboards a customer account.
+type CreateCustomerRequest struct {
+	Name  string `json:"name"  binding:"required"`
+	Email string `json:"email" binding:"required,email"`
+	Tier  string `json:"tier"  binding:"required,oneof=BRONZE SILVER GOLD"`
+}
+
 // CreateCategoryRequest adds a category.
 type CreateCategoryRequest struct {
 	Name string `json:"name" binding:"required"`

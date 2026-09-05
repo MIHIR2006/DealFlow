@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dealflow-frontend",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "cd 'Frontend/dealflow' && npm run dev"],
+      "port": 3000
+    }
+  ]
+}

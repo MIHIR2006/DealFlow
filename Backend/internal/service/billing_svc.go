@@ -226,7 +226,7 @@ func createRecurringSchedule(ctx context.Context, qtx *sqlcgen.Queries, orderID 
 		for _, g := range generated {
 			rows = append(rows, sqlcgen.InsertBillingSchedulesParams{
 				SalesOrderID: orderID, QuotationLineID: g.QuotationLineID, PlanID: *l.PlanID,
-				Seq: int32(g.Seq), PeriodStart: g.PeriodStart, PeriodEnd: g.PeriodEnd,
+				Seq: int32(g.Seq), PeriodStart: g.PeriodStart, PeriodEnd: g.PeriodEnd, //nolint:gosec // a period sequence never approaches int32 range
 				Amount: g.Amount, ProrationFactor: g.ProrationFactor,
 			})
 		}
@@ -338,6 +338,14 @@ func (s *BillingService) RecordPayment(ctx context.Context, actor auth.Principal
 		if err != nil {
 			return fmt.Errorf("recalculate invoice payment: %w", err)
 		}
+		// Checked post-insert, inside the transaction, against the ledger's
+		// own recalculated sum — never the pre-insert amount a concurrent
+		// payment could have raced past.
+		if updated.AmountPaid.GreaterThan(updated.Total) {
+			return apierr.Conflict(fmt.Sprintf(
+				"payment of %s would overpay this invoice: %s already paid of %s total",
+				in.Amount, inv.AmountPaid, inv.Total))
+		}
 
 		if updated.Status == "PAID" {
 			all, err := qtx.ListInvoicesForOrder(ctx, order.ID)
@@ -378,19 +386,19 @@ func (s *BillingService) RecordPayment(ctx context.Context, actor auth.Principal
 
 // SubscriptionChangeResult is what a mid-cycle quantity change produced.
 type SubscriptionChangeResult struct {
-	View   BillingView
-	Kind   billing.Kind
-	Amount decimal.Decimal
-	Factor decimal.Decimal
+	View       BillingView
+	Proration  billing.ProrationResult
+	CreditNote *sqlcgen.CreditNote // nil unless the change produced one
 }
 
 // ChangeSubscription applies a mid-cycle quantity change to one recurring
 // line: the remainder of the current period is prorated, and every future
 // scheduled period moves to the new quantity.
 func (s *BillingService) ChangeSubscription(ctx context.Context, actor auth.Principal, orderID, lineID int64, newQty decimal.Decimal) (SubscriptionChangeResult, error) {
-	if newQty.LessThanOrEqual(decimal.Zero) {
-		return SubscriptionChangeResult{}, apierr.Validation("qty must be greater than zero")
+	if newQty.LessThan(decimal.Zero) {
+		return SubscriptionChangeResult{}, apierr.Validation("qty must not be negative")
 	}
+	cancelling := newQty.IsZero()
 
 	order, err := s.orderAndQuotation(ctx, actor, orderID)
 	if err != nil {
@@ -408,8 +416,11 @@ func (s *BillingService) ChangeSubscription(ctx context.Context, actor auth.Prin
 			break
 		}
 	}
-	if line == nil || line.LineType != "RECURRING" {
-		return SubscriptionChangeResult{}, apierr.NotFound("that line is not a recurring line on this order")
+	if line == nil {
+		return SubscriptionChangeResult{}, apierr.NotFound("that line is not on this order")
+	}
+	if line.LineType != "RECURRING" {
+		return SubscriptionChangeResult{}, apierr.Validation("only a recurring line has a subscription quantity to change")
 	}
 
 	current, err := s.q.GetCurrentBillingPeriod(ctx, lineID)
@@ -433,10 +444,17 @@ func (s *BillingService) ChangeSubscription(ctx context.Context, actor auth.Prin
 	})
 	newPeriodAmount := unitNet.Mul(newQty).Round(2)
 
+	var creditNote *sqlcgen.CreditNote
 	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
-		if _, err := qtx.UpdateScheduleAmountsFrom(ctx, sqlcgen.UpdateScheduleAmountsFromParams{
+		if cancelling {
+			if _, err := qtx.CancelScheduleAmountsFrom(ctx, sqlcgen.CancelScheduleAmountsFromParams{
+				QuotationLineID: lineID, AfterSeq: current.Seq,
+			}); err != nil {
+				return fmt.Errorf("cancel schedule amounts: %w", err)
+			}
+		} else if _, err := qtx.UpdateScheduleAmountsFrom(ctx, sqlcgen.UpdateScheduleAmountsFromParams{
 			Amount: newPeriodAmount, QuotationLineID: lineID, AfterSeq: current.Seq,
 		}); err != nil {
 			return fmt.Errorf("update schedule amounts: %w", err)
@@ -450,24 +468,34 @@ func (s *BillingService) ChangeSubscription(ctx context.Context, actor auth.Prin
 				return fmt.Errorf("adjust schedule amount: %w", err)
 			}
 		case billing.KindCredit:
+			reason := "Subscription quantity reduced mid-cycle"
+			if cancelling {
+				reason = "Subscription cancelled mid-cycle"
+			}
 			ref, err := qtx.NextCreditNoteReference(ctx)
 			if err != nil {
 				return fmt.Errorf("next credit note reference: %w", err)
 			}
 			actorID := actor.UserID
-			if _, err := qtx.CreateCreditNote(ctx, sqlcgen.CreateCreditNoteParams{
+			cn, err := qtx.CreateCreditNote(ctx, sqlcgen.CreateCreditNoteParams{
 				Reference: ref, SalesOrderID: orderID, BillingScheduleID: &current.ID,
 				QuotationLineID: &lineID, Amount: result.Amount, ProrationFactor: result.Factor,
-				Reason: "Subscription quantity reduced mid-cycle", CreatedBy: &actorID,
-			}); err != nil {
+				Reason: reason, CreatedBy: &actorID,
+			})
+			if err != nil {
 				return fmt.Errorf("create credit note: %w", err)
 			}
+			creditNote = &cn
 		}
 
-		if _, err := qtx.UpdateQuotationLineInput(ctx, sqlcgen.UpdateQuotationLineInputParams{
-			ID: lineID, Qty: newQty, LineDiscountPct: line.LineDiscountPct,
-		}); err != nil {
-			return fmt.Errorf("update quotation line: %w", err)
+		// A line's qty must stay positive (it is what was ordered); cancelling
+		// stops future billing without rewriting that record to zero.
+		if !cancelling {
+			if _, err := qtx.UpdateQuotationLineInput(ctx, sqlcgen.UpdateQuotationLineInputParams{
+				ID: lineID, Qty: newQty, LineDiscountPct: line.LineDiscountPct,
+			}); err != nil {
+				return fmt.Errorf("update quotation line: %w", err)
+			}
 		}
 		return nil
 	})
@@ -491,5 +519,5 @@ func (s *BillingService) ChangeSubscription(ctx context.Context, actor auth.Prin
 	if err != nil {
 		return SubscriptionChangeResult{}, err
 	}
-	return SubscriptionChangeResult{View: view, Kind: result.Kind, Amount: result.Amount, Factor: result.Factor}, nil
+	return SubscriptionChangeResult{View: view, Proration: result, CreditNote: creditNote}, nil
 }

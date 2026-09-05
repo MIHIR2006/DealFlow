@@ -12,6 +12,38 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const addToFulfillmentTotals = `-- name: AddToFulfillmentTotals :one
+UPDATE fulfillments
+SET shipment_count = shipment_count + $1::int,
+    estimated_cost = estimated_cost + $2::numeric
+WHERE id = $3
+RETURNING id, sales_order_id, strategy, shipment_count, estimated_cost, is_manual_override, created_at
+`
+
+type AddToFulfillmentTotalsParams struct {
+	AddedShipments int32
+	AddedCost      decimal.Decimal
+	ID             int64
+}
+
+// Consolidating a backorder adds shipments to the order's one fulfillment
+// record rather than opening a second one, so a single GET always shows
+// every line ever allocated to the order in one place.
+func (q *Queries) AddToFulfillmentTotals(ctx context.Context, arg AddToFulfillmentTotalsParams) (Fulfillment, error) {
+	row := q.db.QueryRow(ctx, addToFulfillmentTotals, arg.AddedShipments, arg.AddedCost, arg.ID)
+	var i Fulfillment
+	err := row.Scan(
+		&i.ID,
+		&i.SalesOrderID,
+		&i.Strategy,
+		&i.ShipmentCount,
+		&i.EstimatedCost,
+		&i.IsManualOverride,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const countFulfillmentsForOrder = `-- name: CountFulfillmentsForOrder :one
 SELECT count(*)::bigint FROM fulfillments WHERE sales_order_id = $1
 `

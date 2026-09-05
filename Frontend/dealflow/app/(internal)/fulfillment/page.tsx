@@ -1,47 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
-import { Package, Truck, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-
-const ORDERS = [
-  {
-    id: "SO-9042",
-    quoteRef: "Q-1042",
-    customer: "Acme Corp",
-    destination: "Bengaluru, KA",
-    lineCount: 3,
-    status: "SUGGESTED",
-    shipmentCount: 2,
-    backorderCount: 1,
-    date: "Aug 22",
-  },
-  {
-    id: "SO-9038",
-    quoteRef: "Q-1031",
-    customer: "Beta Industries",
-    destination: "Mumbai, MH",
-    lineCount: 2,
-    status: "FULFILLED",
-    shipmentCount: 1,
-    backorderCount: 0,
-    date: "Aug 21",
-  },
-  {
-    id: "SO-9031",
-    quoteRef: "Q-1018",
-    customer: "Northwind Trading",
-    destination: "Delhi, DL",
-    lineCount: 4,
-    status: "BACKORDERED",
-    shipmentCount: 1,
-    backorderCount: 3,
-    date: "Aug 20",
-  },
-];
+import { useFetch } from "@/lib/hooks";
+import type { OrderSummary, Page } from "@/lib/types";
 
 export default function FulfillmentPage() {
+  const { data, loading, error } = useFetch<Page<OrderSummary>>("/v1/orders?limit=100");
+  const orders = data?.data ?? [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -55,14 +24,11 @@ export default function FulfillmentPage() {
             The greedy set-cover heuristic splits confirmed orders across warehouses to minimize freight shipments and handle stock backorders automatically.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full tone-ok px-3 py-1.5 text-[12px] font-medium text-ok border border-transparent">
-            <span className="size-1.5 rounded-full fill-ok animate-pulse" />
-            Stock Synchronized: 3 Depots Live
-          </span>
-        </div>
       </div>
+
+      {error ? (
+        <div className="rounded-[16px] tone-bad p-3 text-[12.5px] text-bad">{error.message}</div>
+      ) : null}
 
       {/* Orders Table */}
       <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
@@ -71,58 +37,77 @@ export default function FulfillmentPage() {
             <tr>
               <th className="px-6 py-3.5">Order #</th>
               <th className="px-6 py-3.5">Quote Ref</th>
-              <th className="px-6 py-3.5">Customer &amp; City</th>
+              <th className="px-6 py-3.5">Customer</th>
               <th className="px-6 py-3.5">Fulfillment Status</th>
               <th className="px-6 py-3.5">Shipments</th>
               <th className="px-6 py-3.5">Backorders</th>
+              <th className="px-6 py-3.5">Promised Date</th>
               <th className="px-6 py-3.5 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink/5">
-            {ORDERS.map((ord) => (
-              <tr
-                key={ord.id}
-                className="hover:bg-cream/40 transition-colors group cursor-pointer"
-              >
-                <td className="px-6 py-4 font-medium text-ink">
-                  <Link href={`/fulfillment/${ord.id}`} className="hover:underline">
-                    {ord.id}
-                  </Link>
-                </td>
-                <td className="px-6 py-4 text-mist text-[12.5px]">
-                  {ord.quoteRef}
-                </td>
-                <td className="px-6 py-4">
-                  <p className="font-medium text-ink">{ord.customer}</p>
-                  <p className="text-[11.5px] text-mist">{ord.destination}</p>
-                </td>
-                <td className="px-6 py-4">
-                  <StatusBadge status={ord.status} size="sm" />
-                </td>
-                <td className="px-6 py-4 text-[13px] text-ink font-semibold">
-                  {ord.shipmentCount} {ord.shipmentCount === 1 ? "depot" : "depots"}
-                </td>
-                <td className="px-6 py-4">
-                  {ord.backorderCount > 0 ? (
-                    <span className="text-[12px] font-semibold text-bad">
-                      {ord.backorderCount} line backordered
-                    </span>
-                  ) : (
-                    <span className="text-[12px] text-ok font-medium">
-                      Zero backorder
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <Link
-                    href={`/fulfillment/${ord.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors"
-                  >
-                    Manage Split <ArrowRight className="size-3" />
-                  </Link>
+            {loading ? (
+              <tr>
+                <td colSpan={8} className="px-6 py-12 text-center text-mist">
+                  Loading&hellip;
                 </td>
               </tr>
-            ))}
+            ) : (
+              orders.map((ord) => (
+                <tr
+                  key={ord.id}
+                  className="hover:bg-cream/40 transition-colors group cursor-pointer"
+                >
+                  <td className="px-6 py-4 font-medium text-ink">
+                    <Link href={`/fulfillment/${ord.id}`} className="hover:underline">
+                      {ord.reference}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-4 text-mist text-[12.5px]">
+                    {ord.quotation_reference}
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="font-medium text-ink">{ord.customer_name}</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge status={ord.status} size="sm" />
+                  </td>
+                  <td className="px-6 py-4 text-[13px] text-ink font-semibold">
+                    {ord.shipment_count} {ord.shipment_count === 1 ? "depot" : "depots"}
+                  </td>
+                  <td className="px-6 py-4">
+                    {ord.backorder_count > 0 ? (
+                      <span className="inline-flex items-center rounded-full tone-bad px-2 py-0.5 text-[12px] font-semibold text-bad">
+                        {ord.backorder_count} line{ord.backorder_count === 1 ? "" : "s"} backordered
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-ok font-medium">
+                        Zero backorder
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-[12.5px] text-mist">
+                    {ord.promised_date ? new Date(ord.promised_date).toLocaleDateString() : "—"}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <Link
+                      href={`/fulfillment/${ord.id}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors"
+                    >
+                      Manage Split <ArrowRight className="size-3" />
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            )}
+
+            {!loading && orders.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-6 py-12 text-center text-mist">
+                  No confirmed orders yet.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>

@@ -1,34 +1,55 @@
 "use client";
 
 import React, { useState } from "react";
-import { ShieldCheck, Sliders, Save, CheckCircle2, AlertCircle } from "lucide-react";
+import { AlertCircle, Check, Loader2, Plus } from "lucide-react";
+import { useFetch, useAuth, timeAgo } from "@/lib/hooks";
+import { ConfigApi } from "@/lib/api";
+import type { ApprovalPolicy, ApprovalPolicyInput, CategoryCeiling, DiscountTier, GovernanceSnapshot } from "@/lib/types";
+
+const TIER_ORDER: DiscountTier["tier"][] = ["BRONZE", "SILVER", "GOLD"];
+const TIER_LABEL: Record<string, string> = {
+  BRONZE: "Bronze Tier Customer",
+  SILVER: "Silver Tier Customer",
+  GOLD: "Gold Tier Customer",
+};
+
+type FieldStatus = "idle" | "saving" | "ok" | "error";
+
+/** Small per-field save indicator — there is no global save button any more,
+ * every field persists on its own, so the reviewer needs to see that here. */
+function StatusDot({ status, message }: { status: FieldStatus; message: string | null }) {
+  if (status === "saving") return <Loader2 className="size-3.5 text-mist animate-spin" />;
+  if (status === "ok") return <Check className="size-3.5 text-ok" />;
+  if (status === "error") return <span className="text-[10.5px] font-medium text-bad">{message ?? "Failed"}</span>;
+  return null;
+}
+
+function useFieldSave(onSaved?: () => void) {
+  const [status, setStatus] = useState<FieldStatus>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function run(fn: () => Promise<unknown>) {
+    setStatus("saving");
+    setMessage(null);
+    try {
+      await fn();
+      setStatus("ok");
+      onSaved?.();
+      window.setTimeout(() => setStatus((s) => (s === "ok" ? "idle" : s)), 1800);
+    } catch (e) {
+      setStatus("error");
+      setMessage(e instanceof Error ? e.message : "Failed to save");
+    }
+  }
+
+  return { status, message, run };
+}
 
 export default function GovernanceConfigPage() {
-  const [savedNotice, setSavedNotice] = useState(false);
+  const { user } = useAuth();
+  const canEdit = user?.role === "ADMIN" || user?.role === "MANAGER";
 
-  // Matrix 1: Customer Tier Discount Ceilings
-  const [tierBronze, setTierBronze] = useState(5.0);
-  const [tierSilver, setTierSilver] = useState(10.0);
-  const [tierGold, setTierGold] = useState(15.0);
-
-  // Matrix 2: Category Discount Ceilings
-  const [catHardware, setCatHardware] = useState(15.0);
-  const [catServices, setCatServices] = useState(10.0);
-  const [catSubscriptions, setCatSubscriptions] = useState(20.0);
-
-  // Matrix 3: Approval Chain Thresholds
-  const [singleLineMgr, setSingleLineMgr] = useState(0.0);
-  const [blendedFinance, setBlendedFinance] = useState(5.0);
-  const [singleLineFinance, setSingleLineFinance] = useState(10.0);
-
-  // Matrix 4: Deal Health Parameters
-  const [stallDays, setStallDays] = useState(7);
-  const [anomalyMultiplier, setAnomalyMultiplier] = useState(1.5);
-
-  function handleSavePolicy() {
-    setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 3500);
-  }
+  const { data: snapshot, error, loading, refetch } = useFetch<GovernanceSnapshot>("/v1/governance");
 
   return (
     <div className="space-y-6">
@@ -39,228 +60,366 @@ export default function GovernanceConfigPage() {
           <h1 className="font-serif mt-1 text-[32px] tracking-[-0.02em] sm:text-[40px] text-ink">
             Discount Governance &amp; Routing Matrix
           </h1>
-          <p className="mt-1 text-[14.5px] text-mist max-w-[620px]">
-            Configure company-wide discount ceilings, category restrictions, and automated approval chain triggers. Changes take effect across active quotation sessions immediately.
+          <p className="mt-1 text-[14.5px] text-mist max-w-[640px]">
+            {canEdit
+              ? "Every field below persists immediately — there is no batch save. Editing a ceiling changes what the risk engine reads on the very next quotation, with no restart."
+              : "Read-only view of the discount ceilings and approval routing the risk engine is using right now. Only Admins and Managers can edit governance."}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSavePolicy}
-          className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-bone hover:bg-ink/90 shadow-sm transition-colors"
-        >
-          <Save className="size-4" /> Save Governance Policy
-        </button>
+        {snapshot && (
+          <div className="rounded-[16px] bg-white px-4 py-2.5 card-shadow text-right">
+            <p className="text-[10.5px] font-semibold uppercase text-mist">Engine Config Snapshot</p>
+            <p className="text-[13px] font-semibold text-ink tabular-nums">v{snapshot.version}</p>
+            <p className="text-[11px] text-mist">{timeAgo(snapshot.loaded_at)}</p>
+          </div>
+        )}
       </div>
 
-      {savedNotice && (
-        <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex items-center gap-2.5">
-          <CheckCircle2 className="size-4 text-ok shrink-0" />
-          Governance rules committed to database! In-memory engine cache snapshot invalidated (v2026.08 updated).
+      {error && (
+        <div className="rounded-[18px] tone-bad p-4 text-[13px] font-medium flex items-center gap-2.5">
+          <AlertCircle className="size-4 shrink-0" />
+          {error.message}
         </div>
       )}
 
-      {/* MATRIX 1: CUSTOMER TIER CEILINGS */}
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
-        <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
-          1. Customer Tier Discount Ceilings
-        </h2>
-        <p className="text-[12.5px] text-mist mt-1">
-          Base discretion granted according to customer relationship tier.
-        </p>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
-            <span className="font-semibold text-[13.5px] text-warn">
-              Bronze Tier Customer
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                value={tierBronze}
-                onChange={(e) => setTierBronze(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
-              />
-              <span className="text-mist font-semibold">% Max</span>
-            </div>
-            <p className="text-[11px] text-mist mt-1.5">Default entry account tier</p>
-          </div>
-
-          <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
-            <span className="font-semibold text-[13.5px] text-slate-900">
-              Silver Tier Customer
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                value={tierSilver}
-                onChange={(e) => setTierSilver(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
-              />
-              <span className="text-mist font-semibold">% Max</span>
-            </div>
-            <p className="text-[11px] text-mist mt-1.5">Mid-market recurring accounts</p>
-          </div>
-
-          <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
-            <span className="font-semibold text-[13.5px] text-warn">
-              Gold Tier Customer
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                value={tierGold}
-                onChange={(e) => setTierGold(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
-              />
-              <span className="text-mist font-semibold">% Max</span>
-            </div>
-            <p className="text-[11px] text-mist mt-1.5">Enterprise key accounts</p>
-          </div>
+      {loading && !snapshot && (
+        <div className="flex h-40 items-center justify-center">
+          <div className="size-6 border-2 border-ink border-t-transparent rounded-full animate-spin" />
         </div>
-      </div>
+      )}
 
-      {/* MATRIX 2: CATEGORY SPECIFIC CEILINGS */}
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
-        <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
-          2. Product Category Discount Ceilings
-        </h2>
-        <p className="text-[12.5px] text-mist mt-1">
-          Protects product categories with thinner gross margins (e.g. Services).
-        </p>
+      {snapshot && (
+        <>
+          {/* MATRIX 1: CUSTOMER TIER CEILINGS */}
+          <div className="rounded-[24px] bg-white p-6 card-shadow">
+            <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
+              1. Customer Tier Discount Ceilings
+            </h2>
+            <p className="text-[12.5px] text-mist mt-1">
+              Base discretion granted according to customer relationship tier.
+            </p>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
-            <span className="font-semibold text-[13.5px] text-ink">
-              Hardware Products
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                value={catHardware}
-                onChange={(e) => setCatHardware(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
-              />
-              <span className="text-mist font-semibold">% Limit</span>
-            </div>
-            <p className="text-[11px] text-mist mt-1.5">Laptops, Servers, Accessories</p>
-          </div>
-
-          <div className="p-4 rounded-[18px] tone-bad border border-transparent">
-            <span className="font-semibold text-[13.5px] text-bad flex items-center gap-1.5">
-              Professional Services
-              <span className="text-[10px] tone-bad px-1.5 py-0.5 rounded-full font-medium">Strict</span>
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                value={catServices}
-                onChange={(e) => setCatServices(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px] text-bad"
-              />
-              <span className="text-mist font-semibold">% Limit</span>
-            </div>
-            <p className="text-[11px] text-bad/80 mt-1.5">Thin margins; Setup &amp; Migration</p>
-          </div>
-
-          <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
-            <span className="font-semibold text-[13.5px] text-ink">
-              Subscriptions (SaaS)
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                value={catSubscriptions}
-                onChange={(e) => setCatSubscriptions(parseFloat(e.target.value) || 0)}
-                className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px]"
-              />
-              <span className="text-mist font-semibold">% Limit</span>
-            </div>
-            <p className="text-[11px] text-mist mt-1.5">High margin cloud licenses</p>
-          </div>
-        </div>
-      </div>
-
-      {/* MATRIX 3: APPROVAL CHAIN ROUTING POLICY */}
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
-        <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
-          3. Automated Approval Routing Rules
-        </h2>
-        <p className="text-[12.5px] text-mist mt-1">
-          Conditions deciding which reviewer level is required for quotation sign-off.
-        </p>
-
-        <div className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between p-3.5 rounded-[16px] bg-cream/40 border border-ink/6 text-[13px]">
-            <div>
-              <span className="font-semibold text-ink">
-                Sales Manager Review (Tier 1 Trigger):
-              </span>
-              <p className="text-[12px] text-mist">
-                Any single line discount exceeding its allowed limit by more than:
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.1"
-                value={singleLineMgr}
-                onChange={(e) => setSingleLineMgr(parseFloat(e.target.value) || 0)}
-                className="w-20 rounded-lg border border-ink/15 bg-white p-1.5 font-bold text-center"
-              />
-              <span className="text-mist">points</span>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {TIER_ORDER.map((tierKey) => {
+                const row = snapshot.tiers.find((t) => t.tier === tierKey);
+                if (!row) return null;
+                return <TierCard key={`${tierKey}-${row.max_discount_pct}`} row={row} canEdit={canEdit} onSaved={refetch} />;
+              })}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between p-3.5 rounded-[16px] tone-bad border border-transparent text-[13px]">
-            <div>
-              <span className="font-semibold text-bad">
-                Finance Review (Tier 2 Trigger &mdash; Blended Risk):
-              </span>
-              <p className="text-[12px] text-bad/80">
-                Weighted blended risk score across the entire order exceeds:
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.1"
-                value={blendedFinance}
-                onChange={(e) => setBlendedFinance(parseFloat(e.target.value) || 0)}
-                className="w-20 rounded-lg border border-ink/15 bg-white p-1.5 font-bold text-center text-bad"
-              />
-              <span className="text-bad">% score</span>
+          {/* MATRIX 2: CATEGORY SPECIFIC CEILINGS */}
+          <div className="rounded-[24px] bg-white p-6 card-shadow">
+            <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
+              2. Product Category Discount Ceilings
+            </h2>
+            <p className="text-[12.5px] text-mist mt-1">
+              Protects product categories with thinner gross margins (e.g. Services).
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {snapshot.category_ceilings.map((row) => (
+                <CeilingCard
+                  key={`${row.category_id}-${row.max_discount_pct}`}
+                  row={row}
+                  canEdit={canEdit}
+                  onSaved={refetch}
+                />
+              ))}
+
+              {snapshot.category_ceilings.length === 0 && (
+                <p className="text-[12.5px] text-mist sm:col-span-3">No category ceilings configured yet.</p>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between p-3.5 rounded-[16px] tone-bad border border-transparent text-[13px]">
-            <div>
-              <span className="font-semibold text-bad">
-                Finance Review (Tier 2 Trigger &mdash; Maximum Single-Line Overage):
-              </span>
-              <p className="text-[12px] text-bad/80">
-                Any single line item exceeds allowed discretion by at least:
-              </p>
+          {/* MATRIX 3: APPROVAL POLICIES */}
+          <div className="rounded-[24px] bg-white p-6 card-shadow">
+            <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
+              3. Automated Approval Routing Policies
+            </h2>
+            <p className="text-[12.5px] text-mist mt-1">
+              A quotation routes for review when either threshold is met — the blended score and the worst single line
+              act independently.
+            </p>
+
+            <div className="mt-4 overflow-hidden rounded-[18px] border border-ink/6">
+              <table className="w-full text-left text-[12.5px]">
+                <thead className="text-[11px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
+                  <tr>
+                    <th className="px-4 py-2.5">Policy</th>
+                    <th className="px-4 py-2.5">Min Blended %</th>
+                    <th className="px-4 py-2.5">Min Line Overage (pt)</th>
+                    <th className="px-4 py-2.5 text-center">Manager</th>
+                    <th className="px-4 py-2.5 text-center">Finance</th>
+                    <th className="px-4 py-2.5 text-center">Active</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink/5">
+                  {snapshot.policies.map((p) => (
+                    <PolicyRow key={p.id} policy={p} canEdit={canEdit} onSaved={refetch} />
+                  ))}
+
+                  {snapshot.policies.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-mist">
+                        No approval policies configured yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.1"
-                value={singleLineFinance}
-                onChange={(e) => setSingleLineFinance(parseFloat(e.target.value) || 0)}
-                className="w-20 rounded-lg border border-ink/15 bg-white p-1.5 font-bold text-center text-bad"
-              />
-              <span className="text-bad">points</span>
-            </div>
+
+            {canEdit && <AddPolicyForm onCreated={refetch} />}
           </div>
-        </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TierCard({
+  row,
+  canEdit,
+  onSaved,
+}: {
+  row: DiscountTier;
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const { status, message, run } = useFieldSave(onSaved);
+  const [value, setValue] = useState(row.max_discount_pct);
+
+  function commit() {
+    if (value === row.max_discount_pct || value.trim() === "") return;
+    run(() => ConfigApi.setDiscountTier(row.tier, value));
+  }
+
+  return (
+    <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
+      <span className="font-semibold text-[13.5px] text-ink">{TIER_LABEL[row.tier] ?? row.tier}</span>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          disabled={!canEdit}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px] tabular-nums disabled:bg-ink/[0.03] disabled:text-mist"
+        />
+        <span className="text-mist font-semibold">% Max</span>
+        <StatusDot status={status} message={message} />
       </div>
     </div>
+  );
+}
+
+function CeilingCard({
+  row,
+  canEdit,
+  onSaved,
+}: {
+  row: CategoryCeiling;
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const { status, message, run } = useFieldSave(onSaved);
+  const [value, setValue] = useState(row.max_discount_pct);
+
+  function commit() {
+    if (value === row.max_discount_pct || value.trim() === "") return;
+    run(() => ConfigApi.setCategoryCeiling(row.category_id, value));
+  }
+
+  return (
+    <div className="p-4 rounded-[18px] bg-cream/40 border border-ink/6">
+      <span className="font-semibold text-[13.5px] text-ink">{row.category_name}</span>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          disabled={!canEdit}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          className="w-24 rounded-lg border border-ink/15 bg-white p-2 font-bold text-center text-[15px] tabular-nums disabled:bg-ink/[0.03] disabled:text-mist"
+        />
+        <span className="text-mist font-semibold">% Limit</span>
+        <StatusDot status={status} message={message} />
+      </div>
+    </div>
+  );
+}
+
+function policyToInput(p: ApprovalPolicy): ApprovalPolicyInput {
+  return {
+    name: p.name,
+    min_blended: p.min_blended,
+    min_line_overage: p.min_line_overage,
+    requires_manager: p.requires_manager,
+    requires_finance: p.requires_finance,
+    is_active: p.is_active,
+  };
+}
+
+function PolicyRow({
+  policy,
+  canEdit,
+  onSaved,
+}: {
+  policy: ApprovalPolicy;
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const { status, message, run } = useFieldSave(onSaved);
+  const [minBlended, setMinBlended] = useState(policy.min_blended);
+  const [minOverage, setMinOverage] = useState(policy.min_line_overage);
+
+  function commitPatch(patch: Partial<ApprovalPolicyInput>) {
+    run(() => ConfigApi.updatePolicy(policy.id, { ...policyToInput(policy), ...patch }));
+  }
+
+  return (
+    <tr className="hover:bg-cream/30 transition-colors">
+      <td className="px-4 py-3 font-medium text-ink">{policy.name}</td>
+      <td className="px-4 py-3">
+        <input
+          type="text"
+          inputMode="decimal"
+          disabled={!canEdit}
+          value={minBlended}
+          onChange={(e) => setMinBlended(e.target.value)}
+          onBlur={() => minBlended !== policy.min_blended && commitPatch({ min_blended: minBlended })}
+          className="w-20 rounded-md border border-ink/15 bg-white px-2 py-1 text-center tabular-nums disabled:bg-ink/[0.03] disabled:text-mist"
+        />
+      </td>
+      <td className="px-4 py-3">
+        <input
+          type="text"
+          inputMode="decimal"
+          disabled={!canEdit}
+          value={minOverage}
+          onChange={(e) => setMinOverage(e.target.value)}
+          onBlur={() => minOverage !== policy.min_line_overage && commitPatch({ min_line_overage: minOverage })}
+          className="w-20 rounded-md border border-ink/15 bg-white px-2 py-1 text-center tabular-nums disabled:bg-ink/[0.03] disabled:text-mist"
+        />
+      </td>
+      <td className="px-4 py-3 text-center">
+        <input
+          type="checkbox"
+          disabled={!canEdit}
+          checked={policy.requires_manager}
+          onChange={(e) => commitPatch({ requires_manager: e.target.checked })}
+        />
+      </td>
+      <td className="px-4 py-3 text-center">
+        <input
+          type="checkbox"
+          disabled={!canEdit}
+          checked={policy.requires_finance}
+          onChange={(e) => commitPatch({ requires_finance: e.target.checked })}
+        />
+      </td>
+      <td className="px-4 py-3 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <input
+            type="checkbox"
+            disabled={!canEdit}
+            checked={policy.is_active}
+            onChange={(e) => commitPatch({ is_active: e.target.checked })}
+          />
+          <StatusDot status={status} message={message} />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+const EMPTY_POLICY: ApprovalPolicyInput = {
+  name: "",
+  min_blended: "0",
+  min_line_overage: "0",
+  requires_manager: true,
+  requires_finance: false,
+  is_active: true,
+};
+
+function AddPolicyForm({ onCreated }: { onCreated: () => void }) {
+  const [form, setForm] = useState<ApprovalPolicyInput>(EMPTY_POLICY);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function set<K extends keyof ApprovalPolicyInput>(key: K, value: ApprovalPolicyInput[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await ConfigApi.createPolicy(form);
+      setForm(EMPTY_POLICY);
+      onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create policy");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 flex flex-wrap items-end gap-3 rounded-[16px] bg-cream/40 p-4 border border-ink/6">
+      <div>
+        <label className="text-[11px] font-medium text-mist">Policy name</label>
+        <input
+          type="text"
+          required
+          value={form.name}
+          onChange={(e) => set("name", e.target.value)}
+          className="mt-1 w-48 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px]"
+        />
+      </div>
+      <div>
+        <label className="text-[11px] font-medium text-mist">Min blended %</label>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={form.min_blended}
+          onChange={(e) => set("min_blended", e.target.value)}
+          className="mt-1 w-24 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] tabular-nums"
+        />
+      </div>
+      <div>
+        <label className="text-[11px] font-medium text-mist">Min line overage</label>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={form.min_line_overage}
+          onChange={(e) => set("min_line_overage", e.target.value)}
+          className="mt-1 w-24 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] tabular-nums"
+        />
+      </div>
+      <label className="flex items-center gap-1.5 text-[12px] text-ink pb-1.5">
+        <input type="checkbox" checked={form.requires_manager} onChange={(e) => set("requires_manager", e.target.checked)} />
+        Manager
+      </label>
+      <label className="flex items-center gap-1.5 text-[12px] text-ink pb-1.5">
+        <input type="checkbox" checked={form.requires_finance} onChange={(e) => set("requires_finance", e.target.checked)} />
+        Finance
+      </label>
+      <button
+        type="submit"
+        disabled={saving}
+        className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-bone hover:bg-ink/90 disabled:opacity-50"
+      >
+        <Plus className="size-3.5" /> {saving ? "Adding..." : "Add policy"}
+      </button>
+      {error && <p className="text-[11.5px] text-bad basis-full">{error}</p>}
+    </form>
   );
 }

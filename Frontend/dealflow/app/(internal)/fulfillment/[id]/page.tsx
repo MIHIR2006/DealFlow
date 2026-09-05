@@ -1,46 +1,150 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
   Warehouse,
   Truck,
   Package,
-  AlertTriangle,
   CheckCircle,
   Sliders,
   Sparkles,
   Layers,
 } from "lucide-react";
-import { LifecycleBar } from "@/components/workspace/lifecycle-bar";
+import { LifecycleBar, type DealStage } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { OrderApi, ApiError } from "@/lib/api";
+import { inr } from "@/lib/hooks";
+import type { SalesOrder, FulfillmentPlan, FulfillmentLine, Backorder } from "@/lib/types";
+
+const STAGE_BY_STATUS: Record<string, DealStage> = {
+  CONFIRMED: "FULFILLMENT",
+  PARTIALLY_FULFILLED: "FULFILLMENT",
+  BACKORDERED: "FULFILLMENT",
+  FULFILLED: "BILLING",
+};
+
+function groupByShipment(lines: FulfillmentLine[]): Map<number, FulfillmentLine[]> {
+  const groups = new Map<number, FulfillmentLine[]>();
+  for (const line of lines) {
+    const list = groups.get(line.shipment_group) ?? [];
+    list.push(line);
+    groups.set(line.shipment_group, list);
+  }
+  return new Map([...groups.entries()].sort((a, b) => a[0] - b[0]));
+}
 
 export default function WarehouseSplitDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const resolvedParams = use(params);
-  const orderId = resolvedParams.id || "SO-9042";
+  const { id: idParam } = use(params);
+  const orderId = Number(idParam);
 
-  const [splitAccepted, setSplitAccepted] = useState(false);
-  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
-  const [backorderConsolidated, setBackorderConsolidated] = useState(false);
-  const [stockArrivalTriggered, setStockArrivalTriggered] = useState(true);
+  const [order, setOrder] = useState<SalesOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Allocations state
-  const [mumbaiQty, setMumbaiQty] = useState(8);
-  const [eastQty, setEastQty] = useState(2);
+  const [plan, setPlan] = useState<FulfillmentPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
 
-  function handleAcceptSplit() {
-    setSplitAccepted(true);
+  const loadOrder = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const o = await OrderApi.get(orderId);
+      setOrder(o);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load this order.");
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    loadOrder();
+  }, [loadOrder]);
+
+  const loadPlan = useCallback(async () => {
+    setPlanLoading(true);
+    setPlanError(null);
+    try {
+      const p = await OrderApi.suggestFulfillment(orderId);
+      setPlan(p);
+    } catch (err) {
+      setPlanError(err instanceof ApiError ? err.message : "Could not compute a suggested split.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    if (order && !order.fulfillment) {
+      loadPlan();
+    }
+  }, [order, loadPlan]);
+
+  async function acceptSplit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const o = await OrderApi.acceptFulfillment(orderId);
+      setOrder(o);
+      setPlan(null);
+      setNotice("Split confirmed and stock reserved.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not accept this split.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleConsolidateBackorder() {
-    setBackorderConsolidated(true);
-    setStockArrivalTriggered(false);
+  async function consolidateBackorders() {
+    setBusy(true);
+    setError(null);
+    try {
+      const o = await OrderApi.consolidateBackorders(orderId);
+      setOrder(o);
+      setNotice("Backorders consolidated against newly available stock.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not consolidate backorders.");
+    } finally {
+      setBusy(false);
+    }
   }
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="size-6 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="mx-auto max-w-[480px] py-16 text-center">
+        <p className="text-[14px] font-medium text-rose-800">{error ?? "Order not found."}</p>
+        <Link href="/fulfillment" className="mt-3 inline-block text-[13px] text-ink underline">
+          Back to fulfillment
+        </Link>
+      </div>
+    );
+  }
+
+  const persisted = order.fulfillment;
+  const isPreview = !persisted;
+  const displayLines: FulfillmentLine[] = persisted?.lines ?? plan?.allocations ?? [];
+  const shipmentGroups = groupByShipment(displayLines);
+  const shipmentCount = persisted?.shipment_count ?? plan?.shipment_count ?? 0;
+  const estimatedCost = persisted?.estimated_cost ?? plan?.estimated_cost ?? null;
+  const openBackorders: Backorder[] = order.backorders ?? [];
+  const hasOpenBackorders = openBackorders.length > 0;
 
   return (
     <div className="space-y-6">
@@ -56,16 +160,19 @@ export default function WarehouseSplitDetailPage({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
-                Fulfillment Plan: {orderId} (Acme Corp)
+                Fulfillment Plan: {order.reference} ({order.customer_name})
               </h1>
-              <StatusBadge
-                status={splitAccepted ? "ALLOCATED" : "SUGGESTED"}
-                size="sm"
-              />
+              <StatusBadge status={order.status} size="sm" />
             </div>
             <p className="text-[12.5px] text-mist">
-              Destination: <strong>Bengaluru Hub, KA</strong> &middot; Promised
-              Delivery Date: <strong>Aug 28, 2026</strong>
+              Quote: <strong>{order.quotation_reference}</strong>
+              {order.promised_date ? (
+                <>
+                  {" "}
+                  &middot; Promised Delivery Date:{" "}
+                  <strong>{new Date(order.promised_date).toLocaleDateString()}</strong>
+                </>
+              ) : null}
             </p>
           </div>
         </div>
@@ -73,169 +180,149 @@ export default function WarehouseSplitDetailPage({
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setOverrideModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
+            disabled
+            title="Manual override isn't available in this build — accepting always applies the engine's suggested split."
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-mist opacity-50 cursor-not-allowed"
           >
             <Sliders className="size-3.5" />
             Manual Override
           </button>
 
-          <button
-            type="button"
-            disabled={splitAccepted}
-            onClick={handleAcceptSplit}
-            className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-[13px] font-semibold transition-colors ${
-              splitAccepted
-                ? "fill-ok text-white cursor-default"
-                : "bg-ink text-bone hover:bg-ink/90"
-            }`}
-          >
-            <CheckCircle className="size-3.5" />
-            {splitAccepted ? "Split Confirmed & Reserved" : "Accept Suggested Split"}
-          </button>
+
+          {isPreview ? (
+            <button
+              type="button"
+              disabled={busy || planLoading || !plan}
+              onClick={acceptSplit}
+              className="inline-flex items-center gap-1.5 rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle className="size-3.5" />
+              {busy ? "Accepting…" : "Accept Suggested Split"}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-semibold text-white">
+              <CheckCircle className="size-3.5" />
+              Split Confirmed &amp; Reserved
+            </span>
+          )}
         </div>
       </div>
 
-      <LifecycleBar currentStage="FULFILLMENT" />
+      <LifecycleBar currentStage={STAGE_BY_STATUS[order.status] ?? "FULFILLMENT"} />
 
-      {/* Heuristic Evaluation Callout */}
+      {error ? (
+        <div className="rounded-[16px] tone-bad p-3 text-[12.5px] text-bad">{error}</div>
+      ) : null}
+
+      {notice ? (
+        <div className="rounded-[18px] tone-ok p-3.5 text-[12.5px] font-medium flex items-center gap-2">
+          <CheckCircle className="size-4 text-ok" />
+          {notice}
+        </div>
+      ) : null}
+
+      {/* Heuristic / Persisted Evaluation Callout */}
       <div className="rounded-[20px] bg-white p-5 card-shadow flex items-start gap-3">
         <Sparkles className="size-5 text-ok shrink-0 mt-0.5" />
         <div className="text-[13px] text-ink">
           <p className="font-semibold">
-            Heuristic Warehouse Split Decision (Objective: Fewest Shipments)
+            {isPreview
+              ? "Suggested Warehouse Split (preview — not yet applied)"
+              : "Confirmed Warehouse Split"}
           </p>
-          <p className="mt-0.5 text-mist leading-relaxed">
-            Main Warehouse in Mumbai holds 8 of the 10 requested Laptop units. East Depot in Kolkata holds remaining stock. The split engine allocated 8 units to Mumbai and 2 to Kolkata, tie-breaking by lowest freight cost weight (1.0 vs 1.4). Total shipments minimized to <strong>2 packages</strong>.
-          </p>
+          {planLoading ? (
+            <p className="mt-0.5 text-mist">Computing the suggested split&hellip;</p>
+          ) : planError && isPreview ? (
+            <p className="mt-0.5 text-bad">{planError}</p>
+          ) : (
+            <p className="mt-0.5 text-mist leading-relaxed">
+              Strategy <strong>{(persisted?.strategy ?? plan?.strategy) || "—"}</strong> across{" "}
+              <strong>{shipmentCount} shipment{shipmentCount === 1 ? "" : "s"}</strong>
+              {estimatedCost ? (
+                <>
+                  {" "}
+                  at an estimated freight cost of <strong>{inr(estimatedCost)}</strong>
+                </>
+              ) : null}
+              {isPreview
+                ? ". This is a live preview from the split engine — accept it to reserve stock."
+                : ". This split has been accepted and stock has been reserved."}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Reactive Backorder Stock Arrival Notification (Spec B6) */}
-      {stockArrivalTriggered && !backorderConsolidated && (
-        <div className="rounded-[20px] tone-ok p-4 border border-transparent flex flex-wrap items-center justify-between gap-3">
+      {/* Consolidate Remaining Backorder prompt */}
+      {hasOpenBackorders && (
+        <div className="rounded-[20px] tone-warn p-4 border border-transparent flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Package className="size-5 text-ok" />
+            <Package className="size-5 text-warn" />
             <div className="text-[13px]">
-              <span className="font-semibold text-ok">
-                New Stock Received Mid-Fulfillment:
-              </span>{" "}
-              <span className="text-ok">
-                5 units of <em>Docking Station Ultra Dual-4K</em> just arrived at Main Warehouse (Mumbai).
+              <span className="font-semibold text-warn">Open backorder on this order:</span>{" "}
+              <span className="text-warn">
+                {openBackorders.length} line{openBackorders.length === 1 ? "" : "s"} awaiting stock.
+                If new stock has arrived, consolidate it into this order&apos;s shipments.
               </span>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={handleConsolidateBackorder}
-            className="inline-flex items-center gap-1.5 rounded-full fill-ok text-white px-3.5 py-1.5 text-[12px] font-semibold hover:fill-ok transition-colors"
+            disabled={busy}
+            onClick={consolidateBackorders}
+            className="inline-flex items-center gap-1.5 rounded-full fill-warn text-white px-3.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50"
           >
-            Consolidate Remaining Backorder &rarr;
+            {busy ? "Consolidating…" : "Consolidate Remaining Backorder →"}
           </button>
         </div>
       )}
 
-      {backorderConsolidated && (
-        <div className="rounded-[18px] tone-ok p-3.5 text-[12.5px] font-medium flex items-center gap-2">
-          <CheckCircle className="size-4 text-ok" />
-          Backorder consolidated! All docking station units merged into Shipment 1 (Main Warehouse). Total freight cost saved: ₹1,400.
-        </div>
-      )}
-
-      {/* THREE DISPATCH CARDS */}
+      {/* SHIPMENT CARDS */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {/* Shipment 1: Main Warehouse */}
-        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-              <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
-                <Warehouse className="size-4 text-ink/70" />
-                Main Warehouse
-              </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tone-ok text-ok border border-transparent">
-                Mumbai Depot
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[16px] bg-cream/40 p-3 border border-ink/6">
-                <p className="text-[13px] font-medium text-ink">
-                  Laptop Pro 16&quot;
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[12px]">
-                  <span className="text-ink font-semibold">
-                    Qty: {mumbaiQty} units
-                  </span>
-                  <span className="text-ok font-medium">In Stock</span>
-                </div>
+        {[...shipmentGroups.entries()].map(([group, lines]) => (
+          <div
+            key={group}
+            className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-ink/6">
+                <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
+                  <Warehouse className="size-4 text-ink/70" />
+                  {lines[0]?.warehouse_name ?? "Warehouse"}
+                </span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tone-ok text-ok border border-transparent">
+                  Shipment #{group}
+                </span>
               </div>
 
-              {backorderConsolidated && (
-                <div className="rounded-[16px] tone-ok p-3 border border-transparent">
-                  <p className="text-[13px] font-medium text-ink">
-                    Docking Station Ultra Dual-4K
-                  </p>
-                  <div className="mt-1 flex items-center justify-between text-[12px]">
-                    <span className="text-ok font-semibold">
-                      Qty: 5 units (Merged)
-                    </span>
-                    <span className="text-ok font-medium">Stock Arrived</span>
+              <div className="mt-4 space-y-3">
+                {lines.map((line, idx) => (
+                  <div
+                    key={`${line.product_id}-${idx}`}
+                    className="rounded-[16px] bg-cream/40 p-3 border border-ink/6"
+                  >
+                    <p className="text-[13px] font-medium text-ink">{line.product_name}</p>
+                    <div className="mt-1 flex items-center justify-between text-[12px]">
+                      <span className="text-ink font-semibold">Qty: {line.qty} units</span>
+                      <span className="text-mist font-medium">{line.warehouse_name}</span>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span className="flex items-center gap-1">
-              <Truck className="size-3.5" /> Shipment #1
-            </span>
-            <span className="font-semibold text-ink">
-              Est. Freight: ₹3,200
-            </span>
-          </div>
-        </div>
-
-        {/* Shipment 2: East Depot */}
-        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-              <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
-                <Warehouse className="size-4 text-ink/70" />
-                East Depot
-              </span>
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-cream text-ink">
-                Kolkata Depot
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[16px] bg-cream/40 p-3 border border-ink/6">
-                <p className="text-[13px] font-medium text-ink">
-                  Laptop Pro 16&quot;
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[12px]">
-                  <span className="text-ink font-semibold">
-                    Qty: {eastQty} units
-                  </span>
-                  <span className="text-ink font-medium">In Stock</span>
-                </div>
+                ))}
               </div>
             </div>
-          </div>
 
-          <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span className="flex items-center gap-1">
-              <Truck className="size-3.5" /> Shipment #2
-            </span>
-            <span className="font-semibold text-ink">
-              Est. Freight: ₹2,800
-            </span>
+            <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
+              <span className="flex items-center gap-1">
+                <Truck className="size-3.5" /> Shipment #{group}
+              </span>
+              <span className="font-medium text-ink">
+                {lines.reduce((sum, l) => sum + l.qty, 0)} units total
+              </span>
+            </div>
           </div>
-        </div>
+        ))}
 
-        {/* Shipment 3: Backorder Queue */}
+        {/* Backorder Queue card */}
         <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-ink/6">
@@ -243,26 +330,28 @@ export default function WarehouseSplitDetailPage({
                 <Layers className="size-4 text-ink/70" />
                 Backorder Queue
               </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tone-bad text-bad border border-transparent">
-                {backorderConsolidated ? "Zero Pending" : "1 Item Shortfall"}
+              <span
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border border-transparent ${
+                  hasOpenBackorders ? "tone-bad text-bad" : "tone-ok text-ok"
+                }`}
+              >
+                {hasOpenBackorders
+                  ? `${openBackorders.length} Item${openBackorders.length === 1 ? "" : "s"} Shortfall`
+                  : "Zero Pending"}
               </span>
             </div>
 
             <div className="mt-4 space-y-3">
-              {!backorderConsolidated ? (
-                <div className="rounded-[16px] tone-bad p-3 border border-transparent">
-                  <p className="text-[13px] font-medium text-ink">
-                    Docking Station Ultra Dual-4K
-                  </p>
-                  <div className="mt-1 flex items-center justify-between text-[12px]">
-                    <span className="text-bad font-semibold">
-                      Qty: 5 units
-                    </span>
-                    <span className="text-bad font-medium">
-                      Est. Restock: Aug 26
-                    </span>
+              {hasOpenBackorders ? (
+                openBackorders.map((b) => (
+                  <div key={b.id} className="rounded-[16px] tone-bad p-3 border border-transparent">
+                    <p className="text-[13px] font-medium text-ink">{b.product_name}</p>
+                    <div className="mt-1 flex items-center justify-between text-[12px]">
+                      <span className="text-bad font-semibold">Qty: {b.qty}</span>
+                      <span className="text-bad font-medium">{b.status}</span>
+                    </div>
                   </div>
-                </div>
+                ))
               ) : (
                 <div className="rounded-[16px] bg-cream/30 p-4 text-center text-[12px] text-mist">
                   All backorder lines resolved and consolidated into warehouse pickings.
@@ -272,81 +361,23 @@ export default function WarehouseSplitDetailPage({
           </div>
 
           <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span>Network Stock Status</span>
+            <span>Backorder Status</span>
             <span className="font-semibold text-ink">
-              {backorderConsolidated ? "100% Ready" : "Partially Ready (80%)"}
+              {hasOpenBackorders ? "Partially Ready" : "100% Ready"}
             </span>
           </div>
         </div>
-      </div>
 
-      {/* Manual Override Modal */}
-      {overrideModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl border border-ink/10">
-            <h3 className="text-[18px] font-semibold text-ink">
-              Manual Warehouse Allocation Override
-            </h3>
-            <p className="text-[13px] text-mist mt-1">
-              Adjust quantities allocated to specific warehouses. The heuristic cost engine will re-evaluate freight charges.
-            </p>
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="text-[12.5px] font-medium text-ink block mb-1">
-                  Main Warehouse (Mumbai Depot) — Laptop Qty
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={mumbaiQty}
-                  onChange={(e) => setMumbaiQty(parseInt(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 text-[13.5px] font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-[12.5px] font-medium text-ink block mb-1">
-                  East Depot (Kolkata Depot) — Laptop Qty
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={eastQty}
-                  onChange={(e) => setEastQty(parseInt(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 text-[13.5px] font-semibold"
-                />
-              </div>
-
-              <div className="rounded-xl tone-warn p-3 text-[12px] text-warn border border-transparent">
-                <strong>Cost Consequence:</strong> Overriding the automatic split preserves manual quantities, but may increase total freight charges by up to <strong>₹1,800</strong>.
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-ink/8">
-              <button
-                type="button"
-                onClick={() => setOverrideModalOpen(false)}
-                className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOverrideModalOpen(false);
-                  setSplitAccepted(true);
-                }}
-                className="rounded-full bg-ink text-bone px-5 py-2 text-[13px] font-semibold hover:bg-ink/90"
-              >
-                Apply Override Allocation
-              </button>
-            </div>
+        {shipmentGroups.size === 0 ? (
+          <div className="rounded-[24px] bg-white p-6 card-shadow text-[13px] text-mist md:col-span-2">
+            {planLoading
+              ? "Computing the suggested split…"
+              : isPreview
+                ? "No split has been suggested yet."
+                : "This order has no allocated shipment lines."}
           </div>
-        </div>
-      )}
+        ) : null}
+      </div>
     </div>
   );
 }

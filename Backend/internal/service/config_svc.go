@@ -78,6 +78,46 @@ func (s *ConfigService) CreateCategory(ctx context.Context, name string) (sqlcge
 }
 
 // ---------------------------------------------------------------------------
+// Customers
+// ---------------------------------------------------------------------------
+
+// ListCustomers returns a page of active customer accounts, for a rep
+// building a quotation to choose from.
+func (s *ConfigService) ListCustomers(ctx context.Context, cursor *int64, limit int32) ([]sqlcgen.Customer, error) {
+	rows, err := s.q.ListCustomers(ctx, sqlcgen.ListCustomersParams{Cursor: cursor, PageSize: limit})
+	if err != nil {
+		return nil, apierr.Internal(fmt.Errorf("list customers: %w", err))
+	}
+	return rows, nil
+}
+
+// CreateCustomer onboards a customer account. Reps create these inline while
+// building a quotation, so this is not restricted to admins the way catalogue
+// and governance writes are.
+func (s *ConfigService) CreateCustomer(ctx context.Context, name, email, tier string) (sqlcgen.Customer, error) {
+	if name == "" {
+		return sqlcgen.Customer{}, apierr.Validation("name is required")
+	}
+	if email == "" {
+		return sqlcgen.Customer{}, apierr.Validation("email is required")
+	}
+	switch tier {
+	case "BRONZE", "SILVER", "GOLD":
+	default:
+		return sqlcgen.Customer{}, apierr.Validation("tier must be one of BRONZE, SILVER, GOLD")
+	}
+
+	row, err := s.q.CreateCustomer(ctx, sqlcgen.CreateCustomerParams{Name: name, Email: email, Tier: tier})
+	if err != nil {
+		if isUniqueViolation(err) {
+			return sqlcgen.Customer{}, apierr.Conflict("a customer with that email already exists")
+		}
+		return sqlcgen.Customer{}, apierr.Internal(fmt.Errorf("create customer: %w", err))
+	}
+	return row, nil
+}
+
+// ---------------------------------------------------------------------------
 // Products
 // ---------------------------------------------------------------------------
 

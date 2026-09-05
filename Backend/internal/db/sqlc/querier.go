@@ -10,9 +10,17 @@ import (
 
 type Querier interface {
 	AddStock(ctx context.Context, arg AddStockParams) (StockItem, error)
+	// Consolidating a backorder adds shipments to the order's one fulfillment
+	// record rather than opening a second one, so a single GET always shows
+	// every line ever allocated to the order in one place.
+	AddToFulfillmentTotals(ctx context.Context, arg AddToFulfillmentTotalsParams) (Fulfillment, error)
 	AdjustScheduleAmount(ctx context.Context, arg AdjustScheduleAmountParams) (BillingSchedule, error)
 	AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) (AuditLog, error)
 	CancelRemainingSchedules(ctx context.Context, quotationLineID int64) (int64, error)
+	// A subscription reduced to zero seats stops billing outright: every future
+	// period is marked CANCELLED rather than merely re-priced to zero, so the
+	// schedule reads as "this stopped" rather than "this happens to cost nothing".
+	CancelScheduleAmountsFrom(ctx context.Context, arg CancelScheduleAmountsFromParams) (int64, error)
 	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	CountFulfillmentsForOrder(ctx context.Context, salesOrderID int64) (int64, error)
 	CountOpenApprovals(ctx context.Context, arg CountOpenApprovalsParams) (int64, error)

@@ -3,6 +3,7 @@
 package http_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -28,7 +29,7 @@ type billingBody struct {
 		PeriodEnd   string `json:"period_end"`
 		Amount      string `json:"amount"`
 		Status      string `json:"status"`
-	} `json:"schedule"`
+	} `json:"schedules"`
 	CreditNotes []struct {
 		Reference string `json:"reference"`
 		Amount    string `json:"amount"`
@@ -81,7 +82,9 @@ func hybridOrder(t *testing.T, h *harness, rep string) (quoteBody, orderBody, in
 func generateBilling(t *testing.T, h *harness, token string, orderID int64) billingBody {
 	t.Helper()
 
-	w := h.do(http.MethodPost, "/api/v1/orders/"+itoa(orderID)+"/invoices", token, nil)
+	req := h.request(http.MethodPost, "/api/v1/orders/"+itoa(orderID)+"/invoices", token, nil)
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("generate-billing-%d", orderID))
+	w := h.send(req)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("generate billing = %d: %s", w.Code, w.Body)
 	}
@@ -408,7 +411,7 @@ func TestMidCycleIncreaseIsProrated(t *testing.T) {
 
 	w := h.do(http.MethodPost,
 		"/api/v1/orders/"+itoa(o.ID)+"/subscriptions/"+itoa(lineID)+"/change", rep,
-		map[string]any{"qty": 5})
+		map[string]any{"qty": "5"})
 	if w.Code != http.StatusOK {
 		t.Fatalf("increase = %d: %s", w.Code, w.Body)
 	}
@@ -460,7 +463,7 @@ func TestMidCycleReductionProducesACreditNote(t *testing.T) {
 
 	w := h.do(http.MethodPost,
 		"/api/v1/orders/"+itoa(o.ID)+"/subscriptions/"+itoa(lineID)+"/change", rep,
-		map[string]any{"qty": 1})
+		map[string]any{"qty": "1"})
 	if w.Code != http.StatusOK {
 		t.Fatalf("reduce = %d: %s", w.Code, w.Body)
 	}
@@ -510,7 +513,7 @@ func TestCancellingASubscriptionStopsFutureBilling(t *testing.T) {
 
 	w := h.do(http.MethodPost,
 		"/api/v1/orders/"+itoa(o.ID)+"/subscriptions/"+itoa(lineID)+"/change", rep,
-		map[string]any{"qty": 0})
+		map[string]any{"qty": "0"})
 	if w.Code != http.StatusOK {
 		t.Fatalf("cancel = %d: %s", w.Code, w.Body)
 	}
@@ -538,16 +541,28 @@ func TestCancellingASubscriptionStopsFutureBilling(t *testing.T) {
 	}
 }
 
-func TestBillingCannotBeGeneratedTwice(t *testing.T) {
+// Generate is deliberately safe to call more than once: it only ever creates
+// the one-time invoice, or the recurring schedule, that does not already
+// exist. A second call must return the same billing state, not duplicate it.
+func TestGeneratingBillingTwiceDoesNotDuplicateIt(t *testing.T) {
 	h := newHarness(t)
 	rep := h.login(t, "rep@dealflow360.test")
 
 	_, o, _ := hybridOrder(t, h, rep)
-	generateBilling(t, h, rep, o.ID)
+	first := generateBilling(t, h, rep, o.ID)
 
 	w := h.do(http.MethodPost, "/api/v1/orders/"+itoa(o.ID)+"/invoices", rep, nil)
-	if w.Code != http.StatusConflict {
-		t.Errorf("second generation = %d, want 409: %s", w.Code, w.Body)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("second generation = %d, want 201: %s", w.Code, w.Body)
+	}
+	var second billingBody
+	decodeJSON(t, w, &second)
+
+	if len(second.Invoices) != len(first.Invoices) {
+		t.Errorf("invoices = %d after a second call, want %d (no duplicate)", len(second.Invoices), len(first.Invoices))
+	}
+	if len(second.Schedule) != len(first.Schedule) {
+		t.Errorf("schedule rows = %d after a second call, want %d (no duplicate)", len(second.Schedule), len(first.Schedule))
 	}
 }
 
@@ -567,7 +582,7 @@ func TestOnlyRecurringLinesHaveASubscriptionQuantity(t *testing.T) {
 
 	w := h.do(http.MethodPost,
 		"/api/v1/orders/"+itoa(o.ID)+"/subscriptions/"+itoa(oneTimeLine)+"/change", rep,
-		map[string]any{"qty": 5})
+		map[string]any{"qty": "5"})
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("changing a one-time line = %d, want 422: %s", w.Code, w.Body)
 	}

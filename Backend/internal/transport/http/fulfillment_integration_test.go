@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+// orderBody mirrors dto.SalesOrder. The fulfillment split, once persisted,
+// lives under Fulfillment.Lines (flat, grouped by ShipmentGroup) rather than
+// under a "plan" — "plan" is only the shape of the free-standing preview
+// GET /orders/:id/fulfillment/suggest returns, via planBody below.
 type orderBody struct {
 	ID           int64  `json:"id"`
 	Reference    string `json:"reference"`
@@ -15,26 +19,50 @@ type orderBody struct {
 	QuotationID  int64  `json:"quotation_id"`
 	CustomerName string `json:"customer_name"`
 	PromisedDate string `json:"promised_date"`
-	Suggested    bool   `json:"suggested"`
 
-	Plan *struct {
+	Fulfillment *struct {
+		ID               int64  `json:"id"`
 		Strategy         string `json:"strategy"`
 		ShipmentCount    int    `json:"shipment_count"`
 		EstimatedCost    string `json:"estimated_cost"`
 		IsManualOverride bool   `json:"is_manual_override"`
-		Allocations      []struct {
+		Lines            []struct {
 			WarehouseID   int64  `json:"warehouse_id"`
 			WarehouseName string `json:"warehouse_name"`
 			ProductID     int64  `json:"product_id"`
 			ProductName   string `json:"product_name"`
 			Qty           int64  `json:"qty"`
 			ShipmentGroup int    `json:"shipment_group"`
-		} `json:"allocations"`
-		Backorders []struct {
-			ProductID int64 `json:"product_id"`
-			Qty       int64 `json:"qty"`
-		} `json:"backorders"`
-	} `json:"plan"`
+		} `json:"lines"`
+	} `json:"fulfillment"`
+
+	Backorders []struct {
+		ID        int64  `json:"id"`
+		ProductID int64  `json:"product_id"`
+		Qty       int64  `json:"qty"`
+		Status    string `json:"status"`
+	} `json:"backorders"`
+}
+
+// planBody mirrors dto.FulfillmentPlan, the shape of a non-persisted preview.
+type planBody struct {
+	Strategy      string `json:"strategy"`
+	ShipmentCount int    `json:"shipment_count"`
+	EstimatedCost string `json:"estimated_cost"`
+	Allocations   []struct {
+		WarehouseID   int64  `json:"warehouse_id"`
+		WarehouseName string `json:"warehouse_name"`
+		ProductID     int64  `json:"product_id"`
+		ProductName   string `json:"product_name"`
+		Qty           int64  `json:"qty"`
+		ShipmentGroup int    `json:"shipment_group"`
+	} `json:"allocations"`
+	Backorders []struct {
+		ProductID int64  `json:"product_id"`
+		Qty       int64  `json:"qty"`
+		Status    string `json:"status"`
+	} `json:"backorders"`
+	FullyFulfilled bool `json:"fully_fulfilled"`
 }
 
 // approvedQuote builds a compliant quotation for the given products and takes
@@ -87,22 +115,20 @@ func TestSuggestReproducesTheDemoSplit(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("suggest = %d: %s", w.Code, w.Body)
 	}
-	decodeJSON(t, w, &o)
+	var plan planBody
+	decodeJSON(t, w, &plan)
 
-	if !o.Suggested {
-		t.Error("the response is not marked as a suggestion")
+	if plan.Strategy != "GREEDY_SPLIT" {
+		t.Errorf("strategy = %s, want GREEDY_SPLIT", plan.Strategy)
 	}
-	if o.Plan == nil {
-		t.Fatal("no plan returned")
+	if plan.ShipmentCount != 2 {
+		t.Errorf("shipments = %d, want 2", plan.ShipmentCount)
 	}
-	if o.Plan.Strategy != "GREEDY_SPLIT" {
-		t.Errorf("strategy = %s, want GREEDY_SPLIT", o.Plan.Strategy)
+	if len(plan.Backorders) != 1 || plan.Backorders[0].Qty != 1 {
+		t.Errorf("backorders = %+v, want one unit", plan.Backorders)
 	}
-	if o.Plan.ShipmentCount != 2 {
-		t.Errorf("shipments = %d, want 2", o.Plan.ShipmentCount)
-	}
-	if len(o.Plan.Backorders) != 1 || o.Plan.Backorders[0].Qty != 1 {
-		t.Errorf("backorders = %+v, want one unit", o.Plan.Backorders)
+	if plan.FullyFulfilled {
+		t.Error("a plan with a backorder must not report fully fulfilled")
 	}
 
 	// Suggesting must persist nothing: the order is untouched and no stock
@@ -136,15 +162,21 @@ func TestAcceptReservesStockAndRecordsBackorders(t *testing.T) {
 	if o.Status != "PARTIALLY_FULFILLED" {
 		t.Errorf("status = %s, want PARTIALLY_FULFILLED", o.Status)
 	}
+	if o.Fulfillment == nil {
+		t.Fatal("no fulfillment persisted")
+	}
 	var allocated int64
-	for _, a := range o.Plan.Allocations {
+	for _, a := range o.Fulfillment.Lines {
 		allocated += a.Qty
 	}
 	if allocated != 6 {
 		t.Errorf("allocated %d, want 6", allocated)
 	}
-	if len(o.Plan.Backorders) != 1 || o.Plan.Backorders[0].Qty != 1 {
-		t.Errorf("backorders = %+v, want one unit", o.Plan.Backorders)
+	if len(o.Backorders) != 1 || o.Backorders[0].Qty != 1 {
+		t.Errorf("backorders = %+v, want one unit", o.Backorders)
+	}
+	if o.Fulfillment.IsManualOverride {
+		t.Error("an engine-chosen split must not be marked as a manual override")
 	}
 
 	var reserved int64
@@ -169,14 +201,17 @@ func TestSingleWarehouseOrderShipsInOnePiece(t *testing.T) {
 	w := h.do(http.MethodPost, "/api/v1/orders/"+itoa(o.ID)+"/fulfillment", rep, nil)
 	decodeJSON(t, w, &o)
 
-	if o.Plan.Strategy != "SINGLE_WAREHOUSE" {
-		t.Errorf("strategy = %s, want SINGLE_WAREHOUSE", o.Plan.Strategy)
+	if o.Fulfillment == nil {
+		t.Fatal("no fulfillment persisted")
+	}
+	if o.Fulfillment.Strategy != "SINGLE_WAREHOUSE" {
+		t.Errorf("strategy = %s, want SINGLE_WAREHOUSE", o.Fulfillment.Strategy)
 	}
 	if o.Status != "FULFILLED" {
 		t.Errorf("status = %s, want FULFILLED", o.Status)
 	}
-	if len(o.Plan.Backorders) != 0 {
-		t.Errorf("backorders = %+v, want none", o.Plan.Backorders)
+	if len(o.Backorders) != 0 {
+		t.Errorf("backorders = %+v, want none", o.Backorders)
 	}
 }
 
@@ -281,15 +316,15 @@ func TestManualOverrideIsHonouredButValidated(t *testing.T) {
 	}
 	decodeJSON(t, good, &o)
 
-	if !o.Plan.IsManualOverride {
-		t.Error("the plan is not marked as a manual override")
+	if o.Fulfillment == nil || !o.Fulfillment.IsManualOverride {
+		t.Error("the fulfillment is not marked as a manual override")
 	}
-	if len(o.Plan.Backorders) != 1 || o.Plan.Backorders[0].Qty != 2 {
-		t.Errorf("backorders = %+v, want two units left over", o.Plan.Backorders)
+	if len(o.Backorders) != 1 || o.Backorders[0].Qty != 2 {
+		t.Errorf("backorders = %+v, want two units left over", o.Backorders)
 	}
 
 	byWarehouse := map[int64]int64{}
-	for _, a := range o.Plan.Allocations {
+	for _, a := range o.Fulfillment.Lines {
 		byWarehouse[a.WarehouseID] += a.Qty
 	}
 	if byWarehouse[eastWH] != 1 || byWarehouse[mainWH] != 3 {
@@ -337,7 +372,10 @@ func TestBackorderConsolidatesWhenStockArrives(t *testing.T) {
 	if o.Status != "PARTIALLY_FULFILLED" {
 		t.Fatalf("status = %s, want PARTIALLY_FULFILLED", o.Status)
 	}
-	shipmentsBefore := len(o.Plan.Allocations)
+	if o.Fulfillment == nil {
+		t.Fatal("no fulfillment persisted")
+	}
+	shipmentsBefore := len(o.Fulfillment.Lines)
 
 	// Nothing to consolidate yet.
 	early := h.do(http.MethodPost, "/api/v1/orders/"+itoa(o.ID)+"/backorders/consolidate", rep, nil)
@@ -366,17 +404,20 @@ func TestBackorderConsolidatesWhenStockArrives(t *testing.T) {
 	if o.Status != "FULFILLED" {
 		t.Errorf("status = %s, want FULFILLED once the backorder cleared", o.Status)
 	}
-	if len(o.Plan.Backorders) != 0 {
-		t.Errorf("backorders remain: %+v", o.Plan.Backorders)
+	if len(o.Backorders) != 0 {
+		t.Errorf("backorders remain: %+v", o.Backorders)
 	}
-	if len(o.Plan.Allocations) <= shipmentsBefore {
+	if o.Fulfillment == nil {
+		t.Fatal("no fulfillment persisted")
+	}
+	if len(o.Fulfillment.Lines) <= shipmentsBefore {
 		t.Error("no new allocation was added for the consolidated units")
 	}
 
 	// The consolidated shipment continues the original numbering rather than
 	// starting again, so the order reads as one delivery in parts.
 	maxGroup := 0
-	for _, a := range o.Plan.Allocations {
+	for _, a := range o.Fulfillment.Lines {
 		if a.ShipmentGroup > maxGroup {
 			maxGroup = a.ShipmentGroup
 		}
@@ -408,17 +449,25 @@ func TestOnlyApprovedQuotationsCanBeConfirmed(t *testing.T) {
 	}
 }
 
-func TestAQuotationCannotBeConfirmedTwice(t *testing.T) {
+// Confirm is deliberately safe to call more than once: a quotation that
+// already has an order just returns that same order rather than erroring, so
+// a retried confirm request is harmless.
+func TestConfirmingAQuotationTwiceReturnsTheSameOrder(t *testing.T) {
 	h := newHarness(t)
 	rep := h.login(t, "rep@dealflow360.test")
 
 	docking := productBySKUOverHTTP(t, h, "HW-DOCK")
 	q := approvedQuote(t, h, rep, map[int64]string{docking.ID: "1"})
-	confirmOrder(t, h, rep, q.ID)
+	first := confirmOrder(t, h, rep, q.ID)
 
 	w := h.do(http.MethodPost, "/api/v1/quotations/"+itoa(q.ID)+"/confirm", rep, nil)
-	if w.Code != http.StatusConflict {
-		t.Errorf("second confirm = %d, want 409: %s", w.Code, w.Body)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("second confirm = %d, want 201: %s", w.Code, w.Body)
+	}
+	var second orderBody
+	decodeJSON(t, w, &second)
+	if second.ID != first.ID {
+		t.Errorf("second confirm order id = %d, want the same order %d", second.ID, first.ID)
 	}
 }
 
@@ -469,13 +518,16 @@ func TestRecurringLinesAreNotFulfilled(t *testing.T) {
 	w := h.do(http.MethodPost, "/api/v1/orders/"+itoa(o.ID)+"/fulfillment", rep, nil)
 	decodeJSON(t, w, &o)
 
-	for _, a := range o.Plan.Allocations {
+	if o.Fulfillment == nil {
+		t.Fatal("no fulfillment persisted")
+	}
+	for _, a := range o.Fulfillment.Lines {
 		if a.ProductID == support.ID {
 			t.Errorf("the subscription line was allocated for shipping: %+v", a)
 		}
 	}
-	if len(o.Plan.Allocations) != 1 {
-		t.Errorf("allocations = %+v, want only the hardware line", o.Plan.Allocations)
+	if len(o.Fulfillment.Lines) != 1 {
+		t.Errorf("allocations = %+v, want only the hardware line", o.Fulfillment.Lines)
 	}
 }
 

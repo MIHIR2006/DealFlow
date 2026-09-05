@@ -40,11 +40,27 @@ type OrderSummary struct {
 
 // Fulfillment is the persisted split decision for an order.
 type Fulfillment struct {
-	ID            int64             `json:"id"`
-	Strategy      string            `json:"strategy"`
-	ShipmentCount int32             `json:"shipment_count"`
-	EstimatedCost string            `json:"estimated_cost"`
-	Lines         []FulfillmentLine `json:"lines"`
+	ID               int64             `json:"id"`
+	Strategy         string            `json:"strategy"`
+	ShipmentCount    int32             `json:"shipment_count"`
+	EstimatedCost    string            `json:"estimated_cost"`
+	IsManualOverride bool              `json:"is_manual_override"`
+	Lines            []FulfillmentLine `json:"lines"`
+}
+
+// AcceptFulfillmentRequest is the optional body of a fulfillment accept.
+// Omitting it (or sending an empty body) accepts the engine's own suggested
+// split; supplying overrides replaces the engine's choice of warehouse with
+// the caller's own, still validated against real demand and real stock.
+type AcceptFulfillmentRequest struct {
+	Overrides []FulfillmentOverride `json:"overrides"`
+}
+
+// FulfillmentOverride is one caller-specified allocation.
+type FulfillmentOverride struct {
+	WarehouseID int64 `json:"warehouse_id" binding:"required,gt=0"`
+	ProductID   int64 `json:"product_id"   binding:"required,gt=0"`
+	Qty         int64 `json:"qty"          binding:"required,gt=0"`
 }
 
 // FulfillmentLine is one warehouse's contribution to a shipment.

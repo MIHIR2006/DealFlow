@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, ApiError, readToken, clearToken } from "@/lib/api";
+import { api, AuthApi, ApiError, readToken, clearToken } from "@/lib/api";
+import type { UserRole } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // useFetch — reusable data loader for any BFF endpoint
@@ -90,7 +91,8 @@ export interface AuthUser {
   id: number;
   name: string;
   email: string;
-  role: string;
+  role: UserRole;
+  salesTeam: string;
 }
 
 export interface AuthState {
@@ -98,27 +100,31 @@ export interface AuthState {
   loading: boolean;
   isLoggedIn: boolean;
   logout: () => void;
+  refetch: () => void;
 }
 
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     const token = readToken();
-    if (!token) { setLoading(false); return; }
-    api<{ data: AuthUser }>("/v1/auth/me")
-      .then((res) => setUser(res.data))
-      .catch(() => { clearToken(); })
+    if (!token) { setUser(null); setLoading(false); return; }
+    setLoading(true);
+    AuthApi.me()
+      .then((u) => setUser({ id: u.id, name: u.full_name, email: u.email, role: u.role, salesTeam: u.sales_team }))
+      .catch(() => { clearToken(); setUser(null); })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const logout = useCallback(() => {
     clearToken();
     setUser(null);
   }, []);
 
-  return { user, loading, isLoggedIn: !!user, logout };
+  return { user, loading, isLoggedIn: !!user, logout, refetch: load };
 }
 
 // ---------------------------------------------------------------------------

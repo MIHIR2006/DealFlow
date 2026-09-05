@@ -61,13 +61,8 @@ build/
 
 # OS and Editor files
 .DS_Store
-<<<<<<< HEAD
-*.md
-*.pdf
-=======
 Thumbs.db
 .vscode/
 .idea/
 *.swp
 *.swo
->>>>>>> f637f58db39e975e5685ebabc709ecbe549d01c5

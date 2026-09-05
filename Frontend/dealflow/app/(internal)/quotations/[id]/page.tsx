@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, use } from "react";
+import React, { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,344 +8,226 @@ import {
   Trash2,
   Plus,
   Minus,
-  Send,
   CheckCircle,
   Clock,
   ShieldAlert,
-  Sparkles,
   Copy,
   ExternalLink,
+  Lock,
 } from "lucide-react";
-import { LifecycleBar } from "@/components/workspace/lifecycle-bar";
+import { LifecycleBar, type DealStage } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { MarginBar } from "@/components/ui/margin-bar";
+import { ApprovalStepper } from "@/components/ui/approval-stepper";
 import { UpsellPanel } from "@/components/workspace/upsell-panel";
-import { UpsellSuggestion } from "@/lib/types";
+import { QuotationApi, ConfigApi, ApiError } from "@/lib/api";
+import { inr } from "@/lib/hooks";
+import type { Quotation, Product, Category, SubscriptionPlan, Upsell, Page } from "@/lib/types";
 
-interface CartLineItem {
-  id: string;
-  productId: number;
-  productName: string;
-  sku: string;
-  category: "Hardware" | "Service" | "Subscription";
-  unitPrice: number;
-  costPrice: number;
-  qty: number;
-  discountPct: number;
-  taxRatePct: number;
-  lineType: "ONE_TIME" | "RECURRING";
-  planPeriod?: string;
-}
-
-const CATALOG = [
-  {
-    id: 1,
-    name: "Laptop Pro 16\"",
-    sku: "HW-LP-16",
-    category: "Hardware" as const,
-    unitPrice: 220000,
-    costPrice: 155000,
-    stock: "Mumbai: 42 · East: 12",
-    lineType: "ONE_TIME" as const,
-  },
-  {
-    id: 2,
-    name: "Setup & Migration Service",
-    sku: "SRV-SETUP-PRO",
-    category: "Service" as const,
-    unitPrice: 45000,
-    costPrice: 38000,
-    stock: "Available Immediately",
-    lineType: "ONE_TIME" as const,
-  },
-  {
-    id: 3,
-    name: "Enterprise Cloud Support 24/7",
-    sku: "SUB-CLOUD-247",
-    category: "Subscription" as const,
-    unitPrice: 25000,
-    costPrice: 8000,
-    stock: "Unlimited Seats",
-    lineType: "RECURRING" as const,
-    planPeriod: "Monthly",
-  },
-  {
-    id: 4,
-    name: "Server Rack Unit 2U",
-    sku: "HW-SRV-2U",
-    category: "Hardware" as const,
-    unitPrice: 180000,
-    costPrice: 130000,
-    stock: "Kolkata: 4 · Mumbai: 0",
-    lineType: "ONE_TIME" as const,
-  },
-  {
-    id: 5,
-    name: "Docking Station Ultra Dual-4K",
-    sku: "HW-DOCK-4K",
-    category: "Hardware" as const,
-    unitPrice: 18500,
-    costPrice: 11000,
-    stock: "Out of Stock (Backorder)",
-    lineType: "ONE_TIME" as const,
-  },
-];
+const STAGE_BY_STATUS: Record<string, DealStage> = {
+  DRAFT: "PRICING",
+  PENDING_APPROVAL: "APPROVAL",
+  APPROVED: "APPROVAL",
+  SENT: "APPROVAL",
+  UNDER_NEGOTIATION: "APPROVAL",
+  CONFIRMED: "FULFILLMENT",
+  REJECTED: "APPROVAL",
+};
 
 export default function QuotationBuilderPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const resolvedParams = use(params);
+  const { id: idParam } = use(params);
+  const id = Number(idParam);
   const router = useRouter();
-  const quoteId = resolvedParams.id || "Q-1042";
 
-  // Initial cart seeded to mirror the spec §10 worked example
-  const [lines, setLines] = useState<CartLineItem[]>([
-    {
-      id: "l1",
-      productId: 1,
-      productName: "Laptop Pro 16\"",
-      sku: "HW-LP-16",
-      category: "Hardware",
-      unitPrice: 220000,
-      costPrice: 155000,
-      qty: 2,
-      discountPct: 12, // Gold allowed: 15% -> 0pt over
-      taxRatePct: 18,
-      lineType: "ONE_TIME",
-    },
-    {
-      id: "l2",
-      productId: 2,
-      productName: "Setup & Migration Service",
-      sku: "SRV-SETUP-PRO",
-      category: "Service",
-      unitPrice: 45000,
-      costPrice: 38000,
-      qty: 1,
-      discountPct: 18, // Service allowed: 10% -> 8pt OVER
-      taxRatePct: 18,
-      lineType: "ONE_TIME",
-    },
-  ]);
+  const [quote, setQuote] = useState<Quotation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const [orderDiscountPct, setOrderDiscountPct] = useState(0);
-  const [customerTier] = useState<"Gold" | "Silver" | "Bronze">("Gold");
-  const [customerName] = useState("Acme Corporation");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [upsells, setUpsells] = useState<Upsell[]>([]);
+  const [upsellLoading, setUpsellLoading] = useState(false);
+
   const [catalogSearch, setCatalogSearch] = useState("");
   const [categoryTab, setCategoryTab] = useState("ALL");
+  const [portalLink, setPortalLink] = useState<string | null>(null);
   const [portalCopied, setPortalCopied] = useState(false);
-  const [submittedStatus, setSubmittedStatus] = useState<string | null>(null);
 
-  // Ceilings Matrix (Spec §10 & A3)
-  const tierCeiling = customerTier === "Gold" ? 15 : customerTier === "Silver" ? 10 : 5;
-  const categoryCeilings: Record<string, number> = {
-    Hardware: 15,
-    Service: 10,
-    Subscription: 20,
-  };
+  const [discountDraft, setDiscountDraft] = useState<Record<number, string>>({});
+  const [orderDiscountDraft, setOrderDiscountDraft] = useState("");
 
-  // Live Recalculations (Pricing & Risk Engine logic)
-  const totals = useMemo(() => {
-    let listSubtotal = 0;
-    let lineDiscountTotal = 0;
-    let totalCost = 0;
-    let oneTimeTotal = 0;
-    let recurringTotal = 0;
-
-    let weightedOverageSum = 0;
-    let maxLineOverage = 0;
-
-    const computedLines = lines.map((line) => {
-      const lineList = line.unitPrice * line.qty;
-      const lineCost = line.costPrice * line.qty;
-      const lineDiscountAmt = (lineList * line.discountPct) / 100;
-      const lineNet = lineList - lineDiscountAmt;
-      const lineTax = (lineNet * line.taxRatePct) / 100;
-      const lineMargin = lineNet - lineCost;
-      const lineMarginPct = lineNet > 0 ? (lineMargin / lineNet) * 100 : 0;
-
-      // Effective ceiling = min(tier, category)
-      const allowedCeiling = Math.min(tierCeiling, categoryCeilings[line.category] ?? tierCeiling);
-      const overagePts = Math.max(0, line.discountPct - allowedCeiling);
-
-      weightedOverageSum += overagePts * lineList;
-      if (overagePts > maxLineOverage) {
-        maxLineOverage = overagePts;
-      }
-
-      listSubtotal += lineList;
-      lineDiscountTotal += lineDiscountAmt;
-      totalCost += lineCost;
-
-      if (line.lineType === "ONE_TIME") {
-        oneTimeTotal += lineNet + lineTax;
-      } else {
-        recurringTotal += lineNet + lineTax;
-      }
-
-      return {
-        ...line,
-        lineList,
-        lineNet,
-        lineTax,
-        lineMarginPct,
-        allowedCeiling,
-        overagePts,
-        isOver: overagePts > 0,
-      };
-    });
-
-    const netBeforeOrderDisc = listSubtotal - lineDiscountTotal;
-    const orderDiscountAmt = (netBeforeOrderDisc * orderDiscountPct) / 100;
-    const finalNet = netBeforeOrderDisc - orderDiscountAmt;
-    const finalTax = (finalNet * 18) / 100;
-    const grandTotal = finalNet + finalTax;
-
-    const totalMarginAmt = finalNet - totalCost;
-    const totalMarginPct = finalNet > 0 ? (totalMarginAmt / finalNet) * 100 : 0;
-
-    // Blended risk calculation: value-weighted overage
-    const blendedRiskScore =
-      listSubtotal > 0 ? Number((weightedOverageSum / listSubtotal).toFixed(1)) : 0;
-
-    // Governance determination
-    let requiredLevel: "NONE" | "MANAGER" | "FINANCE" = "NONE";
-    let rationale = "Discounts are fully within customer tier and category discretion.";
-
-    if (blendedRiskScore >= 5.0 || maxLineOverage >= 10) {
-      requiredLevel = "FINANCE";
-      rationale = `Blended risk score is ${blendedRiskScore}% (≥5%) or maximum single-line overage is ${maxLineOverage}pt (≥10pt). Two-level approval required (Sales Manager ➔ Finance).`;
-    } else if (maxLineOverage > 0 || blendedRiskScore > 0) {
-      requiredLevel = "MANAGER";
-      rationale = `Line item exceeds category discretion by ${maxLineOverage}pt. Requires Sales Manager review.`;
+  const loadQuote = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const q = await QuotationApi.get(id);
+      setQuote(q);
+      setOrderDiscountDraft(q.order_discount_pct);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load this quotation.");
+    } finally {
+      setLoading(false);
     }
+  }, [id]);
 
-    return {
-      listSubtotal,
-      lineDiscountTotal,
-      orderDiscountAmt,
-      finalNet,
-      finalTax,
-      grandTotal,
-      totalCost,
-      totalMarginAmt,
-      totalMarginPct,
-      oneTimeTotal,
-      recurringTotal,
-      blendedRiskScore,
-      maxLineOverage,
-      requiredLevel,
-      rationale,
-      computedLines,
-    };
-  }, [lines, orderDiscountPct, tierCeiling]);
+  const loadUpsells = useCallback(async () => {
+    setUpsellLoading(true);
+    try {
+      const page = await QuotationApi.upsell(id);
+      setUpsells(page.data);
+    } catch {
+      setUpsells([]);
+    } finally {
+      setUpsellLoading(false);
+    }
+  }, [id]);
 
-  // Cart operations
-  function updateQty(id: string, delta: number) {
-    setLines((prev) =>
-      prev
-        .map((item) => {
-          if (item.id === id) {
-            const newQty = item.qty + delta;
-            return newQty > 0 ? { ...item, qty: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean) as CartLineItem[]
+  useEffect(() => {
+    loadQuote();
+    loadUpsells();
+    ConfigApi.listProducts({ limit: 100 }).then((p: Page<Product>) => setProducts(p.data));
+    ConfigApi.listCategories().then((p: Page<Category>) => setCategories(p.data));
+    ConfigApi.listPlans().then((p: Page<SubscriptionPlan>) => setPlans(p.data));
+  }, [loadQuote, loadUpsells]);
+
+  const isDraft = quote?.status === "DRAFT";
+
+  async function withErrorHandling(fn: () => Promise<Quotation>) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = await fn();
+      setQuote(q);
+      setOrderDiscountDraft(q.order_discount_pct);
+      return q;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "The request failed.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addProduct(product: Product, planId?: number) {
+    const q = await withErrorHandling(() =>
+      QuotationApi.addLine(id, {
+        product_id: product.id,
+        qty: "1",
+        discount_pct: "0",
+        plan_id: product.is_subscription ? planId ?? plans[0]?.id ?? null : null,
+      }),
+    );
+    if (q) loadUpsells();
+  }
+
+  async function changeQty(lineId: number, currentQty: string, currentDiscount: string, delta: number) {
+    const newQty = Math.max(1, Math.round(parseFloat(currentQty) || 1) + delta);
+    await withErrorHandling(() =>
+      QuotationApi.updateLine(id, lineId, { qty: String(newQty), discount_pct: currentDiscount }),
     );
   }
 
-  function updateDiscount(id: string, pct: number) {
-    setLines((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, discountPct: Math.max(0, Math.min(100, pct)) } : item))
+  async function commitDiscount(lineId: number, currentQty: string) {
+    const raw = discountDraft[lineId];
+    if (raw === undefined) return;
+    const pct = Math.max(0, Math.min(100, parseFloat(raw) || 0));
+    await withErrorHandling(() =>
+      QuotationApi.updateLine(id, lineId, { qty: currentQty, discount_pct: String(pct) }),
     );
   }
 
-  function removeLine(id: string) {
-    setLines((prev) => prev.filter((i) => i.id !== id));
+  async function removeLine(lineId: number) {
+    const q = await withErrorHandling(() => QuotationApi.deleteLine(id, lineId));
+    if (q) loadUpsells();
   }
 
-  function addProductToCart(product: (typeof CATALOG)[0]) {
-    setLines((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.productId === product.id ? { ...i, qty: i.qty + 1 } : i
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: `l_${Date.now()}`,
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          category: product.category,
-          unitPrice: product.unitPrice,
-          costPrice: product.costPrice,
-          qty: 1,
-          discountPct: 0,
-          taxRatePct: 18,
-          lineType: product.lineType,
-          planPeriod: product.planPeriod,
-        },
-      ];
-    });
+  async function commitOrderDiscount() {
+    const pct = Math.max(0, Math.min(100, parseFloat(orderDiscountDraft) || 0));
+    await withErrorHandling(() => QuotationApi.setOrderDiscount(id, String(pct)));
   }
 
-  function handleAddUpsell(suggestion: UpsellSuggestion) {
-    setLines((prev) => [
-      ...prev,
-      {
-        id: `l_upsell_${Date.now()}`,
-        productId: suggestion.product_id,
-        productName: suggestion.product_name,
-        sku: suggestion.sku,
-        category: (suggestion.category_name as any) || "Service",
-        unitPrice: 34000,
-        costPrice: 18000,
-        qty: 1,
-        discountPct: 0,
-        taxRatePct: 18,
-        lineType: "ONE_TIME",
-      },
-    ]);
+  async function submitQuote() {
+    const q = await withErrorHandling(() => QuotationApi.submit(id));
+    if (q && q.status === "APPROVED") {
+      // No approval needed: straight to fulfillment per the spec's flow.
+    }
+  }
+
+  async function sendToPortal() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await QuotationApi.send(id);
+      setPortalLink(`${window.location.origin}/portal/q/${res.token}`);
+      await loadQuote();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not generate a portal link.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function copyPortalLink() {
-    const token = "pt_acme_839f201d4a67b8e";
-    const portalUrl = `${window.location.origin}/portal/q/${token}`;
-    navigator.clipboard.writeText(portalUrl);
+    if (!portalLink) return;
+    navigator.clipboard.writeText(portalLink);
     setPortalCopied(true);
     setTimeout(() => setPortalCopied(false), 3000);
   }
 
-  function handleSubmitQuote() {
-    if (totals.requiredLevel === "FINANCE" || totals.requiredLevel === "MANAGER") {
-      setSubmittedStatus("PENDING_APPROVAL");
-      router.push(`/approvals/${quoteId}`);
-    } else {
-      setSubmittedStatus("APPROVED");
-      router.push(`/fulfillment/${quoteId}`);
+  async function confirmOrder() {
+    setBusy(true);
+    setError(null);
+    try {
+      const order = await QuotationApi.confirm(id);
+      router.push(`/fulfillment/${order.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not confirm this order.");
+      setBusy(false);
     }
   }
 
-  const filteredCatalog = CATALOG.filter((p) => {
+  const filteredCatalog = products.filter((p) => {
     const matchSearch =
       p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
       p.sku.toLowerCase().includes(catalogSearch.toLowerCase());
-    const matchCategory =
-      categoryTab === "ALL" ||
-      p.category.toUpperCase() === categoryTab.toUpperCase();
+    const matchCategory = categoryTab === "ALL" || p.category_name === categoryTab;
     return matchSearch && matchCategory;
   });
 
+  const addedProductIds = quote?.lines.map((l) => l.product_id) ?? [];
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="size-6 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!quote) {
+    return (
+      <div className="mx-auto max-w-[480px] py-16 text-center">
+        <p className="text-[14px] font-medium text-rose-800">{error ?? "Quotation not found."}</p>
+        <Link href="/quotations" className="mt-3 inline-block text-[13px] text-ink underline">
+          Back to quotations
+        </Link>
+      </div>
+    );
+  }
+
+  const risk = quote.risk;
+  const blended = parseFloat(risk.blended_score) || 0;
+  const maxOverage = parseFloat(risk.max_line_overage) || 0;
+
   return (
     <div className="space-y-6">
-      {/* Top Breadcrumb & Actions */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -355,433 +237,411 @@ export default function QuotationBuilderPage({
             <ArrowLeft className="size-4" />
           </Link>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-serif text-[24px] font-medium tracking-tight text-ink sm:text-[28px]">
-                {quoteId} &middot; {customerName}
+                {quote.reference} &middot; {quote.customer_name}
               </h1>
-              <span className="rounded-full tone-warn px-2.5 py-0.5 text-[11px] font-semibold text-warn border border-transparent">
-                {customerTier} Customer (15% Discretion)
+              <StatusBadge status={quote.status} />
+              <span className="rounded-full tone-warn px-2.5 py-0.5 text-[11px] font-semibold text-warn">
+                {quote.customer_tier} customer
               </span>
             </div>
             <p className="text-[12.5px] text-mist">
-              Created by J. Rao &middot; Last modified 4 mins ago
+              Owned by {quote.rep_name} &middot; Last activity {new Date(quote.last_activity_at).toLocaleString()}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={copyPortalLink}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
-          >
-            {portalCopied ? (
-              <>
-                <CheckCircle className="size-3.5 text-ok" />
-                Copied Link!
-              </>
-            ) : (
-              <>
-                <Copy className="size-3.5 text-mist" />
-                Customer Portal Link
-              </>
-            )}
-          </button>
-
-          <Link
-            href={`/portal/q/pt_acme_839f201d4a67b8e`}
-            target="_blank"
-            className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-white px-3 py-2 text-[12.5px] font-medium text-mist hover:text-ink transition-colors"
-            title="Open customer portal in isolated view"
-          >
-            <ExternalLink className="size-3.5" />
-          </Link>
+          {quote.status === "APPROVED" || quote.status === "SENT" || quote.status === "UNDER_NEGOTIATION" ? (
+            <button
+              type="button"
+              onClick={portalLink ? copyPortalLink : sendToPortal}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50"
+            >
+              {portalCopied ? (
+                <>
+                  <CheckCircle className="size-3.5 text-ok" /> Copied link!
+                </>
+              ) : (
+                <>
+                  <Copy className="size-3.5 text-mist" />
+                  {portalLink ? "Copy portal link" : "Send to customer portal"}
+                </>
+              )}
+            </button>
+          ) : null}
+          {portalLink ? (
+            <Link
+              href={portalLink.replace(window.location.origin, "")}
+              target="_blank"
+              className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-white px-3 py-2 text-[12.5px] font-medium text-mist hover:text-ink transition-colors"
+              title="Open customer portal in isolated view"
+            >
+              <ExternalLink className="size-3.5" />
+            </Link>
+          ) : null}
         </div>
       </div>
 
-      <LifecycleBar currentStage="PRICING" />
+      <LifecycleBar currentStage={STAGE_BY_STATUS[quote.status] ?? "PRICING"} />
 
-      {/* ASYMMETRIC 3-PANEL WORKSPACE */}
+      {error ? (
+        <div className="rounded-[16px] tone-bad p-3 text-[12.5px] text-bad">{error}</div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* PANEL 1: PRODUCT CATALOG BROWSER (3 cols) */}
-        <div className="rounded-[24px] bg-white p-4 card-shadow lg:col-span-3 flex flex-col h-[740px]">
-          <div className="pb-3 border-b border-ink/6">
-            <h2 className="text-[14px] font-semibold text-ink">Catalog &amp; Stock</h2>
-            <p className="text-[11.5px] text-mist mt-0.5">
-              Select products to add to quotation cart
-            </p>
+        {isDraft ? (
+          <div className="rounded-[24px] bg-white p-4 card-shadow lg:col-span-3 flex flex-col h-[740px]">
+            <div className="pb-3 border-b border-ink/6">
+              <h2 className="text-[14px] font-semibold text-ink">Catalog &amp; Stock</h2>
+              <p className="text-[11.5px] text-mist mt-0.5">Select products to add to the cart</p>
 
-            <input
-              type="text"
-              value={catalogSearch}
-              onChange={(e) => setCatalogSearch(e.target.value)}
-              placeholder="Search catalog..."
-              className="mt-3 w-full rounded-full bg-ink/[0.03] px-3 py-1.5 text-[12px] border border-ink/6 focus:outline-hidden"
-            />
+              <input
+                type="text"
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                placeholder="Search catalog..."
+                className="mt-3 w-full rounded-full bg-ink/[0.03] px-3 py-1.5 text-[12px] border border-ink/6 focus:outline-hidden"
+              />
 
-            {/* Category tabs */}
-            <div className="mt-2.5 flex items-center gap-1 overflow-x-auto pb-1">
-              {["ALL", "Hardware", "Service", "Subscription"].map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setCategoryTab(tab)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
-                    categoryTab === tab
-                      ? "bg-ink text-bone"
-                      : "bg-ink/[0.03] text-mist hover:text-ink"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
+              <div className="mt-2.5 flex items-center gap-1 overflow-x-auto pb-1">
+                {["ALL", ...categories.map((c) => c.name)].map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setCategoryTab(tab)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
+                      categoryTab === tab ? "bg-ink text-bone" : "bg-ink/[0.03] text-mist hover:text-ink"
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="mt-3 space-y-2 flex-1 overflow-y-auto pr-1">
-            {filteredCatalog.map((product) => (
-              <div
-                key={product.id}
-                className="group rounded-[16px] bg-cream/30 p-3 border border-ink/6 hover:border-ink/15 hover:bg-cream/60 transition-all flex flex-col justify-between"
-              >
-                <div>
+            <div className="mt-3 space-y-2 flex-1 overflow-y-auto pr-1">
+              {filteredCatalog.map((product) => (
+                <div
+                  key={product.id}
+                  className="group rounded-[16px] bg-cream/30 p-3 border border-ink/6 hover:border-ink/15 hover:bg-cream/60 transition-all"
+                >
                   <div className="flex items-start justify-between gap-1">
-                    <h4 className="text-[12.5px] font-semibold text-ink leading-tight">
-                      {product.name}
-                    </h4>
+                    <h4 className="text-[12.5px] font-semibold text-ink leading-tight">{product.name}</h4>
                     <span className="text-[9.5px] uppercase font-bold px-1.5 py-0.5 rounded bg-ink/5 text-mist">
-                      {product.category}
+                      {product.category_name}
                     </span>
                   </div>
-                  <p className="text-[11px] text-mist mt-1">{product.stock}</p>
-                </div>
+                  <p className="text-[11px] text-mist mt-1">SKU {product.sku}</p>
 
-                <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-ink/6">
-                  <span className="text-[12px] font-semibold tabular-nums text-ink">
-                    &#8377;{product.unitPrice.toLocaleString("en-IN")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => addProductToCart(product)}
-                    className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium text-bone hover:bg-ink/90 transition-colors"
-                  >
-                    <Plus className="size-3" /> Add
-                  </button>
+                  <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-ink/6">
+                    <span className="text-[12px] font-semibold tabular-nums text-ink">
+                      {inr(product.unit_price)}
+                      {product.is_subscription ? "/period" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy || (product.is_subscription && plans.length === 0)}
+                      onClick={() => addProduct(product)}
+                      className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
+                    >
+                      <Plus className="size-3" /> Add
+                    </button>
+                  </div>
+                  {product.is_subscription && plans.length > 0 ? (
+                    <p className="mt-1 text-[10px] text-mist">Plan: {plans[0].name} ({plans[0].period})</p>
+                  ) : null}
+                  {product.is_subscription && plans.length === 0 ? (
+                    <p className="mt-1 text-[10px] text-bad">No subscription plans configured</p>
+                  ) : null}
                 </div>
-              </div>
-            ))}
+              ))}
+              {filteredCatalog.length === 0 ? (
+                <p className="py-6 text-center text-[12px] text-mist">No products match.</p>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {/* PANEL 2: QUOTATION CART & ACTIVE LINES (5 cols) */}
-        <div className="rounded-[24px] bg-white p-5 card-shadow lg:col-span-5 flex flex-col justify-between">
+        <div className={`rounded-[24px] bg-white p-5 card-shadow flex flex-col justify-between ${isDraft ? "lg:col-span-5" : "lg:col-span-8"}`}>
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-ink/6">
               <div>
-                <h2 className="text-[16px] font-semibold tracking-tight text-ink">
-                  Quotation Cart
-                </h2>
-                <p className="text-[12px] text-mist">
-                  {totals.computedLines.length} line items configured
-                </p>
+                <h2 className="text-[16px] font-semibold tracking-tight text-ink">Quotation cart</h2>
+                <p className="text-[12px] text-mist">{quote.lines.length} line items</p>
               </div>
-
               <div className="text-right">
-                <span className="text-[11px] text-mist font-medium uppercase">
-                  Net Cart Value
-                </span>
+                <span className="text-[11px] text-mist font-medium uppercase">Net value</span>
                 <p className="text-[18px] font-serif font-semibold text-ink tabular-nums">
-                  &#8377;{totals.finalNet.toLocaleString("en-IN")}
+                  {inr(quote.totals.net_subtotal)}
                 </p>
               </div>
             </div>
 
-            {/* Lines List */}
+            {!isDraft ? (
+              <div className="mt-3 flex items-center gap-2 rounded-[14px] bg-cream/60 p-2.5 text-[12px] text-mist">
+                <Lock className="size-3.5 shrink-0" />
+                Editing is locked while this quotation is {quote.status.replace(/_/g, " ").toLowerCase()}.
+                {quote.status === "PENDING_APPROVAL"
+                  ? " A reviewer must return it for revision before lines can change."
+                  : ""}
+              </div>
+            ) : null}
+
             <div className="mt-4 space-y-3 max-h-[460px] overflow-y-auto pr-1">
-              {totals.computedLines.map((line) => (
-                <div
-                  key={line.id}
-                  className={`rounded-[18px] p-3.5 border transition-all ${
-                    line.isOver
-                      ? "border-transparent bg-amber-500/5"
-                      : "border-ink/8 bg-white"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[13.5px] text-ink">
-                          {line.productName}
+              {quote.lines.map((line) => {
+                const isOver = parseFloat(line.margin_pct) < 0 || risk.breakdown.find((b) => b.line_id === line.id)?.is_over;
+                const breakdown = risk.breakdown.find((b) => b.line_id === line.id);
+                return (
+                  <div
+                    key={line.id}
+                    className={`rounded-[18px] p-3.5 border transition-all ${
+                      breakdown?.is_over ? "border-transparent bg-amber-500/5" : "border-ink/8 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-[13.5px] text-ink">{line.product_name}</span>
+                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-ink/5 text-mist">
+                            {line.category_name}
+                          </span>
+                          {line.line_type === "RECURRING" ? (
+                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded tone-lilac">
+                              {line.plan_name} &middot; {line.plan_period}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[11px] text-mist">
+                          {line.sku} &middot; List: {inr(line.unit_price)} each
+                        </p>
+                      </div>
+                      {isDraft ? (
+                        <button
+                          type="button"
+                          onClick={() => removeLine(line.id)}
+                          disabled={busy}
+                          className="text-mist hover:text-bad transition-colors p-1"
+                          title="Remove line item"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-ink/6">
+                      <div className="flex items-center gap-1.5 rounded-full border border-ink/10 bg-cream/60 px-2 py-0.5">
+                        <button
+                          type="button"
+                          disabled={!isDraft || busy}
+                          onClick={() => changeQty(line.id, line.qty, line.line_discount_pct, -1)}
+                          className="text-mist hover:text-ink transition-colors disabled:opacity-30"
+                        >
+                          <Minus className="size-3" />
+                        </button>
+                        <span className="text-[12px] font-semibold px-2 tabular-nums">{line.qty}</span>
+                        <button
+                          type="button"
+                          disabled={!isDraft || busy}
+                          onClick={() => changeQty(line.id, line.qty, line.line_discount_pct, 1)}
+                          className="text-mist hover:text-ink transition-colors disabled:opacity-30"
+                        >
+                          <Plus className="size-3" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11.5px] text-mist font-medium">Disc %:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          disabled={!isDraft || busy}
+                          value={discountDraft[line.id] ?? line.line_discount_pct}
+                          onChange={(e) => setDiscountDraft((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                          onBlur={() => commitDiscount(line.id, line.qty)}
+                          className={`w-14 rounded-md px-1.5 py-0.5 text-right text-[12.5px] font-semibold border focus:outline-hidden disabled:opacity-60 ${
+                            breakdown?.is_over ? "border-ink/20 tone-warn" : "border-ink/15 bg-white text-ink"
+                          }`}
+                        />
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[13px] font-semibold text-ink tabular-nums">
+                          {inr(line.net_amount)}
                         </span>
-                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-ink/5 text-mist">
-                          {line.category}
+                        <span className="ml-1.5 text-[11px] font-medium text-ok">
+                          ({parseFloat(line.margin_pct).toFixed(0)}% mg)
                         </span>
                       </div>
-                      <p className="text-[11px] text-mist">
-                        {line.sku} &middot; List: &#8377;
-                        {line.unitPrice.toLocaleString("en-IN")} each
-                      </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => removeLine(line.id)}
-                      className="text-mist hover:text-bad transition-colors p-1"
-                      title="Remove line item"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
+                    {breakdown?.is_over ? (
+                      <div className="mt-2 rounded-lg tone-warn p-2 text-[11.5px] text-warn flex items-start gap-1.5">
+                        <ShieldAlert className="size-3.5 text-warn shrink-0 mt-0.5" />
+                        <span>
+                          <strong>Exceeds category discretion:</strong> allowed {breakdown.allowed_pct}%, given{" "}
+                          {breakdown.given_pct}%. <strong>+{breakdown.overage_pts}pt over limit.</strong>
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
+                );
+              })}
 
-                  {/* Qty & Discount Controls */}
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-ink/6">
-                    {/* Qty Stepper */}
-                    <div className="flex items-center gap-1.5 rounded-full border border-ink/10 bg-cream/60 px-2 py-0.5">
-                      <button
-                        type="button"
-                        onClick={() => updateQty(line.id, -1)}
-                        className="text-mist hover:text-ink transition-colors"
-                      >
-                        <Minus className="size-3" />
-                      </button>
-                      <span className="text-[12px] font-semibold px-2 tabular-nums">
-                        {line.qty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => updateQty(line.id, 1)}
-                        className="text-mist hover:text-ink transition-colors"
-                      >
-                        <Plus className="size-3" />
-                      </button>
-                    </div>
-
-                    {/* Discount Input */}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11.5px] text-mist font-medium">
-                        Disc %:
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={line.discountPct}
-                        onChange={(e) =>
-                          updateDiscount(line.id, parseFloat(e.target.value) || 0)
-                        }
-                        className={`w-14 rounded-md px-1.5 py-0.5 text-right text-[12.5px] font-semibold border focus:outline-hidden ${
-                          line.isOver
-                            ? "border-ink/20 tone-warn"
-                            : "border-ink/15 bg-white text-ink"
-                        }`}
-                      />
-                    </div>
-
-                    {/* Line Total & Line Margin */}
-                    <div className="text-right">
-                      <span className="text-[13px] font-semibold text-ink tabular-nums">
-                        &#8377;{line.lineNet.toLocaleString("en-IN")}
-                      </span>
-                      <span className="ml-1.5 text-[11px] font-medium text-ok">
-                        ({line.lineMarginPct.toFixed(0)}% mg)
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Ceiling Violation Warning Box */}
-                  {line.isOver && (
-                    <div className="mt-2 rounded-lg tone-warn p-2 text-[11.5px] text-warn border border-transparent flex items-start gap-1.5">
-                      <ShieldAlert className="size-3.5 text-warn shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Exceeds category discretion:</strong> Allowed{" "}
-                        {line.allowedCeiling}% ({line.category}), Applied{" "}
-                        {line.discountPct}%. <strong>+{line.overagePts}pt over limit.</strong> Will auto-route to Approvals.
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {totals.computedLines.length === 0 && (
+              {quote.lines.length === 0 ? (
                 <div className="flex h-40 flex-col items-center justify-center rounded-[18px] border border-dashed border-ink/15 text-center p-4">
-                  <p className="text-[13px] font-medium text-ink">
-                    Quotation cart is empty
-                  </p>
-                  <p className="text-[11.5px] text-mist mt-1">
-                    Add products from the catalog on the left to begin pricing.
-                  </p>
+                  <p className="text-[13px] font-medium text-ink">Quotation cart is empty</p>
+                  <p className="text-[11.5px] text-mist mt-1">Add products from the catalog to begin pricing.</p>
                 </div>
-              )}
+              ) : null}
             </div>
 
-            {/* Order Level Discount */}
             <div className="mt-4 pt-3 border-t border-ink/6 flex items-center justify-between text-[12.5px]">
-              <span className="text-mist font-medium">
-                Overall Order Discount (%):
-              </span>
+              <span className="text-mist font-medium">Overall order discount (%):</span>
               <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min="0"
                   max="100"
-                  value={orderDiscountPct}
-                  onChange={(e) =>
-                    setOrderDiscountPct(parseFloat(e.target.value) || 0)
-                  }
-                  className="w-16 rounded-md border border-ink/15 bg-white px-2 py-1 text-right text-[12.5px] font-semibold focus:outline-hidden"
+                  disabled={!isDraft || busy}
+                  value={orderDiscountDraft}
+                  onChange={(e) => setOrderDiscountDraft(e.target.value)}
+                  onBlur={commitOrderDiscount}
+                  className="w-16 rounded-md border border-ink/15 bg-white px-2 py-1 text-right text-[12.5px] font-semibold focus:outline-hidden disabled:opacity-60"
                 />
                 <span className="text-mist">%</span>
               </div>
             </div>
           </div>
 
-          {/* Workflow Action Bar */}
-          <div className="mt-6 pt-4 border-t border-ink/8 space-y-2">
-            <button
-              type="button"
-              onClick={handleSubmitQuote}
-              className={`w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-[13.5px] font-semibold transition-all shadow-sm ${
-                totals.requiredLevel === "FINANCE"
-                  ? "fill-warn"
-                  : totals.requiredLevel === "MANAGER"
-                  ? "fill-warn"
-                  : "bg-ink text-bone hover:bg-ink/90"
-              }`}
-            >
-              {totals.requiredLevel === "FINANCE" ? (
-                <>
-                  <ShieldAlert className="size-4" />
-                  Submit for Approval (Manager + Finance) &rarr;
-                </>
-              ) : totals.requiredLevel === "MANAGER" ? (
-                <>
-                  <Clock className="size-4" />
-                  Submit for Approval (Sales Manager) &rarr;
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="size-4" />
-                  Submit &amp; Move to Fulfillment &rarr;
-                </>
-              )}
-            </button>
+          <div className="mt-6 pt-4 border-t border-ink/8 space-y-3">
+            {isDraft ? (
+              <button
+                type="button"
+                onClick={submitQuote}
+                disabled={busy || quote.lines.length === 0}
+                className={`w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-[13.5px] font-semibold transition-all shadow-sm disabled:opacity-50 ${
+                  risk.required_level === "NONE" ? "bg-ink text-bone hover:bg-ink/90" : "fill-warn"
+                }`}
+              >
+                {risk.required_level === "FINANCE" ? (
+                  <>
+                    <ShieldAlert className="size-4" /> Submit for approval (Manager &rarr; Finance)
+                  </>
+                ) : risk.required_level === "MANAGER" ? (
+                  <>
+                    <Clock className="size-4" /> Submit for approval (Sales Manager)
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="size-4" /> Submit &amp; move to fulfillment
+                  </>
+                )}
+              </button>
+            ) : quote.status === "APPROVED" ? (
+              <button
+                type="button"
+                onClick={confirmOrder}
+                disabled={busy}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-ink py-3 text-[13.5px] font-semibold text-bone hover:bg-ink/90 disabled:opacity-50"
+              >
+                <CheckCircle className="size-4" /> Confirm &amp; move to fulfillment
+              </button>
+            ) : quote.status === "CONFIRMED" ? (
+              <button
+                type="button"
+                onClick={confirmOrder}
+                disabled={busy}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-ink py-3 text-[13.5px] font-semibold text-bone hover:bg-ink/90 disabled:opacity-50"
+              >
+                View fulfillment &rarr;
+              </button>
+            ) : null}
 
-            <div className="flex items-center justify-between text-[11.5px] text-mist px-1">
-              <span>Status: Draft (Unsaved)</span>
-              <span>Blended Engine: Auto-Routing Active</span>
-            </div>
+            {quote.approvals && quote.approvals.length > 0 ? (
+              <ApprovalStepper steps={quote.approvals} currentStatus={quote.status} />
+            ) : null}
           </div>
         </div>
 
-        {/* PANEL 3: FINANCIAL SUMMARY, LIVE MARGIN & INTELLIGENCE (4 cols) */}
         <div className="space-y-4 lg:col-span-4">
-          {/* Financial Summary Card */}
           <div className="rounded-[24px] bg-white p-5 card-shadow">
             <h3 className="text-[14px] font-semibold text-ink pb-2.5 border-b border-ink/6">
-              Financial Summary
+              Financial summary
             </h3>
-
             <dl className="mt-3 space-y-2 text-[12.5px]">
               <div className="flex justify-between">
-                <dt className="text-mist">List Subtotal</dt>
-                <dd className="tabular-nums text-ink">
-                  &#8377;{totals.listSubtotal.toLocaleString("en-IN")}
-                </dd>
+                <dt className="text-mist">List subtotal</dt>
+                <dd className="tabular-nums text-ink">{inr(quote.totals.list_subtotal)}</dd>
               </div>
-
               <div className="flex justify-between text-warn font-medium">
-                <dt>Discount Reductions</dt>
-                <dd className="tabular-nums">
-                  -&#8377;
-                  {(totals.lineDiscountTotal + totals.orderDiscountAmt).toLocaleString(
-                    "en-IN"
-                  )}
-                </dd>
+                <dt>Discount reductions</dt>
+                <dd className="tabular-nums">-{inr(quote.totals.discount_total)}</dd>
               </div>
-
               <div className="flex justify-between">
-                <dt className="text-mist">Net Subtotal</dt>
-                <dd className="tabular-nums text-ink font-semibold">
-                  &#8377;{totals.finalNet.toLocaleString("en-IN")}
-                </dd>
+                <dt className="text-mist">Net subtotal</dt>
+                <dd className="tabular-nums text-ink font-semibold">{inr(quote.totals.net_subtotal)}</dd>
               </div>
-
               <div className="flex justify-between">
-                <dt className="text-mist">Applicable GST (18%)</dt>
-                <dd className="tabular-nums text-ink">
-                  &#8377;{totals.finalTax.toLocaleString("en-IN")}
-                </dd>
+                <dt className="text-mist">Tax</dt>
+                <dd className="tabular-nums text-ink">{inr(quote.totals.tax_total)}</dd>
               </div>
-
               <div className="pt-2 border-t border-ink/8 flex justify-between text-[15px] font-semibold">
-                <dt className="text-ink">Grand Total</dt>
-                <dd className="text-ink tabular-nums">
-                  &#8377;{totals.grandTotal.toLocaleString("en-IN")}
-                </dd>
+                <dt className="text-ink">Grand total</dt>
+                <dd className="text-ink tabular-nums">{inr(quote.totals.grand_total)}</dd>
               </div>
-
               <div className="pt-2 border-t border-ink/4 flex justify-between text-[11.5px] text-mist">
                 <dt>One-time items:</dt>
-                <dd className="tabular-nums font-medium">
-                  &#8377;{totals.oneTimeTotal.toLocaleString("en-IN")}
-                </dd>
+                <dd className="tabular-nums font-medium">{inr(quote.totals.one_time_total)}</dd>
               </div>
               <div className="flex justify-between text-[11.5px] text-mist">
-                <dt>Recurring subscriptions:</dt>
-                <dd className="tabular-nums font-medium">
-                  &#8377;{totals.recurringTotal.toLocaleString("en-IN")}
-                </dd>
+                <dt>Recurring per period:</dt>
+                <dd className="tabular-nums font-medium">{inr(quote.totals.recurring_total)}</dd>
               </div>
             </dl>
-
-            {/* Live Margin Indicator Bar */}
             <div className="mt-4 pt-3 border-t border-ink/6">
-              <MarginBar
-                marginPct={totals.totalMarginPct}
-                targetPct={25}
-                floorPct={12}
-              />
+              <MarginBar marginPct={quote.totals.margin_pct} targetPct={25} floorPct={12} />
             </div>
           </div>
 
-          {/* Governance Risk Verdict Card */}
           <div
             className={`rounded-[24px] p-5 border transition-all ${
-              totals.requiredLevel === "FINANCE"
+              risk.required_level === "FINANCE"
                 ? "tone-bad border-transparent"
-                : totals.requiredLevel === "MANAGER"
-                ? "tone-warn border-transparent"
-                : "tone-ok border-transparent"
+                : risk.required_level === "MANAGER"
+                  ? "tone-warn border-transparent"
+                  : "tone-ok border-transparent"
             }`}
           >
             <div className="flex items-center justify-between pb-2 border-b border-ink/6">
-              <h3 className="text-[13.5px] font-semibold text-ink">
-                Governance Determination
-              </h3>
-              <RiskBadge
-                score={totals.blendedRiskScore}
-                requiredLevel={totals.requiredLevel}
-                size="sm"
-              />
+              <h3 className="text-[13.5px] font-semibold text-ink">Governance determination</h3>
+              <RiskBadge score={blended} requiredLevel={risk.required_level} size="sm" />
             </div>
-
-            <p className="mt-2.5 text-[12px] leading-relaxed text-ink/80">
-              {totals.rationale}
-            </p>
-
+            <p className="mt-2.5 text-[12px] leading-relaxed text-ink/80">{risk.rationale}</p>
             <div className="mt-3 pt-2.5 border-t border-ink/6 flex items-center justify-between text-[11.5px] text-mist">
-              <span>Max line overage: +{totals.maxLineOverage}pt</span>
-              <Link
-                href={`/approvals/${quoteId}`}
-                className="font-semibold text-ink hover:underline"
-              >
-                Inspect Policy Table &rarr;
-              </Link>
+              <span>Max line overage: +{maxOverage}pt</span>
+              {quote.status !== "DRAFT" ? (
+                <Link href="/approvals" className="font-semibold text-ink hover:underline">
+                  Approvals inbox &rarr;
+                </Link>
+              ) : null}
             </div>
           </div>
 
-          {/* Smart Recommendations Upsell Panel (SALES-06) */}
-          <UpsellPanel onAddSuggestion={handleAddUpsell} />
+          {isDraft ? (
+            <UpsellPanel
+              suggestions={upsells}
+              addedIds={addedProductIds}
+              loading={upsellLoading}
+              onAddSuggestion={(u) => {
+                const product = products.find((p) => p.id === u.product_id);
+                if (product) addProduct(product);
+              }}
+            />
+          ) : null}
         </div>
       </div>
     </div>

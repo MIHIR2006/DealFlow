@@ -70,7 +70,7 @@ func (h fulfillmentHandler) list(c *gin.Context) {
 		row := dto.OrderSummary{
 			ID: o.ID, Reference: o.Reference, QuotationID: o.QuotationID,
 			QuotationReference: o.QuotationReference,
-			CustomerID: o.CustomerID, CustomerName: o.CustomerName,
+			CustomerID:         o.CustomerID, CustomerName: o.CustomerName,
 			Status: o.Status, CreatedAt: iso(o.CreatedAt),
 			ShipmentCount: o.ShipmentCount, BackorderCount: o.BackorderCount,
 		}
@@ -125,7 +125,21 @@ func (h fulfillmentHandler) accept(c *gin.Context) {
 		return
 	}
 
-	order, err := h.svc.Accept(c.Request.Context(), actor, id)
+	var overrides []fulfillment.OverrideLine
+	if c.Request.ContentLength > 0 {
+		var req dto.AcceptFulfillmentRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Fail(c, bindError(err))
+			return
+		}
+		for _, o := range req.Overrides {
+			overrides = append(overrides, fulfillment.OverrideLine{
+				WarehouseID: o.WarehouseID, ProductID: o.ProductID, Qty: o.Qty,
+			})
+		}
+	}
+
+	order, err := h.svc.Accept(c.Request.Context(), actor, id, overrides)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -169,9 +183,10 @@ func orderDTO(o service.Order) dto.SalesOrder {
 	if o.Fulfillment != nil {
 		f := &dto.Fulfillment{
 			ID: o.Fulfillment.ID, Strategy: o.Fulfillment.Strategy,
-			ShipmentCount: o.Fulfillment.ShipmentCount,
-			EstimatedCost: o.Fulfillment.EstimatedCost.String(),
-			Lines:         make([]dto.FulfillmentLine, 0, len(o.Lines)),
+			ShipmentCount:    o.Fulfillment.ShipmentCount,
+			EstimatedCost:    o.Fulfillment.EstimatedCost.String(),
+			IsManualOverride: o.Fulfillment.IsManualOverride,
+			Lines:            make([]dto.FulfillmentLine, 0, len(o.Lines)),
 		}
 		for _, l := range o.Lines {
 			f.Lines = append(f.Lines, dto.FulfillmentLine{
@@ -205,7 +220,7 @@ func planDTO(p fulfillment.Plan) dto.FulfillmentPlan {
 		out.Allocations = append(out.Allocations, dto.FulfillmentLine{
 			WarehouseID: a.WarehouseID, WarehouseName: a.WarehouseName,
 			ProductID: a.ProductID, ProductName: a.ProductName,
-			Qty: a.Qty, ShipmentGroup: int32(a.ShipmentGroup),
+			Qty: a.Qty, ShipmentGroup: int32(a.ShipmentGroup), //nolint:gosec // a shipment group index never approaches int32 range
 		})
 	}
 	for _, b := range p.Backorders {

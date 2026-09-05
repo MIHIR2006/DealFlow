@@ -284,10 +284,79 @@ func (s *FulfillmentService) Suggest(ctx context.Context, actor auth.Principal, 
 	return s.buildPlan(ctx, s.q, orderID, false)
 }
 
+// buildOverridePlan loads the same demand/warehouse/locked-stock inputs as
+// buildPlan, but hands them to the manual-override path instead of the
+// greedy engine, and translates its two distinct failure modes into the
+// right HTTP status: asking a warehouse for more than it has is a conflict
+// with the world as it now stands, asking for more of a product than the
+// order needs is simply an invalid request.
+func (s *FulfillmentService) buildOverridePlan(
+	ctx context.Context, q *sqlcgen.Queries, orderID int64, overrides []fulfillment.OverrideLine,
+) (fulfillment.Plan, error) {
+	lines, err := q.ListFulfillableLines(ctx, orderID)
+	if err != nil {
+		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list fulfillable lines: %w", err))
+	}
+	if len(lines) == 0 {
+		return fulfillment.Plan{}, apierr.Validation("this order has no lines to fulfil")
+	}
+
+	productIDs := make([]int64, 0, len(lines))
+	demands := make([]fulfillment.Demand, 0, len(lines))
+	for _, l := range lines {
+		productIDs = append(productIDs, l.ProductID)
+		demands = append(demands, fulfillment.Demand{
+			ProductID: l.ProductID, ProductName: l.ProductName,
+			Qty: l.Qty.IntPart(), UnitValue: l.UnitPrice,
+		})
+	}
+
+	warehouseRows, err := q.ListWarehouses(ctx)
+	if err != nil {
+		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list warehouses: %w", err))
+	}
+	warehouses := make([]fulfillment.Warehouse, 0, len(warehouseRows))
+	for _, w := range warehouseRows {
+		warehouses = append(warehouses, fulfillment.Warehouse{
+			ID: w.ID, Name: w.Name, ShippingCostWeight: w.ShippingCostWeight,
+		})
+	}
+
+	rows, err := q.LockStockForProducts(ctx, productIDs)
+	if err != nil {
+		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("lock stock for products: %w", err))
+	}
+	stock := make([]fulfillment.Stock, 0, len(rows))
+	for _, r := range rows {
+		stock = append(stock, fulfillment.Stock{
+			WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
+		})
+	}
+
+	result := fulfillment.Override(demands, stock, warehouses, overrides)
+	if len(result.ExceedsDemand) > 0 {
+		return fulfillment.Plan{}, apierr.Validation(
+			"the override allocates more of a product than this order needs")
+	}
+	if len(result.ExceedsStock) > 0 {
+		return fulfillment.Plan{}, apierr.Conflict(
+			"one or more warehouses cannot cover the quantity requested")
+	}
+	return result.Plan, nil
+}
+
 // Accept re-runs the split against locked stock and reserves exactly what it
 // allocates. An order can be accepted only once; consolidating a later
 // backorder is a separate, additive step.
-func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, orderID int64) (Order, error) {
+//
+// Overrides, when given, replace the engine's own choice of warehouse for
+// this acceptance: the rep or finance reviewer is telling the system where
+// stock should come from rather than asking it to decide. The plan is still
+// validated against real demand and real stock — an override may leave
+// units backordered, it may never invent units that are not there.
+func (s *FulfillmentService) Accept(
+	ctx context.Context, actor auth.Principal, orderID int64, overrides []fulfillment.OverrideLine,
+) (Order, error) {
 	order, err := s.Get(ctx, actor, orderID)
 	if err != nil {
 		return Order{}, err
@@ -299,14 +368,21 @@ func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, o
 	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
-		plan, err := s.buildPlan(ctx, qtx, orderID, true)
+		var plan fulfillment.Plan
+		var err error
+		if len(overrides) > 0 {
+			plan, err = s.buildOverridePlan(ctx, qtx, orderID, overrides)
+		} else {
+			plan, err = s.buildPlan(ctx, qtx, orderID, true)
+		}
 		if err != nil {
 			return err
 		}
 
 		f, err := qtx.CreateFulfillment(ctx, sqlcgen.CreateFulfillmentParams{
 			SalesOrderID: orderID, Strategy: string(plan.Strategy),
-			ShipmentCount: int32(plan.ShipmentCount), EstimatedCost: plan.EstimatedCost,
+			ShipmentCount: int32(plan.ShipmentCount), EstimatedCost: plan.EstimatedCost, //nolint:gosec // a shipment count never approaches int32 range
+			IsManualOverride: len(overrides) > 0,
 		})
 		if err != nil {
 			return fmt.Errorf("create fulfillment: %w", err)
@@ -325,7 +401,7 @@ func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, o
 				}
 				lines = append(lines, sqlcgen.InsertFulfillmentLinesParams{
 					FulfillmentID: f.ID, WarehouseID: a.WarehouseID, ProductID: a.ProductID,
-					Qty: a.Qty, ShipmentGroup: int32(a.ShipmentGroup),
+					Qty: a.Qty, ShipmentGroup: int32(a.ShipmentGroup), //nolint:gosec // a shipment group index never approaches int32 range
 				})
 			}
 			if _, err := qtx.InsertFulfillmentLines(ctx, lines); err != nil {
@@ -387,7 +463,7 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 			return fmt.Errorf("list consolidatable backorders: %w", err)
 		}
 		if len(consolidatable) == 0 {
-			return nil
+			return apierr.Conflict("no open backorder on this order currently has stock to consolidate")
 		}
 
 		productIDs := make([]int64, 0, len(consolidatable))
@@ -426,14 +502,14 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 			return nil
 		}
 
-		f, err := qtx.CreateFulfillment(ctx, sqlcgen.CreateFulfillmentParams{
-			SalesOrderID: orderID, Strategy: string(plan.Strategy),
-			ShipmentCount: int32(plan.ShipmentCount), EstimatedCost: plan.EstimatedCost,
-			IsManualOverride: false,
-		})
-		if err != nil {
-			return fmt.Errorf("create fulfillment: %w", err)
-		}
+		// The order already has one fulfillment from Accept (backorders only
+		// ever exist once that has run). Consolidation adds shipments to that
+		// same record rather than opening a second one, so a single GET on
+		// the order always shows every line ever allocated to it, and
+		// "Shipment N" numbering continues rather than restarting at 1.
+		existing := order.Fulfillment
+		groupOffset := existing.ShipmentCount
+		newGroups := make(map[int]bool, plan.ShipmentCount)
 
 		lines := make([]sqlcgen.InsertFulfillmentLinesParams, 0, len(plan.Allocations))
 		for _, a := range plan.Allocations {
@@ -445,13 +521,19 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 				}
 				return fmt.Errorf("reserve stock: %w", err)
 			}
+			newGroups[a.ShipmentGroup] = true
 			lines = append(lines, sqlcgen.InsertFulfillmentLinesParams{
-				FulfillmentID: f.ID, WarehouseID: a.WarehouseID, ProductID: a.ProductID,
-				Qty: a.Qty, ShipmentGroup: int32(a.ShipmentGroup),
+				FulfillmentID: existing.ID, WarehouseID: a.WarehouseID, ProductID: a.ProductID,
+				Qty: a.Qty, ShipmentGroup: groupOffset + int32(a.ShipmentGroup), //nolint:gosec // a shipment group index never approaches int32 range
 			})
 		}
 		if _, err := qtx.InsertFulfillmentLines(ctx, lines); err != nil {
 			return fmt.Errorf("insert fulfillment lines: %w", err)
+		}
+		if _, err := qtx.AddToFulfillmentTotals(ctx, sqlcgen.AddToFulfillmentTotalsParams{
+			ID: existing.ID, AddedShipments: int32(len(newGroups)), AddedCost: plan.EstimatedCost, //nolint:gosec // a shipment count never approaches int32 range
+		}); err != nil {
+			return fmt.Errorf("update fulfillment totals: %w", err)
 		}
 
 		// A backorder resolves only once the plan covered its product in

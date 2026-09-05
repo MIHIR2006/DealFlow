@@ -28,6 +28,8 @@ const (
 	StrategyGreedySplit Strategy = "GREEDY_SPLIT"
 	// StrategyNothingToShip means the order had no physical lines.
 	StrategyNothingToShip Strategy = "NOTHING_TO_SHIP"
+	// StrategyManualOverride means a human chose the allocation, not the engine.
+	StrategyManualOverride Strategy = "MANUAL_OVERRIDE"
 )
 
 // Demand is one product the order needs shipped.
@@ -334,4 +336,137 @@ func minInt64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+// OverrideLine is one caller-specified allocation, used when a rep or
+// finance reviewer overrules the engine's suggested split.
+type OverrideLine struct {
+	WarehouseID int64
+	ProductID   int64
+	Qty         int64
+}
+
+// OverrideStockShortfall names one override entry that asked a warehouse for
+// more than it currently has available.
+type OverrideStockShortfall struct {
+	WarehouseID int64
+	ProductID   int64
+	Requested   int64
+	Available   int64
+}
+
+// OverrideResult is what applying manual overrides produced.
+//
+// The two problem fields are kept separate rather than folded into one error
+// because they mean different things to a caller: asking a warehouse for
+// more than it has is a conflict with the current state of the world (stock
+// may have moved since the split was suggested), while asking for more of a
+// product than the order itself needs is simply a malformed request. Callers
+// map the two to different HTTP statuses.
+type OverrideResult struct {
+	Plan          Plan
+	ExceedsDemand []int64
+	ExceedsStock  []OverrideStockShortfall
+}
+
+// Override builds a plan from caller-specified allocations instead of
+// running the greedy engine. A manual split is allowed to leave some demand
+// unfulfilled — it becomes a backorder just as an engine-chosen split would —
+// but it is never allowed to invent units a warehouse does not have, or ship
+// more of a product than the order asked for.
+func Override(demands []Demand, stock []Stock, warehouses []Warehouse, lines []OverrideLine) OverrideResult {
+	var result OverrideResult
+
+	totalDemand, order := remainingDemand(demands)
+	if len(order) == 0 {
+		result.Plan = Plan{Allocations: []Allocation{}, Backorders: []Backorder{}, EstimatedCost: money.Zero(), Strategy: StrategyNothingToShip}
+		return result
+	}
+
+	// Pass 1: the request must not ask for more of a product, in total, than
+	// the order needs — independent of what any single warehouse holds.
+	requestedByProduct := make(map[int64]int64, len(order))
+	for _, l := range lines {
+		if l.Qty > 0 {
+			requestedByProduct[l.ProductID] += l.Qty
+		}
+	}
+	for pid, requested := range requestedByProduct {
+		if requested > totalDemand[pid] {
+			result.ExceedsDemand = append(result.ExceedsDemand, pid)
+		}
+	}
+	if len(result.ExceedsDemand) > 0 {
+		sort.Slice(result.ExceedsDemand, func(i, j int) bool { return result.ExceedsDemand[i] < result.ExceedsDemand[j] })
+		return result
+	}
+
+	// Pass 2: each individual allocation must not ask a warehouse for more
+	// than it currently has. Shipment groups are assigned per warehouse, in
+	// the order the caller's lines first mention one, so "Shipment 1" is
+	// whichever warehouse the override led with.
+	names := demandNames(demands)
+	whNames := make(map[int64]string, len(warehouses))
+	whByID := make(map[int64]Warehouse, len(warehouses))
+	for _, w := range warehouses {
+		whNames[w.ID] = w.Name
+		whByID[w.ID] = w
+	}
+	avail := availability(stock)
+	remaining := make(map[int64]int64, len(totalDemand))
+	for pid, qty := range totalDemand {
+		remaining[pid] = qty
+	}
+
+	plan := Plan{Allocations: []Allocation{}, Backorders: []Backorder{}}
+	groupByWarehouse := make(map[int64]int)
+	nextGroup := 1
+
+	for _, l := range lines {
+		if l.Qty <= 0 {
+			continue
+		}
+		var available int64
+		if wm := avail[l.WarehouseID]; wm != nil {
+			available = wm[l.ProductID]
+		}
+		if l.Qty > available {
+			result.ExceedsStock = append(result.ExceedsStock, OverrideStockShortfall{
+				WarehouseID: l.WarehouseID, ProductID: l.ProductID,
+				Requested: l.Qty, Available: available,
+			})
+			continue
+		}
+
+		group, ok := groupByWarehouse[l.WarehouseID]
+		if !ok {
+			group = nextGroup
+			groupByWarehouse[l.WarehouseID] = group
+			nextGroup++
+		}
+
+		plan.Allocations = append(plan.Allocations, Allocation{
+			WarehouseID: l.WarehouseID, WarehouseName: whNames[l.WarehouseID],
+			ProductID: l.ProductID, ProductName: names[l.ProductID],
+			Qty: l.Qty, ShipmentGroup: group,
+		})
+		remaining[l.ProductID] -= l.Qty
+		avail[l.WarehouseID][l.ProductID] -= l.Qty
+	}
+	if len(result.ExceedsStock) > 0 {
+		return result
+	}
+
+	plan.Backorders = backorders(remaining, order, names)
+	plan.ShipmentCount = nextGroup - 1
+	plan.Strategy = StrategyManualOverride
+
+	cost := money.Zero()
+	for whID := range groupByWarehouse {
+		cost = cost.Add(whByID[whID].ShippingCostWeight)
+	}
+	plan.EstimatedCost = money.RoundAmount(cost)
+
+	result.Plan = plan
+	return result
 }

@@ -20,6 +20,56 @@ type configHandler struct {
 }
 
 // ---------------------------------------------------------------------------
+// Customers
+// ---------------------------------------------------------------------------
+
+func (h configHandler) listCustomers(c *gin.Context) {
+	cursor, err := optionalInt64Query(c, "cursor")
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	limit := pageLimit(c)
+
+	rows, err := h.svc.ListCustomers(c.Request.Context(), cursor, limit+1)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	var next string
+	if len(rows) > int(limit) {
+		rows = rows[:limit]
+		next = strconv.FormatInt(rows[len(rows)-1].ID, 10)
+	}
+
+	out := make([]dto.Customer, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dto.Customer{
+			ID: r.ID, Name: r.Name, Email: r.Email, Tier: r.Tier, IsActive: r.IsActive,
+		})
+	}
+	OK(c, http.StatusOK, Page[dto.Customer]{Data: out, NextCursor: next})
+}
+
+func (h configHandler) createCustomer(c *gin.Context) {
+	var req dto.CreateCustomerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, bindError(err))
+		return
+	}
+
+	row, err := h.svc.CreateCustomer(c.Request.Context(), req.Name, req.Email, req.Tier)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, http.StatusCreated, dto.Customer{
+		ID: row.ID, Name: row.Name, Email: row.Email, Tier: row.Tier, IsActive: row.IsActive,
+	})
+}
+
+// ---------------------------------------------------------------------------
 // Categories and products
 // ---------------------------------------------------------------------------
 
