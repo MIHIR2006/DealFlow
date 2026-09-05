@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"dealflow360/backend/internal/platform/config"
+	"dealflow360/backend/internal/platform/db"
 	"dealflow360/backend/internal/platform/logger"
 	apihttp "dealflow360/backend/internal/transport/http"
 )
@@ -28,10 +29,27 @@ func main() {
 		slog.String("port", cfg.Port),
 	)
 
+	// Connect before serving: a bad DATABASE_URL should fail at startup with a
+	// clear message, not on the first request that happens to need data.
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	pool, err := db.Open(dbCtx, cfg)
+	dbCancel()
+	if err != nil {
+		log.Error("database unavailable", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	log.Info("database connected",
+		slog.Int("max_conns", int(cfg.DBMaxConns)),
+		slog.Int("min_conns", int(cfg.DBMinConns)),
+	)
+
 	router := apihttp.NewRouter(apihttp.Deps{
 		Config: cfg,
 		Log:    log,
-		// Ready is nil until Phase 2 wires the database ping.
+		Pool:   pool,
+		Ready:  db.Ready(pool),
 	})
 
 	srv := &http.Server{

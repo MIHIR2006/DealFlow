@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"dealflow360/backend/internal/platform/config"
 	"dealflow360/backend/internal/transport/http/middleware"
@@ -20,6 +21,7 @@ type ReadinessFunc func(ctx context.Context) error
 type Deps struct {
 	Config config.Config
 	Log    *slog.Logger
+	Pool   *pgxpool.Pool
 	Ready  ReadinessFunc
 }
 

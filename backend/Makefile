@@ -40,8 +40,16 @@ lint: ## Run golangci-lint
 	golangci-lint run
 
 .PHONY: test
-test: ## Run tests with the race detector
+test: ## Run unit tests with the race detector
 	go test $(PKG) -race -count=1
+
+.PHONY: test-integration
+test-integration: ## Run tests that need a real Postgres (set TEST_DATABASE_URL)
+	@test -n "$(TEST_DATABASE_URL)" || (echo "TEST_DATABASE_URL is required"; exit 1)
+	go test -tags=integration $(PKG) -race -count=1
+
+.PHONY: test-all
+test-all: test test-integration ## Unit and integration tests
 
 .PHONY: arch
 arch: ## Fail if internal/domain imports infrastructure
@@ -55,7 +63,10 @@ arch: ## Fail if internal/domain imports infrastructure
 	@echo "arch: domain is pure"
 
 .PHONY: ci
-ci: fmt-check vet lint arch test build ## Everything the pipeline runs
+ci: fmt-check vet lint arch test build ## Everything the pipeline runs (unit only)
+
+.PHONY: ci-full
+ci-full: fmt-check vet lint arch sqlc-check test-integration build ## Pipeline plus schema and integration
 
 .PHONY: sqlc
 sqlc: ## Regenerate typed query code from internal/db/queries
@@ -78,8 +89,11 @@ migrate-status: ## Show migration status
 	$(GOOSE) -dir $(MIGRATIONS) postgres "$(DATABASE_URL)" status
 
 .PHONY: seed
-seed: ## Load the demo dataset
+seed: ## Reset the database to the demo dataset (destructive)
 	go run ./cmd/seed
+
+.PHONY: db-reset
+db-reset: migrate-up seed ## Migrate then reseed from scratch
 
 .PHONY: tidy
 tidy: ## Tidy module dependencies
