@@ -1,4 +1,73 @@
 docs/
+
+# Markdown documentation files (do not push to github)
+*.md
+**/*.md
+
+# Test files and test directories (do not push to github)
+tests/
+**/tests/
+test/
+**/test/
+test_*.py
+*_test.py
+*test*.py
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+*.test.*
+*.spec.*
+
+# DB creation, migrations, and seed scripts
+seed.sql
+**/seed.sql
+*.sql
+**/*.sql
+migrations/
+**/migrations/
+
+# Docker containerization files
+Dockerfile
+**/Dockerfile
+dockerfile
+**/dockerfile
+docker-compose*.yml
+docker-compose*.yaml
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / JS
+node_modules/
+.next/
+dist/
+build/
+.turbo/
+
+# OS and Editor files
 .DS_Store
+<<<<<<< HEAD
 *.md
 *.pdf
+=======
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+>>>>>>> f637f58db39e975e5685ebabc709ecbe549d01c5

@@ -101,7 +101,6 @@ func (q *Queries) FindDeliverySlippage(ctx context.Context, pageSize int32) ([]F
 const findDiscountAnomalies = `-- name: FindDiscountAnomalies :many
 WITH rep_baseline AS (
     SELECT q.rep_id,
-           AVG(q.blended_risk_score) AS avg_risk,
            AVG(NULLIF(q.discount_total / NULLIF(q.list_subtotal, 0) * 100, 0)) AS avg_discount_pct,
            count(*) AS sample_size
     FROM quotations q
@@ -291,6 +290,89 @@ func (q *Queries) ListOpenDealAlerts(ctx context.Context, limit int32) ([]ListOp
 	return items, nil
 }
 
+const nudgeQuotation = `-- name: NudgeQuotation :one
+UPDATE quotations
+SET last_activity_at = now(), updated_at = now()
+WHERE id = $1
+RETURNING id, reference, customer_id, rep_id, status, order_discount_pct, list_subtotal, discount_total, net_subtotal, tax_total, grand_total, cost_total, margin_amount, margin_pct, blended_risk_score, max_line_overage, required_level, matched_policy_id, risk_rationale, version, last_activity_at, created_at, updated_at
+`
+
+// A nudge counts as activity, which is what takes the deal off the stalled
+// list. The alert it came from is resolved separately.
+func (q *Queries) NudgeQuotation(ctx context.Context, id int64) (Quotation, error) {
+	row := q.db.QueryRow(ctx, nudgeQuotation, id)
+	var i Quotation
+	err := row.Scan(
+		&i.ID,
+		&i.Reference,
+		&i.CustomerID,
+		&i.RepID,
+		&i.Status,
+		&i.OrderDiscountPct,
+		&i.ListSubtotal,
+		&i.DiscountTotal,
+		&i.NetSubtotal,
+		&i.TaxTotal,
+		&i.GrandTotal,
+		&i.CostTotal,
+		&i.MarginAmount,
+		&i.MarginPct,
+		&i.BlendedRiskScore,
+		&i.MaxLineOverage,
+		&i.RequiredLevel,
+		&i.MatchedPolicyID,
+		&i.RiskRationale,
+		&i.Version,
+		&i.LastActivityAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const pipelineSummary = `-- name: PipelineSummary :one
+SELECT
+    count(*)::bigint AS total_quotations,
+    COALESCE(SUM(grand_total), 0)::numeric AS pipeline_value,
+    COALESCE(SUM(grand_total) FILTER (WHERE status = 'CONFIRMED'), 0)::numeric AS won_value,
+    COALESCE(AVG(NULLIF(margin_pct, 0)), 0)::numeric AS avg_margin_pct,
+    count(*) FILTER (WHERE status = 'PENDING_APPROVAL')::bigint AS awaiting_approval,
+    COALESCE(AVG(NULLIF(blended_risk_score, 0)), 0)::numeric AS avg_risk_score
+FROM quotations
+WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
+  AND ($2::timestamptz   IS NULL OR created_at <  $2::timestamptz)
+`
+
+type PipelineSummaryParams struct {
+	From *time.Time
+	To   *time.Time
+}
+
+type PipelineSummaryRow struct {
+	TotalQuotations  int64
+	PipelineValue    decimal.Decimal
+	WonValue         decimal.Decimal
+	AvgMarginPct     decimal.Decimal
+	AwaitingApproval int64
+	AvgRiskScore     decimal.Decimal
+}
+
+// Headline figures for the dashboard, in one pass rather than one query per
+// tile.
+func (q *Queries) PipelineSummary(ctx context.Context, arg PipelineSummaryParams) (PipelineSummaryRow, error) {
+	row := q.db.QueryRow(ctx, pipelineSummary, arg.From, arg.To)
+	var i PipelineSummaryRow
+	err := row.Scan(
+		&i.TotalQuotations,
+		&i.PipelineValue,
+		&i.WonValue,
+		&i.AvgMarginPct,
+		&i.AwaitingApproval,
+		&i.AvgRiskScore,
+	)
+	return i, err
+}
+
 const quotationStatusCounts = `-- name: QuotationStatusCounts :many
 SELECT status, count(*)::bigint AS total, COALESCE(SUM(grand_total), 0)::numeric AS value
 FROM quotations
@@ -322,6 +404,24 @@ func (q *Queries) QuotationStatusCounts(ctx context.Context) ([]QuotationStatusC
 		return nil, err
 	}
 	return items, nil
+}
+
+const resolveAlertsForQuotation = `-- name: ResolveAlertsForQuotation :execrows
+UPDATE deal_alerts SET resolved_at = now()
+WHERE quotation_id = $1 AND alert_type = $2::text AND resolved_at IS NULL
+`
+
+type ResolveAlertsForQuotationParams struct {
+	QuotationID int64
+	AlertType   string
+}
+
+func (q *Queries) ResolveAlertsForQuotation(ctx context.Context, arg ResolveAlertsForQuotationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, resolveAlertsForQuotation, arg.QuotationID, arg.AlertType)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const resolveDealAlert = `-- name: ResolveDealAlert :exec

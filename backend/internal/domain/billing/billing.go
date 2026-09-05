@@ -11,6 +11,7 @@
 package billing
 
 import (
+	"math"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -200,7 +201,12 @@ func Prorate(in ProrationInput) ProrationResult {
 	return res
 }
 
-// wholeDays counts complete days between two instants, truncating toward zero.
+// wholeDays counts the days between two instants.
+//
+// The remaining span is rounded up, because a customer who changes their
+// subscription at ten in the morning has the new quantity for the rest of
+// that day and should be billed for it. Truncating would quietly give away a
+// day on every mid-day change; a full period is a full period.
 func wholeDays(from, to time.Time) int {
-	return int(to.Sub(from).Hours() / 24)
+	return int(math.Ceil(to.Sub(from).Hours() / 24))
 }

@@ -31,17 +31,37 @@ import (
 // forgotten credential. Seeded data is not production data.
 const DemoPassword = "dealflow360"
 
+// Options tunes how the dataset is built.
+type Options struct {
+	// BcryptCost is the work factor for seeded passwords. Zero means the
+	// production default. Tests lower it: the suite logs in dozens of times
+	// and a production cost turns that into a minute of pure key stretching.
+	BcryptCost int
+}
+
+func (o Options) cost() int {
+	if o.BcryptCost <= 0 {
+		return bcrypt.DefaultCost
+	}
+	return o.BcryptCost
+}
+
 func dec(s string) decimal.Decimal { return money.MustFromString(s) }
 
 // Run truncates and repopulates every table. It is destructive by design:
 // resetting to a known state between rehearsals must be one command.
 func Run(ctx context.Context, pool *pgxpool.Pool) error {
+	return RunWith(ctx, pool, Options{})
+}
+
+// RunWith is Run with explicit options.
+func RunWith(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	q := sqlcgen.New(pool)
 
 	if err := truncateAll(ctx, pool); err != nil {
 		return fmt.Errorf("truncate: %w", err)
 	}
-	if err := seedUsers(ctx, q); err != nil {
+	if err := seedUsers(ctx, q, opts.cost()); err != nil {
 		return fmt.Errorf("users: %w", err)
 	}
 
@@ -101,8 +121,8 @@ type userSpec struct {
 	email, name, role, team string
 }
 
-func seedUsers(ctx context.Context, q *sqlcgen.Queries) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(DemoPassword), bcrypt.DefaultCost)
+func seedUsers(ctx context.Context, q *sqlcgen.Queries, cost int) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(DemoPassword), cost)
 	if err != nil {
 		return err
 	}
@@ -426,5 +446,80 @@ func seedDealHealth(ctx context.Context, pool *pgxpool.Pool, q *sqlcgen.Queries,
 	}
 
 	_ = time.Now
+	return nil
+}
+
+// Bulk inflates the dataset so query plans and budgets can be checked against
+// something the planner takes seriously.
+//
+// Postgres will sequentially scan a small table no matter how good the index
+// is, because scanning twelve rows is cheaper than consulting a tree. Proving
+// an index is used, and that a page of results costs the same as the table
+// grows, needs enough rows for the planner to care.
+//
+// The rows are deliberately unremarkable: they exist to be numerous, not to
+// be demonstrated. The handful of seeded quotations that carry the demo are
+// created by Run and are left untouched.
+func Bulk(ctx context.Context, pool *pgxpool.Pool, quotations int, linesEach int) error {
+	if quotations <= 0 {
+		return nil
+	}
+	if linesEach <= 0 {
+		linesEach = 5
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO quotations (
+			reference, customer_id, rep_id, status,
+			list_subtotal, discount_total, net_subtotal, grand_total,
+			cost_total, margin_amount, margin_pct,
+			blended_risk_score, last_activity_at, created_at
+		)
+		SELECT
+			'Q-B' || g,
+			(SELECT id FROM customers ORDER BY id LIMIT 1 OFFSET (g % 4)),
+			4 + (g % 2),
+			(ARRAY['DRAFT','PENDING_APPROVAL','SENT','CONFIRMED'])[1 + (g % 4)],
+			100000, 8000, 92000, 92000,
+			64000, 28000, 30.43,
+			(g % 7),
+			now() - make_interval(days => (g % 45)),
+			now() - make_interval(days => (g % 90))
+		FROM generate_series(1, $1) g`, quotations); err != nil {
+		return fmt.Errorf("bulk quotations: %w", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO quotation_lines (
+			quotation_id, product_id, category_id, position,
+			qty, unit_price, unit_cost, line_discount_pct,
+			list_value, discount_amount, net_amount, cost_amount,
+			margin_amount, margin_pct, effective_discount_pct
+		)
+		SELECT
+			q.id, p.id, p.category_id, s,
+			2, p.unit_price, p.unit_cost, 8,
+			2 * p.unit_price,
+			2 * p.unit_price * 0.08,
+			2 * p.unit_price * 0.92,
+			2 * p.unit_cost,
+			(2 * p.unit_price * 0.92) - (2 * p.unit_cost),
+			25, 8
+		FROM quotations q
+		CROSS JOIN generate_series(1, $1) s
+		JOIN LATERAL (
+			SELECT id, category_id, unit_price, unit_cost
+			FROM products WHERE is_active
+			ORDER BY id LIMIT 1 OFFSET ((q.id + s) % 5)
+		) p ON true
+		WHERE q.reference LIKE 'Q-B%'`, linesEach); err != nil {
+		return fmt.Errorf("bulk quotation lines: %w", err)
+	}
+
+	// The planner chooses badly against stale statistics, so a scale test
+	// that skipped this would measure the wrong thing.
+	if _, err := pool.Exec(ctx, `ANALYZE quotations, quotation_lines`); err != nil {
+		return fmt.Errorf("analyze: %w", err)
+	}
 	return nil
 }

@@ -96,6 +96,20 @@ type CounterOffer struct {
 	CreatedAt           time.Time
 }
 
+type CreditNote struct {
+	ID                int64
+	Reference         string
+	SalesOrderID      int64
+	BillingScheduleID *int64
+	QuotationLineID   *int64
+	Amount            decimal.Decimal
+	ProrationFactor   decimal.Decimal
+	Reason            string
+	Status            string
+	CreatedBy         *int64
+	CreatedAt         time.Time
+}
+
 type Customer struct {
 	ID        int64
 	Name      string
@@ -150,7 +164,7 @@ type IdempotencyKey struct {
 	Endpoint       string
 	RequestHash    string
 	ResponseStatus int32
-	ResponseBody   []byte
+	ResponseBody   string
 	CreatedAt      time.Time
 }
 

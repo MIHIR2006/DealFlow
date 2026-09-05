@@ -123,14 +123,6 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 
 	// The customer-facing tree. Separate group, separate middleware, and no
 	// handler below it ever accepts a quotation id from the request.
-	portal := rg.Group("/portal/q/:token")
-	portal.Use(
-		middleware.RateLimit(60, 20, Fail),
-		middleware.RequirePortalToken(queries, Fail),
-	)
-	{
-		portal.GET("", portalHandler{}.show)
-	}
 
 	// Administrative configuration. Reads are open to any signed-in staff
 	// member because the quotation builder needs the catalogue; writes are
@@ -165,12 +157,112 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		cfg.POST("/upsell-rules", adminOnly, ch.createUpsellRule)
 	}
 
-	// Phase 5 → quotation routes
-	// Phase 6 → approval routes
-	// Phase 7 → fulfillment routes
-	// Phase 8 → billing + invoicing routes
+	// Quotations. Every pricing mutation returns the whole recalculated
+	// document, so the client never recomputes money and cannot disagree
+	// with the server about a total.
+	quoteSvc := service.NewQuoteService(d.Pool, queries, cfgCache)
+	qh := quotationHandler{svc: quoteSvc}
+	quotes := rg.Group("/quotations", authed, staff)
+	{
+		quotes.GET("", qh.list)
+		quotes.POST("", qh.create)
+		quotes.GET("/:id", qh.get)
+		quotes.GET("/:id/upsell", qh.upsell)
+
+		quotes.POST("/:id/lines", qh.addLine)
+		quotes.PATCH("/:id/lines/:lineId", qh.updateLine)
+		quotes.DELETE("/:id/lines/:lineId", qh.deleteLine)
+
+		quotes.PUT("/:id/order-discount", qh.setOrderDiscount)
+
+		// The rep never chooses an approver: the blended risk score decides
+		// whether this needs one and which chain it takes.
+		quotes.POST("/:id/submit", qh.submit)
+	}
+
+	// The customer-facing tree. Separate group, separate middleware, and no
+	// handler below it takes a quotation id: the token names exactly one.
+	ph := portalHandler{
+		svc: service.NewPortalService(d.Pool, queries, quoteSvc),
+		ttl: d.Config.PortalTokenTTL,
+	}
+	quotes.POST("/:id/send", ph.send)
+
+	portal := rg.Group("/portal/q/:token")
+	portal.Use(
+		middleware.RateLimit(60, 20, Fail),
+		middleware.RequirePortalToken(queries, Fail),
+	)
+	{
+		portal.GET("", ph.show)
+		portal.POST("/messages", ph.postMessage)
+		portal.POST("/counter-offer", ph.counterOffer)
+		portal.POST("/confirm", ph.confirm)
+	}
+
+	// The approvals inbox and the three decisions a reviewer can take.
+	// Approve and reject are terminal for a step; return sends the quotation
+	// back to draft so the rep can revise and resubmit, which the audit trail
+	// records alongside the original submission.
+	ah2 := approvalHandler{svc: service.NewApprovalService(d.Pool, queries, quoteSvc)}
+	approvals := rg.Group("/approvals", authed,
+		middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager, auth.RoleFinance))
+	{
+		approvals.GET("", ah2.inbox)
+		approvals.POST("/:id/approve", ah2.approve)
+		approvals.POST("/:id/return", ah2.returnForRevision)
+		approvals.POST("/:id/reject", ah2.reject)
+	}
+
+	// Fulfilment. Suggesting is free and persists nothing; accepting reserves
+	// stock inside one transaction over locked rows, so the warehouses the
+	// engine chose are the ones the order actually takes from.
+	fh := fulfillmentHandler{svc: service.NewFulfillmentService(d.Pool, queries, quoteSvc)}
+	quotes.POST("/:id/confirm", fh.confirm)
+
+	orders := rg.Group("/orders", authed, staff)
+	{
+		orders.GET("/:id", fh.get)
+		orders.GET("/:id/fulfillment/suggest", fh.suggest)
+		orders.POST("/:id/fulfillment", fh.accept)
+		orders.POST("/:id/backorders/consolidate", fh.consolidate)
+	}
+
+	// Billing. One order carries two tracks: a single invoice for the
+	// one-time lines, and a schedule of future periods for the recurring
+	// ones. Money-moving endpoints accept an Idempotency-Key.
+	bh := billingHandler{
+		svc:  service.NewBillingService(d.Pool, queries, quoteSvc),
+		idem: service.NewIdempotency(queries),
+	}
+	orders.POST("/:id/invoices", bh.generate)
+	orders.GET("/:id/billing", bh.getForOrder)
+	orders.POST("/:id/subscriptions/:lineId/change", bh.changeSubscription)
+
+	invoices := rg.Group("/invoices", authed, staff)
+	{
+		invoices.GET("", bh.listInvoices)
+		invoices.GET("/:id", bh.getInvoice)
+		invoices.POST("/:id/payments", bh.recordPayment)
+	}
+
 	// Phase 9 → portal negotiation routes
-	// Phase 10 → analytics routes
+	// Analytics. Every figure is an aggregate computed in Postgres, so the
+	// dashboard costs the same at twenty quotations as at twenty thousand.
+	anh := analyticsHandler{svc: service.NewAnalyticsService(d.Pool, queries, d.Config, quoteSvc)}
+	quotes.POST("/:id/nudge", anh.nudge)
+
+	analytics := rg.Group("", authed,
+		middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager, auth.RoleFinance))
+	{
+		analytics.GET("/dashboard/deal-health", anh.dealHealth)
+		analytics.GET("/dashboard/alerts", anh.alerts)
+	}
+
+	// Reports are open to any staff member; the service narrows what each
+	// role actually sees.
+	rg.GET("/reports", authed, staff, anh.report)
+
 }
 
 // adminSignupGuard keeps account creation open while the platform is being
