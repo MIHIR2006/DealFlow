@@ -216,6 +216,12 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	}
 	quotes.POST("/:id/send", ph.send)
 
+	// The internal half of the negotiation. The customer's portal writes to
+	// the same thread from the other side; without these the conversation
+	// only ever ran one way.
+	quotes.GET("/:id/negotiation", ph.thread)
+	quotes.POST("/:id/messages", ph.reply)
+
 	portal := rg.Group("/portal/q/:token")
 	portal.Use(
 		middleware.RateLimit(60, 20, Fail),

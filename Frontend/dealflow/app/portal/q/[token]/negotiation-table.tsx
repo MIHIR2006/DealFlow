@@ -7,19 +7,34 @@ import type { PortalCounterOffer, PortalLine } from "@/lib/types";
 /**
  * OutcomeBadge states what happened to a proposal without stating why.
  *
- * "Applied" and "Sent for approval" are the two things a customer needs to
- * know. Neither reveals the ceiling the proposal was measured against, which
- * is the whole point of keeping the portal's vocabulary separate.
+ * Each state says what the customer needs and nothing more. None of them
+ * reveals the ceiling the proposal was measured against, who reviewed it, or
+ * how close it came -- keeping the portal's vocabulary separate from the
+ * internal one is the whole point.
+ *
+ * "Under review" is a waiting state, not a resting one: a routed proposal is
+ * resolved to approved or declined the moment the approval round closes, so a
+ * customer is never left reading it after a decision has been made.
  */
 function OutcomeBadge({ outcome }: { outcome: string }) {
-  const applied = outcome === "AUTO_ACCEPTED";
+  const { text, tone } = ((): { text: string; tone: string } => {
+    switch (outcome) {
+      case "AUTO_ACCEPTED":
+        return { text: "Applied", tone: "tone-ok" };
+      case "APPROVED":
+        return { text: "Approved", tone: "tone-ok" };
+      case "REJECTED":
+        return { text: "Declined", tone: "tone-bad" };
+      default:
+        return { text: "Under review", tone: "tone-warn" };
+    }
+  })();
+
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap ${
-        applied ? "tone-ok" : "tone-warn"
-      }`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap ${tone}`}
     >
-      {applied ? "Applied" : "Sent for approval"}
+      {text}
     </span>
   );
 }

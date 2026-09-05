@@ -148,7 +148,7 @@ func portalDTO(v service.View) dto.PortalQuotation {
 		ExpiresAt:        iso(v.ExpiresAt),
 		OrderDiscountPct: h.OrderDiscountPct.String(),
 		AwaitingReview:   h.Status == "PENDING_APPROVAL",
-		CanConfirm:       h.Status == "SENT" || h.Status == "UNDER_NEGOTIATION",
+		CanConfirm:       service.CanConfirm(h.Status),
 		Lines:            make([]dto.PortalLine, 0, len(q.Lines)),
 		Messages:         make([]dto.PortalMessage, 0, len(v.Messages)),
 		CounterOffers:    make([]dto.PortalCounterOffer, 0, len(v.Offers)),
@@ -198,6 +198,83 @@ func portalDTO(v service.View) dto.PortalQuotation {
 	}
 
 	for _, o := range v.Offers {
+		out.CounterOffers = append(out.CounterOffers, dto.PortalCounterOffer{
+			ID: o.ID, LineID: o.QuotationLineID,
+			PreviousDiscountPct: o.PreviousDiscountPct.String(),
+			ProposedDiscountPct: o.ProposedDiscountPct.String(),
+			Outcome:             o.Outcome,
+			Note:                o.Note,
+			CreatedAt:           iso(o.CreatedAt),
+		})
+	}
+
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// The staff side of the negotiation
+// ---------------------------------------------------------------------------
+
+// thread returns the negotiation for a quotation: what the customer said, what
+// they proposed, and how each proposal was answered.
+func (h portalHandler) thread(c *gin.Context) {
+	actor, quotationID, err := actorAndID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	t, err := h.svc.Thread(c.Request.Context(), actor, quotationID)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, http.StatusOK, threadDTO(t))
+}
+
+// reply posts a staff message into the negotiation thread, which the customer
+// sees on their own side of the portal conversation.
+func (h portalHandler) reply(c *gin.Context) {
+	actor, quotationID, err := actorAndID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	var req dto.StaffMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, bindError(err))
+		return
+	}
+
+	t, err := h.svc.ReplyToCustomer(c.Request.Context(), actor, quotationID, req.LineID, req.Body)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, http.StatusCreated, threadDTO(t))
+}
+
+func threadDTO(t service.Thread) dto.NegotiationThread {
+	out := dto.NegotiationThread{
+		QuotationID:   t.QuotationID,
+		Reference:     t.Reference,
+		Status:        t.Status,
+		Negotiable:    t.Negotiable,
+		Messages:      make([]dto.ThreadMessage, 0, len(t.Messages)),
+		CounterOffers: make([]dto.PortalCounterOffer, 0, len(t.Offers)),
+	}
+
+	for _, m := range t.Messages {
+		out.Messages = append(out.Messages, dto.ThreadMessage{
+			ID: m.ID, LineID: m.QuotationLineID,
+			ProductName: m.ProductName,
+			AuthorType:  m.AuthorType, AuthorLabel: m.AuthorLabel,
+			Body: m.Body, CreatedAt: iso(m.CreatedAt),
+		})
+	}
+
+	for _, o := range t.Offers {
 		out.CounterOffers = append(out.CounterOffers, dto.PortalCounterOffer{
 			ID: o.ID, LineID: o.QuotationLineID,
 			PreviousDiscountPct: o.PreviousDiscountPct.String(),

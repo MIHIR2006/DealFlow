@@ -152,6 +152,22 @@ func (s *ApprovalService) Decide(ctx context.Context, actor auth.Principal, appr
 		}); err != nil {
 			return fmt.Errorf("update quotation status: %w", err)
 		}
+
+		// A customer counter-offer that was routed here is still open on the
+		// customer's own screen. Once the round has an answer, give it one:
+		// otherwise their negotiation history reads "sent for approval"
+		// indefinitely, including after the decision they were waiting for.
+		//
+		// Only a settled round resolves it. A step approved with others still
+		// pending has not decided anything yet, and a return sends the deal
+		// back to the rep to revise, which leaves the proposal genuinely open.
+		if offerOutcome := counterOfferOutcomeFor(quotationStatus); offerOutcome != "" {
+			if _, err := qtx.ResolveRoutedCounterOffers(ctx, sqlcgen.ResolveRoutedCounterOffersParams{
+				QuotationID: req.QuotationID, Outcome: offerOutcome,
+			}); err != nil {
+				return fmt.Errorf("resolve routed counter offers: %w", err)
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -185,4 +201,18 @@ func (s *ApprovalService) Decide(ctx context.Context, actor auth.Principal, appr
 // decision response without reaching into QuoteService directly.
 func (s *ApprovalService) Approvals(ctx context.Context, quotationID int64) ([]sqlcgen.ListApprovalsForQuotationRow, error) {
 	return s.quote.Approvals(ctx, quotationID)
+}
+
+// counterOfferOutcomeFor maps a settled quotation status onto what it means for
+// a counter-offer that was awaiting that decision. An empty string means the
+// round has not settled anything and open offers stay open.
+func counterOfferOutcomeFor(quotationStatus string) string {
+	switch quotationStatus {
+	case "APPROVED":
+		return "APPROVED"
+	case "REJECTED":
+		return "REJECTED"
+	default:
+		return ""
+	}
 }

@@ -297,6 +297,61 @@ func (q *Queries) ListNegotiationMessages(ctx context.Context, quotationID int64
 	return items, nil
 }
 
+const listNegotiationMessagesForStaff = `-- name: ListNegotiationMessagesForStaff :many
+SELECT m.id, m.quotation_id, m.quotation_line_id, m.author_type, m.author_id, m.author_label, m.body, m.created_at, l.product_id, p.name AS product_name
+FROM negotiation_messages m
+LEFT JOIN quotation_lines l ON l.id = m.quotation_line_id
+LEFT JOIN products p ON p.id = l.product_id
+WHERE m.quotation_id = $1
+ORDER BY m.created_at
+`
+
+type ListNegotiationMessagesForStaffRow struct {
+	ID              int64
+	QuotationID     int64
+	QuotationLineID *int64
+	AuthorType      string
+	AuthorID        *int64
+	AuthorLabel     string
+	Body            string
+	CreatedAt       time.Time
+	ProductID       *int64
+	ProductName     *string
+}
+
+// The negotiation thread as staff see it. Same rows the customer's portal
+// reads; the staff side needs them to answer, and to see what was proposed.
+func (q *Queries) ListNegotiationMessagesForStaff(ctx context.Context, quotationID int64) ([]ListNegotiationMessagesForStaffRow, error) {
+	rows, err := q.db.Query(ctx, listNegotiationMessagesForStaff, quotationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNegotiationMessagesForStaffRow{}
+	for rows.Next() {
+		var i ListNegotiationMessagesForStaffRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.QuotationID,
+			&i.QuotationLineID,
+			&i.AuthorType,
+			&i.AuthorID,
+			&i.AuthorLabel,
+			&i.Body,
+			&i.CreatedAt,
+			&i.ProductID,
+			&i.ProductName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markPortalTokenUsed = `-- name: MarkPortalTokenUsed :exec
 UPDATE portal_tokens SET used_at = now() WHERE id = $1 AND used_at IS NULL
 `
@@ -304,6 +359,50 @@ UPDATE portal_tokens SET used_at = now() WHERE id = $1 AND used_at IS NULL
 func (q *Queries) MarkPortalTokenUsed(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, markPortalTokenUsed, id)
 	return err
+}
+
+const resolveRoutedCounterOffers = `-- name: ResolveRoutedCounterOffers :many
+UPDATE counter_offers
+SET outcome = $2
+WHERE quotation_id = $1 AND outcome = 'ROUTED_FOR_APPROVAL'
+RETURNING id, quotation_id, quotation_line_id, previous_discount_pct, proposed_discount_pct, outcome, note, created_at
+`
+
+type ResolveRoutedCounterOffersParams struct {
+	QuotationID int64
+	Outcome     string
+}
+
+// Close out every counter-offer still awaiting a decision on this quotation.
+// Called when an approval round ends, so the customer's negotiation history
+// shows the answer rather than sitting on "sent for approval" forever.
+func (q *Queries) ResolveRoutedCounterOffers(ctx context.Context, arg ResolveRoutedCounterOffersParams) ([]CounterOffer, error) {
+	rows, err := q.db.Query(ctx, resolveRoutedCounterOffers, arg.QuotationID, arg.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CounterOffer{}
+	for rows.Next() {
+		var i CounterOffer
+		if err := rows.Scan(
+			&i.ID,
+			&i.QuotationID,
+			&i.QuotationLineID,
+			&i.PreviousDiscountPct,
+			&i.ProposedDiscountPct,
+			&i.Outcome,
+			&i.Note,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const revokePortalTokensForQuotation = `-- name: RevokePortalTokensForQuotation :execrows

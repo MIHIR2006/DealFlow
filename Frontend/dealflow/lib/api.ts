@@ -87,6 +87,7 @@ import type {
   FulfillmentPlan,
   GovernanceSnapshot,
   Invoice,
+  NegotiationThread,
   InvoiceDetail,
   OrderBilling,
   OrderSummary,
@@ -218,6 +219,14 @@ export const QuotationApi = {
     }),
   submit: (id: number) => api<Quotation>(`/v1/quotations/${id}/submit`, { method: "POST" }),
   upsell: (id: number) => api<Page<Upsell>>(`/v1/quotations/${id}/upsell`),
+
+  /** The negotiation thread with the customer, and the staff reply into it. */
+  negotiation: (id: number) => api<NegotiationThread>(`/v1/quotations/${id}/negotiation`),
+  reply: (id: number, body: string, lineId?: number | null) =>
+    api<NegotiationThread>(`/v1/quotations/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ body, line_id: lineId ?? null }),
+    }),
   send: (id: number) => api<SendQuotationResponse>(`/v1/quotations/${id}/send`, { method: "POST" }),
   confirm: (id: number, promisedDate?: string) =>
     api<SalesOrder>(`/v1/quotations/${id}/confirm`, {

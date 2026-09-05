@@ -22,6 +22,7 @@ import { RiskBadge } from "@/components/ui/risk-badge";
 import { MarginBar } from "@/components/ui/margin-bar";
 import { ApprovalStepper } from "@/components/ui/approval-stepper";
 import { UpsellPanel } from "@/components/workspace/upsell-panel";
+import { NegotiationPanel } from "@/components/workspace/negotiation-panel";
 import { QuotationApi, ConfigApi, ApiError } from "@/lib/api";
 import { inr } from "@/lib/hooks";
 import type { Quotation, Product, Category, SubscriptionPlan, Upsell, Page } from "@/lib/types";
@@ -667,6 +668,17 @@ export default function QuotationBuilderPage({
                 const product = products.find((p) => p.id === u.product_id);
                 if (product) addProduct(product);
               }}
+            />
+          ) : null}
+
+          {/* The customer's side of this deal. It renders once the quotation
+              has left draft, which is the point a customer can be talking to
+              us at all. */}
+          {!isDraft ? (
+            <NegotiationPanel
+              quotationId={id}
+              lines={quote.lines}
+              onReplied={loadQuote}
             />
           ) : null}
         </div>

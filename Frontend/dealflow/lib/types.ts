@@ -262,6 +262,30 @@ export interface SendQuotationResponse {
   expires_at: string;
 }
 
+// --- Negotiation, staff side ------------------------------------------------
+
+/** One entry of the negotiation thread as staff see it. */
+export interface ThreadMessage {
+  id: number;
+  line_id?: number | null;
+  product_name?: string | null;
+  author_type: "CUSTOMER" | "STAFF";
+  author_label: string;
+  body: string;
+  created_at: string;
+}
+
+/** The whole conversation for one quotation, staff side. */
+export interface NegotiationThread {
+  quotation_id: number;
+  reference: string;
+  status: QuotationStatus;
+  /** Whether a reply will be accepted; mirrors what the service will allow. */
+  negotiable: boolean;
+  messages: ThreadMessage[];
+  counter_offers: PortalCounterOffer[];
+}
+
 // --- Portal assistant ------------------------------------------------------
 
 /** Whether the AI negotiation assistant is configured and reachable. */
