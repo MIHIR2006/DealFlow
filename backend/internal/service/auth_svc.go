@@ -147,8 +147,16 @@ func normaliseEmail(e string) string {
 	return strings.ToLower(strings.TrimSpace(e))
 }
 
-// isUniqueViolation reports whether err is a Postgres unique constraint
-// failure (SQLSTATE 23505).
+// Postgres SQLSTATE codes worth distinguishing, so a caller's mistake is
+// reported as a 409 or 422 rather than collapsing into a 500.
 func isUniqueViolation(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23505")
+}
+
+func isForeignKeyViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23503")
+}
+
+func isCheckViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23514")
 }

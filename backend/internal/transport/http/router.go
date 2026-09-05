@@ -11,6 +11,7 @@ import (
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/platform/apierr"
 	"dealflow360/backend/internal/platform/auth"
+	"dealflow360/backend/internal/platform/cache"
 	"dealflow360/backend/internal/platform/config"
 	"dealflow360/backend/internal/service"
 	"dealflow360/backend/internal/transport/http/middleware"
@@ -26,6 +27,11 @@ type Deps struct {
 	Log    *slog.Logger
 	Pool   *pgxpool.Pool
 	Ready  ReadinessFunc
+
+	// Cache is the governance snapshot the risk engine reads. Passing it in
+	// lets main load it once before serving, and lets tests supply one that
+	// is already warm.
+	Cache *cache.Config
 }
 
 // NewRouter builds the HTTP handler: global middleware, probes, and the
@@ -91,7 +97,18 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	queries := sqlcgen.New(d.Pool)
 	signer := auth.NewSigner(d.Config.JWTSecret, d.Config.JWTTTL)
 
+	cfgCache := d.Cache
+	if cfgCache == nil {
+		cfgCache = cache.New(queries)
+	}
+
 	authed := middleware.RequireAuth(signer, Fail)
+	staff := middleware.RequireRole(Fail,
+		auth.RoleAdmin, auth.RoleManager, auth.RoleFinance, auth.RoleRep)
+	adminOnly := middleware.RequireRole(Fail, auth.RoleAdmin)
+	// Managers configure discount ceilings and approval chains; that is their
+	// job, and it is separate from managing the catalogue or warehouses.
+	governanceRole := middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager)
 
 	// Login and signup are rate limited: they are the only unauthenticated
 	// endpoints where guessing repeatedly wins something.
@@ -115,7 +132,39 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		portal.GET("", portalHandler{}.show)
 	}
 
-	// Phase 4 → config/admin routes
+	// Administrative configuration. Reads are open to any signed-in staff
+	// member because the quotation builder needs the catalogue; writes are
+	// restricted by resource.
+	ch := configHandler{svc: service.NewConfigService(queries, cfgCache)}
+	cfg := rg.Group("", authed)
+	{
+		cfg.GET("/categories", staff, ch.listCategories)
+		cfg.POST("/categories", adminOnly, ch.createCategory)
+
+		cfg.GET("/products", staff, ch.listProducts)
+		cfg.GET("/products/:id", staff, ch.getProduct)
+		cfg.POST("/products", adminOnly, ch.createProduct)
+		cfg.PUT("/products/:id", adminOnly, ch.updateProduct)
+
+		// The rules that decide who approves a discount, and the cache
+		// version currently serving them.
+		cfg.GET("/governance", staff, ch.governance)
+		cfg.PUT("/governance/tiers/:tier", governanceRole, ch.setDiscountTier)
+		cfg.PUT("/governance/categories/:id/ceiling", governanceRole, ch.setCategoryCeiling)
+		cfg.POST("/governance/policies", governanceRole, ch.createPolicy)
+		cfg.PUT("/governance/policies/:id", governanceRole, ch.updatePolicy)
+
+		cfg.GET("/warehouses", staff, ch.listWarehouses)
+		cfg.POST("/warehouses", adminOnly, ch.createWarehouse)
+		cfg.PUT("/warehouses/:id/stock", adminOnly, ch.setStock)
+		cfg.POST("/warehouses/:id/stock", adminOnly, ch.addStock)
+
+		cfg.GET("/subscription-plans", staff, ch.listPlans)
+		cfg.POST("/subscription-plans", adminOnly, ch.createPlan)
+
+		cfg.POST("/upsell-rules", adminOnly, ch.createUpsellRule)
+	}
+
 	// Phase 5 → quotation routes
 	// Phase 6 → approval routes
 	// Phase 7 → fulfillment routes

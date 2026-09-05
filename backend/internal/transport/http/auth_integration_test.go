@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
+	"dealflow360/backend/internal/platform/cache"
 	"dealflow360/backend/internal/platform/config"
 	"dealflow360/backend/internal/platform/db"
 	"dealflow360/backend/internal/seed"
@@ -29,6 +30,7 @@ type harness struct {
 	router *gin.Engine
 	pool   *db.Pool
 	q      *sqlcgen.Queries
+	cache  *cache.Config
 }
 
 func newHarness(t *testing.T) *harness {
@@ -63,14 +65,23 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("seed.Run: %v", err)
 	}
 
+	queries := sqlcgen.New(pool)
+
+	cfgCache := cache.New(queries)
+	if err := cfgCache.Reload(context.Background()); err != nil {
+		t.Fatalf("cache.Reload: %v", err)
+	}
+
 	return &harness{
-		pool: pool,
-		q:    sqlcgen.New(pool),
+		pool:  pool,
+		q:     queries,
+		cache: cfgCache,
 		router: apihttp.NewRouter(apihttp.Deps{
 			Config: cfg,
 			Log:    slog.New(slog.NewJSONHandler(io.Discard, nil)),
 			Pool:   pool,
 			Ready:  db.Ready(pool),
+			Cache:  cfgCache,
 		}),
 	}
 }
@@ -119,6 +130,60 @@ func (h *harness) login(t *testing.T, email string) string {
 		t.Fatalf("login %s returned an empty token", email)
 	}
 	return resp.Token
+}
+
+// decodeJSON unmarshals a successful response body.
+func decodeJSON(t *testing.T, w *httptest.ResponseRecorder, v any) {
+	t.Helper()
+	if err := json.Unmarshal(w.Body.Bytes(), v); err != nil {
+		t.Fatalf("decode: %v (status=%d body=%s)", err, w.Code, w.Body)
+	}
+}
+
+// productBySKUOverHTTP finds a seeded product through the API, so tests
+// exercise the same path the frontend will.
+func productBySKUOverHTTP(t *testing.T, h *harness, sku string) struct {
+	ID         int64
+	Name       string
+	CategoryID int64
+	UnitPrice  string
+} {
+	t.Helper()
+
+	token := h.login(t, "rep@dealflow360.test")
+	w := h.do(http.MethodGet, "/api/v1/products?limit=100", token, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list products = %d: %s", w.Code, w.Body)
+	}
+
+	var page struct {
+		Data []struct {
+			ID         int64  `json:"id"`
+			SKU        string `json:"sku"`
+			Name       string `json:"name"`
+			CategoryID int64  `json:"category_id"`
+			UnitPrice  string `json:"unit_price"`
+		} `json:"data"`
+	}
+	decodeJSON(t, w, &page)
+
+	for _, p := range page.Data {
+		if p.SKU == sku {
+			return struct {
+				ID         int64
+				Name       string
+				CategoryID int64
+				UnitPrice  string
+			}{p.ID, p.Name, p.CategoryID, p.UnitPrice}
+		}
+	}
+	t.Fatalf("product %q not found", sku)
+	return struct {
+		ID         int64
+		Name       string
+		CategoryID int64
+		UnitPrice  string
+	}{}
 }
 
 func errorCode(t *testing.T, w *httptest.ResponseRecorder) string {

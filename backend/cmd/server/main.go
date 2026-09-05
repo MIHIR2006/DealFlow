@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	sqlcgen "dealflow360/backend/internal/db/sqlc"
+	"dealflow360/backend/internal/platform/cache"
 	"dealflow360/backend/internal/platform/config"
 	"dealflow360/backend/internal/platform/db"
 	"dealflow360/backend/internal/platform/logger"
@@ -45,11 +47,24 @@ func main() {
 		slog.Int("min_conns", int(cfg.DBMinConns)),
 	)
 
+	// Warm the governance cache before serving. Starting with it empty would
+	// mean the first quotations scored found no ceilings and looked compliant.
+	cfgCache := cache.New(sqlcgen.New(pool))
+	warmCtx, warmCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	err = cfgCache.Reload(warmCtx)
+	warmCancel()
+	if err != nil {
+		log.Error("could not load governance configuration", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	log.Info("governance configuration loaded", slog.Int64("version", cfgCache.Version()))
+
 	router := apihttp.NewRouter(apihttp.Deps{
 		Config: cfg,
 		Log:    log,
 		Pool:   pool,
 		Ready:  db.Ready(pool),
+		Cache:  cfgCache,
 	})
 
 	srv := &http.Server{
