@@ -46,6 +46,15 @@ func (o Options) cost() int {
 	return o.BcryptCost
 }
 
+// decNull builds a nullable decimal for optional numeric columns such as
+// coordinates, which are absent on records that have no location on file.
+func decNull(v string) decimal.NullDecimal {
+	if v == "" {
+		return decimal.NullDecimal{}
+	}
+	return decimal.NullDecimal{Decimal: dec(v), Valid: true}
+}
+
 func dec(s string) decimal.Decimal { return money.MustFromString(s) }
 
 // Run truncates and repopulates every table. It is destructive by design:
@@ -153,15 +162,21 @@ func seedCustomers(ctx context.Context, q *sqlcgen.Queries) (customerIDs, error)
 	var out customerIDs
 	for _, c := range []struct {
 		name, email, tier string
+		city              string
+		lat, lng          string
 		dst               *int64
 	}{
-		{"Acme Corporation", "buyer@acme.test", "GOLD", &out.acme},
-		{"Beta Industries", "buyer@beta.test", "SILVER", &out.beta},
-		{"Gamma Retail", "buyer@gamma.test", "BRONZE", &out.gamma},
-		{"Delta Labs", "buyer@delta.test", "SILVER", &out.delta},
+		// Delivery cities, so a shipment has somewhere to go on the map.
+		{"Acme Corporation", "buyer@acme.test", "GOLD", "New Delhi", "28.613900", "77.209000", &out.acme},
+		{"Beta Industries", "buyer@beta.test", "SILVER", "Pune", "18.520400", "73.856700", &out.beta},
+		{"Gamma Retail", "buyer@gamma.test", "BRONZE", "Chennai", "13.082700", "80.270700", &out.gamma},
+		{"Delta Labs", "buyer@delta.test", "SILVER", "Hyderabad", "17.385000", "78.486700", &out.delta},
 	} {
+		city := c.city
+		lat, lng := decNull(c.lat), decNull(c.lng)
 		row, err := q.CreateCustomer(ctx, sqlcgen.CreateCustomerParams{
 			Name: c.name, Email: c.email, Tier: c.tier,
+			City: &city, Latitude: lat, Longitude: lng,
 		})
 		if err != nil {
 			return out, err
@@ -333,26 +348,30 @@ func seedUpsells(ctx context.Context, q *sqlcgen.Queries, p productIDs) error {
 func seedInventory(ctx context.Context, q *sqlcgen.Queries, p productIDs) error {
 	type whSpec struct {
 		name, weight string
+		city         string
+		lat, lng     string
 		stock        map[int64]int64
 	}
 
 	// Laptops are deliberately scarce: 5 at Main and 1 at East means an order
 	// for 7 splits across two warehouses and backorders exactly one unit.
 	warehouses := []whSpec{
-		{"Main Warehouse", "1.0", map[int64]int64{
+		{"Main Warehouse", "1.0", "Mumbai", "19.076000", "72.877700", map[int64]int64{
 			p.laptop: 5, p.docking: 10, p.monitor: 6, p.setupSvc: 50, p.training: 20,
 		}},
-		{"East Depot", "1.4", map[int64]int64{
+		{"East Depot", "1.4", "Kolkata", "22.572600", "88.363900", map[int64]int64{
 			p.laptop: 1, p.docking: 10, p.monitor: 4, p.setupSvc: 30, p.training: 10,
 		}},
-		{"South Hub", "1.2", map[int64]int64{
+		{"South Hub", "1.2", "Bengaluru", "12.971600", "77.594600", map[int64]int64{
 			p.docking: 3, p.monitor: 2,
 		}},
 	}
 
 	for _, w := range warehouses {
+		city := w.city
 		wh, err := q.CreateWarehouse(ctx, sqlcgen.CreateWarehouseParams{
 			Name: w.name, ShippingCostWeight: dec(w.weight),
+			City: &city, Latitude: decNull(w.lat), Longitude: decNull(w.lng),
 		})
 		if err != nil {
 			return err

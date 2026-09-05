@@ -371,6 +371,7 @@ func (s *PortalService) Confirm(ctx context.Context, row sqlcgen.GetQuotationByP
 		}
 	}
 
+	var order sqlcgen.SalesOrder
 	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
@@ -382,11 +383,32 @@ func (s *PortalService) Confirm(ctx context.Context, row sqlcgen.GetQuotationByP
 		if err := qtx.MarkPortalTokenUsed(ctx, row.TokenID); err != nil {
 			return fmt.Errorf("mark token used: %w", err)
 		}
+
+		// The customer accepting terms is a confirmation like any other, and
+		// the flow says a confirmed deal moves on to fulfilment. Creating the
+		// order here is what makes that true: without it the deal reached
+		// CONFIRMED and then vanished from operations, because every
+		// fulfilment screen is keyed on an order that did not exist until a
+		// rep happened to reopen the quotation and confirm it a second time.
+		//
+		// Same transaction as the status change: a confirmed quotation with no
+		// order is exactly the state this is here to prevent. No stock is
+		// reserved -- that is the split decision, and it stays with whoever
+		// runs fulfilment.
+		created, _, err := ensureSalesOrder(ctx, qtx, row.ID, row.CustomerID, nil)
+		if err != nil {
+			return err
+		}
+		order = created
 		return nil
 	})
 	if err != nil {
 		return View{}, apierr.Internal(err)
 	}
+
+	s.quote.Audit(ctx, row.ID, "ORDER_CREATED", customerPrincipal(row.CustomerName),
+		"Customer confirmed the quotation in the portal",
+		map[string]any{"sales_order_id": order.ID, "sales_order_reference": order.Reference})
 
 	s.quote.Audit(ctx, row.ID, "CUSTOMER_CONFIRMED", customerPrincipal(row.CustomerName),
 		"Customer confirmed the quotation from the portal", nil)

@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
@@ -418,11 +419,7 @@ func (h configHandler) listWarehouses(c *gin.Context) {
 
 	out := make([]dto.Warehouse, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, dto.Warehouse{
-			ID: r.ID, Name: r.Name,
-			ShippingCostWeight: r.ShippingCostWeight.String(),
-			IsActive:           r.IsActive,
-		})
+		out = append(out, warehouseDTO(r))
 	}
 	OK(c, http.StatusOK, Page[dto.Warehouse]{Data: out})
 }
@@ -443,16 +440,40 @@ func (h configHandler) createWarehouse(c *gin.Context) {
 		weight = decimal.NewFromInt(1)
 	}
 
-	row, err := h.svc.CreateWarehouse(c.Request.Context(), req.Name, weight)
+	lat, err := parseOptionalNullDecimal(req.Latitude, "latitude")
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	OK(c, http.StatusCreated, dto.Warehouse{
-		ID: row.ID, Name: row.Name,
-		ShippingCostWeight: row.ShippingCostWeight.String(),
-		IsActive:           row.IsActive,
+	lng, err := parseOptionalNullDecimal(req.Longitude, "longitude")
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	row, err := h.svc.CreateWarehouse(c.Request.Context(), req.Name, weight, service.WarehouseLocation{
+		City: strings.TrimSpace(req.City), Latitude: lat, Longitude: lng,
 	})
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, http.StatusCreated, warehouseDTO(row))
+}
+
+// warehouseDTO maps a warehouse, including the optional shipping origin.
+func warehouseDTO(r sqlcgen.Warehouse) dto.Warehouse {
+	out := dto.Warehouse{
+		ID: r.ID, Name: r.Name,
+		ShippingCostWeight: r.ShippingCostWeight.String(),
+		IsActive:           r.IsActive,
+		City:               r.City,
+	}
+	if r.Latitude.Valid && r.Longitude.Valid {
+		lat, lng := r.Latitude.Decimal.String(), r.Longitude.Decimal.String()
+		out.Latitude, out.Longitude = &lat, &lng
+	}
+	return out
 }
 
 func (h configHandler) setStock(c *gin.Context) {
@@ -626,6 +647,19 @@ func parseDecimal(raw, field string) (decimal.Decimal, error) {
 		return decimal.Zero, apierr.Validation(field + " must be a decimal number")
 	}
 	return v, nil
+}
+
+// parseOptionalNullDecimal parses a value that may legitimately be absent,
+// such as a coordinate on a warehouse with no location on file.
+func parseOptionalNullDecimal(raw, field string) (decimal.NullDecimal, error) {
+	if strings.TrimSpace(raw) == "" {
+		return decimal.NullDecimal{}, nil
+	}
+	v, err := decimal.NewFromString(strings.TrimSpace(raw))
+	if err != nil {
+		return decimal.NullDecimal{}, apierr.Validation(field + " must be a number")
+	}
+	return decimal.NullDecimal{Decimal: v, Valid: true}, nil
 }
 
 func parseOptionalDecimal(raw, field string) (decimal.Decimal, error) {

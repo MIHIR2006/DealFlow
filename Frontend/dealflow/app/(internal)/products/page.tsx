@@ -481,18 +481,45 @@ function WarehousesPanel({
 }) {
   const [name, setName] = useState("");
   const [weight, setWeight] = useState("1.0");
+  const [city, setCity] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    setNotice(null);
+
+    // Submitting with an empty name used to return here silently, so the
+    // button looked broken: you clicked it and nothing whatsoever happened.
+    // Say what is missing instead.
+    if (!name.trim()) {
+      setError("Give the warehouse a name.");
+      return;
+    }
+    // Half a coordinate is not a place, and the server rejects it. Catch it
+    // here so the reason is next to the fields rather than in a toast.
+    if ((lat.trim() === "") !== (lng.trim() === "")) {
+      setError("Latitude and longitude must be given together, or both left blank.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
-      await ConfigApi.createWarehouse(name.trim(), weight || undefined);
+      const created = await ConfigApi.createWarehouse(name.trim(), weight || undefined, {
+        city: city.trim() || undefined,
+        latitude: lat.trim() || undefined,
+        longitude: lng.trim() || undefined,
+      });
       setName("");
       setWeight("1.0");
+      setCity("");
+      setLat("");
+      setLng("");
+      setNotice(`${created.name} added.`);
       onCreated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create warehouse");
@@ -509,22 +536,74 @@ function WarehousesPanel({
           className="flex flex-wrap items-end gap-3 rounded-[20px] bg-white p-4 card-shadow"
         >
           <div>
-            <label className="text-[11.5px] font-medium text-mist">Warehouse name</label>
+            <label htmlFor="wh-name" className="text-[11.5px] font-medium text-mist">
+              Warehouse name <span className="text-bad">*</span>
+            </label>
             <input
+              id="wh-name"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. South Central Hub (Bengaluru)"
-              className="mt-1 w-64 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px]"
+              onChange={(e) => {
+                setName(e.target.value);
+                if (error) setError(null);
+              }}
+              placeholder="e.g. South Central Hub"
+              className={`mt-1 w-56 rounded-lg border bg-white px-3 py-2 text-[13px] ${
+                error && !name.trim() ? "border-bad" : "border-ink/15"
+              }`}
             />
           </div>
           <div>
-            <label className="text-[11.5px] font-medium text-mist">Shipping cost weight</label>
+            <label htmlFor="wh-weight" className="text-[11.5px] font-medium text-mist">
+              Shipping cost weight
+            </label>
             <input
+              id="wh-weight"
               type="text"
               inputMode="decimal"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
+              className="mt-1 w-28 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums"
+            />
+          </div>
+          <div>
+            <label htmlFor="wh-city" className="text-[11.5px] font-medium text-mist">
+              City
+            </label>
+            <input
+              id="wh-city"
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Bengaluru"
+              className="mt-1 w-36 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px]"
+            />
+          </div>
+          <div>
+            <label htmlFor="wh-lat" className="text-[11.5px] font-medium text-mist">
+              Latitude
+            </label>
+            <input
+              id="wh-lat"
+              type="text"
+              inputMode="decimal"
+              value={lat}
+              onChange={(e) => setLat(e.target.value)}
+              placeholder="12.9716"
+              className="mt-1 w-28 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums"
+            />
+          </div>
+          <div>
+            <label htmlFor="wh-lng" className="text-[11.5px] font-medium text-mist">
+              Longitude
+            </label>
+            <input
+              id="wh-lng"
+              type="text"
+              inputMode="decimal"
+              value={lng}
+              onChange={(e) => setLng(e.target.value)}
+              placeholder="77.5946"
               className="mt-1 w-28 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums"
             />
           </div>
@@ -535,7 +614,12 @@ function WarehousesPanel({
           >
             <Plus className="size-3.5" /> {saving ? "Adding..." : "Add Warehouse"}
           </button>
-          {error && <p className="text-[12px] text-bad basis-full">{error}</p>}
+          {error ? <p className="basis-full text-[12px] text-bad">{error}</p> : null}
+          {notice ? <p className="basis-full text-[12px] text-ok">{notice}</p> : null}
+          <p className="basis-full text-[11.5px] text-mist">
+            Coordinates are optional and plot the warehouse on the shipment map. They never
+            influence the split — that is decided by stock coverage and shipping cost weight.
+          </p>
         </form>
       )}
 
@@ -561,6 +645,20 @@ function WarehousesPanel({
                   <span className="text-mist">Shipping Cost Scalar:</span>
                   <span className="font-bold text-ink">{wh.shipping_cost_weight}x</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-mist">Ships from:</span>
+                  <span className="font-medium text-ink">
+                    {wh.city ?? <span className="text-mist">Not set</span>}
+                  </span>
+                </div>
+                {wh.latitude && wh.longitude ? (
+                  <div className="flex justify-between">
+                    <span className="text-mist">Coordinates:</span>
+                    <span className="tabular-nums text-ink">
+                      {Number(wh.latitude).toFixed(4)}, {Number(wh.longitude).toFixed(4)}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
 

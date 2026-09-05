@@ -7,20 +7,34 @@ package sqlcgen
 
 import (
 	"context"
+
+	"github.com/shopspring/decimal"
 )
 
 const createCustomer = `-- name: CreateCustomer :one
-INSERT INTO customers (name, email, tier) VALUES ($1, $2, $3) RETURNING id, name, email, tier, is_active, created_at, updated_at
+INSERT INTO customers (name, email, tier, city, latitude, longitude)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, name, email, tier, is_active, created_at, updated_at, city, latitude, longitude
 `
 
 type CreateCustomerParams struct {
-	Name  string
-	Email string
-	Tier  string
+	Name      string
+	Email     string
+	Tier      string
+	City      *string
+	Latitude  decimal.NullDecimal
+	Longitude decimal.NullDecimal
 }
 
 func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, createCustomer, arg.Name, arg.Email, arg.Tier)
+	row := q.db.QueryRow(ctx, createCustomer,
+		arg.Name,
+		arg.Email,
+		arg.Tier,
+		arg.City,
+		arg.Latitude,
+		arg.Longitude,
+	)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
@@ -30,12 +44,15 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.City,
+		&i.Latitude,
+		&i.Longitude,
 	)
 	return i, err
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT id, name, email, tier, is_active, created_at, updated_at FROM customers WHERE id = $1
+SELECT id, name, email, tier, is_active, created_at, updated_at, city, latitude, longitude FROM customers WHERE id = $1
 `
 
 func (q *Queries) GetCustomer(ctx context.Context, id int64) (Customer, error) {
@@ -49,12 +66,15 @@ func (q *Queries) GetCustomer(ctx context.Context, id int64) (Customer, error) {
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.City,
+		&i.Latitude,
+		&i.Longitude,
 	)
 	return i, err
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, name, email, tier, is_active, created_at, updated_at FROM customers
+SELECT id, name, email, tier, is_active, created_at, updated_at, city, latitude, longitude FROM customers
 WHERE is_active
   AND ($1::bigint IS NULL OR id > $1::bigint)
 ORDER BY id
@@ -83,6 +103,9 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.City,
+			&i.Latitude,
+			&i.Longitude,
 		); err != nil {
 			return nil, err
 		}

@@ -196,6 +196,9 @@ type Querier interface {
 	// replay is detected without a second round trip.
 	SaveIdempotentResponse(ctx context.Context, arg SaveIdempotentResponseParams) (IdempotencyKey, error)
 	SetCounterOfferOutcome(ctx context.Context, arg SetCounterOfferOutcomeParams) (CounterOffer, error)
+	// Sets a warehouse's shipping origin. Coordinates are optional metadata; the
+	// split engine never reads them.
+	SetWarehouseLocation(ctx context.Context, arg SetWarehouseLocationParams) (Warehouse, error)
 	// Ranked upsell suggestions for the products already in a cart, excluding
 	// anything the rep has added. One join, no per-line query.
 	SuggestUpsells(ctx context.Context, dollar_1 []int64) ([]SuggestUpsellsRow, error)

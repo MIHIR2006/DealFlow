@@ -4,7 +4,9 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetSalesOrder :one
-SELECT so.*, q.reference AS quotation_reference, c.name AS customer_name
+SELECT so.*, q.reference AS quotation_reference, c.name AS customer_name,
+       c.city AS customer_city, c.latitude AS customer_latitude,
+       c.longitude AS customer_longitude
 FROM sales_orders so
 JOIN quotations q ON q.id = so.quotation_id
 JOIN customers  c ON c.id = so.customer_id
@@ -45,7 +47,10 @@ INSERT INTO fulfillment_lines (fulfillment_id, warehouse_id, product_id, qty, sh
 VALUES ($1, $2, $3, $4, $5);
 
 -- name: ListFulfillmentLines :many
-SELECT fl.*, w.name AS warehouse_name, p.name AS product_name
+SELECT fl.*, w.name AS warehouse_name,
+       w.city AS warehouse_city, w.latitude AS warehouse_latitude,
+       w.longitude AS warehouse_longitude,
+       p.name AS product_name
 FROM fulfillment_lines fl
 JOIN warehouses w ON w.id = fl.warehouse_id
 JOIN products   p ON p.id = fl.product_id

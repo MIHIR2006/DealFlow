@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 
+	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/domain/fulfillment"
 	"dealflow360/backend/internal/platform/apierr"
 	"dealflow360/backend/internal/service"
@@ -115,7 +117,7 @@ func (h fulfillmentHandler) suggest(c *gin.Context) {
 		Fail(c, err)
 		return
 	}
-	OK(c, http.StatusOK, planDTO(plan))
+	OK(c, http.StatusOK, previewDTO(plan))
 }
 
 func (h fulfillmentHandler) accept(c *gin.Context) {
@@ -174,7 +176,8 @@ func orderDTO(o service.Order) dto.SalesOrder {
 		QuotationReference: h.QuotationReference,
 		CustomerID:         h.CustomerID, CustomerName: h.CustomerName,
 		Status: h.Status, CreatedAt: iso(h.CreatedAt),
-		Backorders: make([]dto.Backorder, 0, len(o.Backorders)),
+		Backorders:  make([]dto.Backorder, 0, len(o.Backorders)),
+		Destination: destinationDTO(h),
 	}
 	if h.PromisedDate != nil {
 		out.PromisedDate = iso(*h.PromisedDate)
@@ -189,11 +192,17 @@ func orderDTO(o service.Order) dto.SalesOrder {
 			Lines:            make([]dto.FulfillmentLine, 0, len(o.Lines)),
 		}
 		for _, l := range o.Lines {
-			f.Lines = append(f.Lines, dto.FulfillmentLine{
+			line := dto.FulfillmentLine{
 				WarehouseID: l.WarehouseID, WarehouseName: l.WarehouseName,
 				ProductID: l.ProductID, ProductName: l.ProductName,
 				Qty: l.Qty, ShipmentGroup: l.ShipmentGroup,
-			})
+				WarehouseCity: l.WarehouseCity,
+			}
+			if l.WarehouseLatitude.Valid && l.WarehouseLongitude.Valid {
+				line.WarehouseLatitude = decStr(l.WarehouseLatitude)
+				line.WarehouseLongitude = decStr(l.WarehouseLongitude)
+			}
+			f.Lines = append(f.Lines, line)
 		}
 		out.Fulfillment = f
 	}
@@ -208,6 +217,72 @@ func orderDTO(o service.Order) dto.SalesOrder {
 	return out
 }
 
+// previewDTO maps the suggest response: the engine's plan plus the inputs a
+// reviewer needs to propose a different split.
+func previewDTO(pv service.FulfillmentPreview) dto.FulfillmentPlan {
+	out := planDTO(pv.Plan)
+	out.Destination = destinationDTO(pv.Header)
+
+	// The plan names warehouses; the map needs the origin behind each one.
+	// Availability already carries every warehouse in play, so the coordinates
+	// come from there rather than from a second query.
+	origins := make(map[int64]service.StockAvailability, len(pv.Availability))
+	for _, a := range pv.Availability {
+		origins[a.WarehouseID] = a
+	}
+	for i := range out.Allocations {
+		w, ok := origins[out.Allocations[i].WarehouseID]
+		if !ok {
+			continue
+		}
+		out.Allocations[i].WarehouseCity = w.City
+		if w.Latitude.Valid && w.Longitude.Valid {
+			out.Allocations[i].WarehouseLatitude = decStr(w.Latitude)
+			out.Allocations[i].WarehouseLongitude = decStr(w.Longitude)
+		}
+	}
+	out.Demands = make([]dto.ProductDemand, 0, len(pv.Demands))
+	out.Availability = make([]dto.StockAvailability, 0, len(pv.Availability))
+
+	for _, d := range pv.Demands {
+		out.Demands = append(out.Demands, dto.ProductDemand{
+			ProductID: d.ProductID, ProductName: d.ProductName, Qty: d.Qty,
+		})
+	}
+	for _, a := range pv.Availability {
+		row := dto.StockAvailability{
+			WarehouseID: a.WarehouseID, WarehouseName: a.WarehouseName,
+			ProductID: a.ProductID, Available: a.Available,
+			City: a.City,
+		}
+		if a.Latitude.Valid && a.Longitude.Valid {
+			row.Latitude, row.Longitude = decStr(a.Latitude), decStr(a.Longitude)
+		}
+		out.Availability = append(out.Availability, row)
+	}
+	return out
+}
+
+// decStr renders an optional decimal, or nil when the value is absent.
+func decStr(v decimal.NullDecimal) *string {
+	if !v.Valid {
+		return nil
+	}
+	s := v.Decimal.String()
+	return &s
+}
+
+// destinationDTO is where every shipment on an order is headed.
+func destinationDTO(h sqlcgen.GetSalesOrderRow) dto.Destination {
+	out := dto.Destination{CustomerName: h.CustomerName, City: h.CustomerCity}
+	// Only a complete pair can be plotted; half a coordinate is not a place.
+	if h.CustomerLatitude.Valid && h.CustomerLongitude.Valid {
+		out.Latitude = decStr(h.CustomerLatitude)
+		out.Longitude = decStr(h.CustomerLongitude)
+	}
+	return out
+}
+
 func planDTO(p fulfillment.Plan) dto.FulfillmentPlan {
 	out := dto.FulfillmentPlan{
 		Strategy: string(p.Strategy), ShipmentCount: p.ShipmentCount,
@@ -215,6 +290,8 @@ func planDTO(p fulfillment.Plan) dto.FulfillmentPlan {
 		Allocations:    make([]dto.FulfillmentLine, 0, len(p.Allocations)),
 		Backorders:     make([]dto.Backorder, 0, len(p.Backorders)),
 		FullyFulfilled: p.FullyFulfilled(),
+		Demands:        []dto.ProductDemand{},
+		Availability:   []dto.StockAvailability{},
 	}
 	for _, a := range p.Allocations {
 		out.Allocations = append(out.Allocations, dto.FulfillmentLine{

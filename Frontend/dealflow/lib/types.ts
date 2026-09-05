@@ -369,6 +369,11 @@ export interface Warehouse {
   name: string;
   shipping_cost_weight: string;
   is_active: boolean;
+
+  /** Optional shipping origin. Never an input to the split engine. */
+  city?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
 }
 
 export interface StockItem {
@@ -407,6 +412,11 @@ export interface FulfillmentLine {
   product_name: string;
   qty: number;
   shipment_group: number;
+
+  /** Where this leg starts. Absent when the warehouse has no location on file. */
+  warehouse_city?: string | null;
+  warehouse_latitude?: string | null;
+  warehouse_longitude?: string | null;
 }
 
 export interface Backorder {
@@ -437,6 +447,7 @@ export interface SalesOrder {
   created_at: string;
   fulfillment?: Fulfillment | null;
   backorders: Backorder[];
+  destination: Destination;
 }
 
 export interface OrderSummary {
@@ -454,6 +465,32 @@ export interface OrderSummary {
   backorder_count: number;
 }
 
+/** One product this order needs, and how much of it. */
+export interface ProductDemand {
+  product_id: number;
+  product_name: string;
+  qty: number;
+}
+
+/** What one warehouse can contribute towards one product, net of reservations. */
+export interface StockAvailability {
+  warehouse_id: number;
+  warehouse_name: string;
+  product_id: number;
+  available: number;
+  city?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+}
+
+/** Where every shipment on an order is going. */
+export interface Destination {
+  customer_name: string;
+  city?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+}
+
 export interface FulfillmentPlan {
   strategy: string;
   shipment_count: number;
@@ -461,6 +498,18 @@ export interface FulfillmentPlan {
   allocations: FulfillmentLine[];
   backorders: Backorder[];
   fully_fulfilled: boolean;
+
+  /** Demand and stock, so a reviewer can propose a split instead of only accepting one. */
+  demands: ProductDemand[];
+  availability: StockAvailability[];
+  destination: Destination;
+}
+
+/** One caller-specified allocation for a manual override. */
+export interface FulfillmentOverride {
+  warehouse_id: number;
+  product_id: number;
+  qty: number;
 }
 
 // ---------------------------------------------------------------------------

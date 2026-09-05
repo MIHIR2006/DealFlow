@@ -39,18 +39,27 @@ func (q *Queries) AddStock(ctx context.Context, arg AddStockParams) (StockItem, 
 }
 
 const createWarehouse = `-- name: CreateWarehouse :one
-INSERT INTO warehouses (name, shipping_cost_weight)
-VALUES ($1, $2)
-RETURNING id, name, shipping_cost_weight, is_active, created_at
+INSERT INTO warehouses (name, shipping_cost_weight, city, latitude, longitude)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, shipping_cost_weight, is_active, created_at, city, latitude, longitude
 `
 
 type CreateWarehouseParams struct {
 	Name               string
 	ShippingCostWeight decimal.Decimal
+	City               *string
+	Latitude           decimal.NullDecimal
+	Longitude          decimal.NullDecimal
 }
 
 func (q *Queries) CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (Warehouse, error) {
-	row := q.db.QueryRow(ctx, createWarehouse, arg.Name, arg.ShippingCostWeight)
+	row := q.db.QueryRow(ctx, createWarehouse,
+		arg.Name,
+		arg.ShippingCostWeight,
+		arg.City,
+		arg.Latitude,
+		arg.Longitude,
+	)
 	var i Warehouse
 	err := row.Scan(
 		&i.ID,
@@ -58,6 +67,9 @@ func (q *Queries) CreateWarehouse(ctx context.Context, arg CreateWarehouseParams
 		&i.ShippingCostWeight,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.City,
+		&i.Latitude,
+		&i.Longitude,
 	)
 	return i, err
 }
@@ -111,7 +123,7 @@ func (q *Queries) GetStockForProducts(ctx context.Context, dollar_1 []int64) ([]
 }
 
 const listWarehouses = `-- name: ListWarehouses :many
-SELECT id, name, shipping_cost_weight, is_active, created_at FROM warehouses WHERE is_active ORDER BY shipping_cost_weight, id
+SELECT id, name, shipping_cost_weight, is_active, created_at, city, latitude, longitude FROM warehouses WHERE is_active ORDER BY shipping_cost_weight, id
 `
 
 func (q *Queries) ListWarehouses(ctx context.Context) ([]Warehouse, error) {
@@ -129,6 +141,9 @@ func (q *Queries) ListWarehouses(ctx context.Context) ([]Warehouse, error) {
 			&i.ShippingCostWeight,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.City,
+			&i.Latitude,
+			&i.Longitude,
 		); err != nil {
 			return nil, err
 		}
@@ -227,6 +242,45 @@ func (q *Queries) ReserveStock(ctx context.Context, arg ReserveStockParams) (Sto
 		&i.OnHand,
 		&i.Reserved,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setWarehouseLocation = `-- name: SetWarehouseLocation :one
+UPDATE warehouses
+SET city = $2,
+    latitude = $3,
+    longitude = $4
+WHERE id = $1
+RETURNING id, name, shipping_cost_weight, is_active, created_at, city, latitude, longitude
+`
+
+type SetWarehouseLocationParams struct {
+	ID        int64
+	City      *string
+	Latitude  decimal.NullDecimal
+	Longitude decimal.NullDecimal
+}
+
+// Sets a warehouse's shipping origin. Coordinates are optional metadata; the
+// split engine never reads them.
+func (q *Queries) SetWarehouseLocation(ctx context.Context, arg SetWarehouseLocationParams) (Warehouse, error) {
+	row := q.db.QueryRow(ctx, setWarehouseLocation,
+		arg.ID,
+		arg.City,
+		arg.Latitude,
+		arg.Longitude,
+	)
+	var i Warehouse
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ShippingCostWeight,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.City,
+		&i.Latitude,
+		&i.Longitude,
 	)
 	return i, err
 }

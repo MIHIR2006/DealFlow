@@ -118,6 +118,9 @@ type Customer struct {
 	IsActive  bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	City      *string
+	Latitude  decimal.NullDecimal
+	Longitude decimal.NullDecimal
 }
 
 type DealAlert struct {
@@ -365,4 +368,7 @@ type Warehouse struct {
 	ShippingCostWeight decimal.Decimal
 	IsActive           bool
 	CreatedAt          time.Time
+	City               *string
+	Latitude           decimal.NullDecimal
+	Longitude          decimal.NullDecimal
 }

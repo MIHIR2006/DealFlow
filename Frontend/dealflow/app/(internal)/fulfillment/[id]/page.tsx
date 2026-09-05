@@ -11,12 +11,23 @@ import {
   Sliders,
   Sparkles,
   Layers,
+  Building2,
+  MoveRight,
 } from "lucide-react";
 import { LifecycleBar, type DealStage } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { OrderApi, ApiError } from "@/lib/api";
 import { inr, useAuth } from "@/lib/hooks";
-import type { SalesOrder, FulfillmentPlan, FulfillmentLine, Backorder } from "@/lib/types";
+import { OverrideDialog } from "@/components/workspace/override-dialog";
+import { ShipmentMap } from "@/components/workspace/shipment-map";
+import { SplitDecision } from "@/components/workspace/split-decision";
+import type {
+  SalesOrder,
+  FulfillmentPlan,
+  FulfillmentLine,
+  FulfillmentOverride,
+  Backorder,
+} from "@/lib/types";
 
 const STAGE_BY_STATUS: Record<string, DealStage> = {
   CONFIRMED: "FULFILLMENT",
@@ -55,6 +66,7 @@ export default function WarehouseSplitDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [overrideOpen, setOverrideOpen] = useState(false);
 
   const [plan, setPlan] = useState<FulfillmentPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -96,14 +108,19 @@ export default function WarehouseSplitDetailPage({
     }
   }, [order, loadPlan]);
 
-  async function acceptSplit() {
+  async function acceptSplit(overrides?: FulfillmentOverride[]) {
     setBusy(true);
     setError(null);
     try {
-      const o = await OrderApi.acceptFulfillment(orderId);
+      const o = await OrderApi.acceptFulfillment(orderId, overrides);
       setOrder(o);
       setPlan(null);
-      setNotice("Split confirmed and stock reserved.");
+      setOverrideOpen(false);
+      setNotice(
+        overrides && overrides.length > 0
+          ? "Manual split applied and stock reserved."
+          : "Split confirmed and stock reserved.",
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not accept this split.");
     } finally {
@@ -150,8 +167,25 @@ export default function WarehouseSplitDetailPage({
   const shipmentGroups = groupByShipment(displayLines);
   const shipmentCount = persisted?.shipment_count ?? plan?.shipment_count ?? 0;
   const estimatedCost = persisted?.estimated_cost ?? plan?.estimated_cost ?? null;
-  const openBackorders: Backorder[] = order.backorders ?? [];
+  // Before the split is accepted the shortfall lives on the preview; after it,
+  // on the order. Reading only the persisted list meant a preview that would
+  // clearly backorder stock announced "Zero Pending" right up until the moment
+  // someone accepted it, which is the one point at which the shortfall still
+  // could have been avoided.
+  // A projected backorder has no persisted row yet, so it carries no id.
+  // Negative synthetic ids keep React keys unique without pretending these
+  // are rows that exist.
+  const previewBackorders: Backorder[] = (plan?.backorders ?? []).map((b, i) => ({
+    ...b,
+    id: -(i + 1),
+    status: b.status || "PROJECTED",
+  }));
+  const openBackorders: Backorder[] = isPreview ? previewBackorders : (order.backorders ?? []);
   const hasOpenBackorders = openBackorders.length > 0;
+
+  // Consolidation reconciles a *persisted* backorder against stock that has
+  // since arrived. There is nothing to consolidate against a preview.
+  const canConsolidate = !isPreview && hasOpenBackorders;
 
   return (
     <div className="space-y-6">
@@ -185,12 +219,13 @@ export default function WarehouseSplitDetailPage({
         </div>
 
         <div className="flex items-center gap-2.5">
-          {canDecideFulfillment ? (
+          {canDecideFulfillment && isPreview ? (
             <button
               type="button"
-              disabled
-              title="Manual override isn't available in this build — accepting always applies the engine's suggested split."
-              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-mist opacity-50 cursor-not-allowed"
+              disabled={busy || planLoading || !plan}
+              onClick={() => setOverrideOpen(true)}
+              title="Choose the warehouses yourself instead of taking the engine's split"
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/12 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-cream disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sliders className="size-3.5" />
               Manual Override
@@ -206,7 +241,7 @@ export default function WarehouseSplitDetailPage({
             <button
               type="button"
               disabled={busy || planLoading || !plan}
-              onClick={acceptSplit}
+              onClick={() => acceptSplit()}
               className="inline-flex items-center gap-1.5 rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
             >
               <CheckCircle className="size-3.5" />
@@ -265,7 +300,7 @@ export default function WarehouseSplitDetailPage({
       </div>
 
       {/* Consolidate Remaining Backorder prompt */}
-      {hasOpenBackorders && (
+      {canConsolidate && (
         <div className="rounded-[20px] tone-warn p-4 border border-transparent flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Package className="size-5 text-warn" />
@@ -290,6 +325,14 @@ export default function WarehouseSplitDetailPage({
           ) : null}
         </div>
       )}
+
+      {/* Where the goods move, and why the engine routed them that way. */}
+      {displayLines.length > 0 ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <ShipmentMap lines={displayLines} destination={order.destination} />
+          {plan ? <SplitDecision plan={plan} chosen={displayLines} /> : null}
+        </div>
+      ) : null}
 
       {/* SHIPMENT CARDS */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -325,13 +368,33 @@ export default function WarehouseSplitDetailPage({
               </div>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-              <span className="flex items-center gap-1">
-                <Truck className="size-3.5" /> Shipment #{group}
-              </span>
-              <span className="font-medium text-ink">
-                {lines.reduce((sum, l) => sum + l.qty, 0)} units total
-              </span>
+            {/* Where this shipment starts and where it ends. The split engine
+                decides the origin, and every shipment on an order goes to the
+                one customer who placed it — stating both is what turns a list
+                of warehouse rows into a movement someone can follow. */}
+            <div className="mt-6 border-t border-ink/6 pt-4">
+              <div className="flex items-center gap-2 text-[11.5px]">
+                <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-cream/60 px-2.5 py-1">
+                  <Warehouse className="size-3 shrink-0 text-mist" />
+                  <span className="truncate font-medium text-ink">
+                    {lines[0]?.warehouse_name ?? "Warehouse"}
+                  </span>
+                </span>
+                <MoveRight className="size-3.5 shrink-0 text-mist" />
+                <span className="flex min-w-0 items-center gap-1.5 rounded-full tone-ok px-2.5 py-1">
+                  <Building2 className="size-3 shrink-0" />
+                  <span className="truncate font-medium">{order.customer_name}</span>
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between text-[12px] text-mist">
+                <span className="flex items-center gap-1">
+                  <Truck className="size-3.5" /> Shipment #{group}
+                </span>
+                <span className="font-medium text-ink">
+                  {lines.reduce((sum, l) => sum + l.qty, 0)} units total
+                </span>
+              </div>
             </div>
           </div>
         ))}
@@ -351,7 +414,9 @@ export default function WarehouseSplitDetailPage({
               >
                 {hasOpenBackorders
                   ? `${openBackorders.length} Item${openBackorders.length === 1 ? "" : "s"} Shortfall`
-                  : "Zero Pending"}
+                  : isPreview
+                    ? "Fully Covered"
+                    : "Zero Pending"}
               </span>
             </div>
 
@@ -368,16 +433,20 @@ export default function WarehouseSplitDetailPage({
                 ))
               ) : (
                 <div className="rounded-[16px] bg-cream/30 p-4 text-center text-[12px] text-mist">
-                  All backorder lines resolved and consolidated into warehouse pickings.
+                  {isPreview
+                    ? "Every line on this order is covered by available stock."
+                    : "All backorder lines resolved and consolidated into warehouse pickings."}
                 </div>
               )}
             </div>
           </div>
 
           <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span>Backorder Status</span>
+            <span>{isPreview ? "Projected on accept" : "Backorder Status"}</span>
             <span className="font-semibold text-ink">
-              {hasOpenBackorders ? "Partially Ready" : "100% Ready"}
+              {hasOpenBackorders
+                ? `${openBackorders.reduce((sum, b) => sum + b.qty, 0)} units short`
+                : "100% Ready"}
             </span>
           </div>
         </div>
@@ -392,6 +461,15 @@ export default function WarehouseSplitDetailPage({
           </div>
         ) : null}
       </div>
+
+      {overrideOpen && plan ? (
+        <OverrideDialog
+          plan={plan}
+          busy={busy}
+          onCancel={() => setOverrideOpen(false)}
+          onApply={(overrides) => acceptSplit(overrides)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -84,6 +84,7 @@ import type {
   Customer,
   DealAlert,
   DealHealth,
+  FulfillmentOverride,
   FulfillmentPlan,
   GovernanceSnapshot,
   Invoice,
@@ -171,10 +172,20 @@ export const ConfigApi = {
     api<ApprovalPolicy>(`/v1/governance/policies/${id}`, { method: "PUT", body: JSON.stringify(input) }),
 
   listWarehouses: () => api<Page<Warehouse>>("/v1/warehouses"),
-  createWarehouse: (name: string, shippingCostWeight?: string) =>
+  createWarehouse: (
+    name: string,
+    shippingCostWeight?: string,
+    location?: { city?: string; latitude?: string; longitude?: string },
+  ) =>
     api<Warehouse>("/v1/warehouses", {
       method: "POST",
-      body: JSON.stringify({ name, shipping_cost_weight: shippingCostWeight }),
+      body: JSON.stringify({
+        name,
+        shipping_cost_weight: shippingCostWeight,
+        city: location?.city,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
+      }),
     }),
   setStock: (warehouseId: number, productId: number, onHand: number) =>
     api<StockItem>(`/v1/warehouses/${warehouseId}/stock`, {
@@ -262,7 +273,16 @@ export const OrderApi = {
   list: (limit?: number) => api<Page<OrderSummary>>(`/v1/orders${qs({ limit })}`),
   get: (id: number) => api<SalesOrder>(`/v1/orders/${id}`),
   suggestFulfillment: (id: number) => api<FulfillmentPlan>(`/v1/orders/${id}/fulfillment/suggest`),
-  acceptFulfillment: (id: number) => api<SalesOrder>(`/v1/orders/${id}/fulfillment`, { method: "POST" }),
+  /**
+   * Accept the fulfilment split. With no overrides the engine's own suggestion
+   * is applied; with overrides the caller's warehouse choices replace it, still
+   * validated server-side against real demand and real stock.
+   */
+  acceptFulfillment: (id: number, overrides?: FulfillmentOverride[]) =>
+    api<SalesOrder>(`/v1/orders/${id}/fulfillment`, {
+      method: "POST",
+      body: overrides && overrides.length > 0 ? JSON.stringify({ overrides }) : undefined,
+    }),
   consolidateBackorders: (id: number) =>
     api<SalesOrder>(`/v1/orders/${id}/backorders/consolidate`, { method: "POST" }),
 
