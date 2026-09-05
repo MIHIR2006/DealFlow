@@ -585,12 +585,6 @@ func (s *QuoteService) Submit(ctx context.Context, actor auth.Principal, quotati
 	}
 
 	level := levelOrNone(quote.Risk.RequiredLevel)
-	round, err := s.q.CurrentApprovalRound(ctx, quotationID)
-	if err != nil {
-		return Quotation{}, apierr.Internal(fmt.Errorf("current approval round: %w", err))
-	}
-	nextRound := round + 1
-
 	status := "APPROVED"
 	if level != risk.LevelNone {
 		status = "PENDING_APPROVAL"
@@ -599,25 +593,8 @@ func (s *QuoteService) Submit(ctx context.Context, actor auth.Principal, quotati
 	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
-		// Any chain from a previous round is closed, never deleted: the audit
-		// trail has to keep submitted, returned, and resubmitted side by side.
-		if _, err := qtx.SupersedeOpenApprovals(ctx, quotationID); err != nil {
-			return fmt.Errorf("supersede open approvals: %w", err)
-		}
-
-		// Steps are numbered from one in chain order, so the approvals inbox
-		// can refuse a decision taken out of sequence.
-		var step int32
-		for _, required := range chainFor(level) {
-			step++
-			if _, err := qtx.CreateApprovalRequest(ctx, sqlcgen.CreateApprovalRequestParams{
-				QuotationID:  quotationID,
-				Step:         step,
-				RequiredRole: string(required),
-				Round:        nextRound,
-			}); err != nil {
-				return fmt.Errorf("create approval step %d: %w", step, err)
-			}
+		if err := RebuildApprovalChain(ctx, qtx, quotationID, level); err != nil {
+			return err
 		}
 
 		if _, err := qtx.UpdateQuotationStatus(ctx, sqlcgen.UpdateQuotationStatusParams{
@@ -676,16 +653,80 @@ func (s *QuoteService) audit(ctx context.Context, quotationID int64, action stri
 		}
 	}
 
-	actorID := actor.UserID
+	var actorID *int64
+	if actor.UserID != 0 {
+		id := actor.UserID
+		actorID = &id
+	}
+
 	_, _ = s.q.AppendAuditLog(ctx, sqlcgen.AppendAuditLogParams{
 		EntityType: "quotation",
 		EntityID:   quotationID,
 		Action:     action,
-		ActorID:    &actorID,
+		ActorID:    actorID,
 		ActorLabel: actor.Email,
 		Note:       note,
 		Payload:    encoded,
 	})
+}
+
+// Audit appends to a quotation's trail on behalf of another service.
+func (s *QuoteService) Audit(ctx context.Context, quotationID int64, action string, actor auth.Principal, note string, payload map[string]any) {
+	s.audit(ctx, quotationID, action, actor, note, payload)
+}
+
+// Header loads a quotation without the visibility check.
+//
+// The portal has already established which quotation it may touch, from a
+// token that names exactly one. Re-checking against a staff principal it does
+// not have would be meaningless.
+func (s *QuoteService) Header(ctx context.Context, id int64) (sqlcgen.GetQuotationRow, error) {
+	header, err := s.q.GetQuotation(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return header, apierr.NotFound("quotation not found")
+		}
+		return header, apierr.Internal(fmt.Errorf("get quotation: %w", err))
+	}
+	return header, nil
+}
+
+// Recalculate re-runs both engines over a quotation and persists the result.
+//
+// Exposed so the portal can reprice after a customer counter-offer. The
+// caller is responsible for having established that it may touch this
+// quotation at all.
+func (s *QuoteService) Recalculate(ctx context.Context, actor auth.Principal, header sqlcgen.GetQuotationRow) (Quotation, error) {
+	return s.recalculate(ctx, actor, header)
+}
+
+// RebuildApprovalChain closes any open chain and lays out a fresh one.
+//
+// The previous round is superseded rather than deleted, so the audit trail
+// keeps every submission side by side. Must run inside a transaction.
+func RebuildApprovalChain(ctx context.Context, qtx *sqlcgen.Queries, quotationID int64, level risk.Level) error {
+	if _, err := qtx.SupersedeOpenApprovals(ctx, quotationID); err != nil {
+		return fmt.Errorf("supersede open approvals: %w", err)
+	}
+
+	round, err := qtx.CurrentApprovalRound(ctx, quotationID)
+	if err != nil {
+		return fmt.Errorf("current approval round: %w", err)
+	}
+
+	var step int32
+	for _, required := range chainFor(level) {
+		step++
+		if _, err := qtx.CreateApprovalRequest(ctx, sqlcgen.CreateApprovalRequestParams{
+			QuotationID:  quotationID,
+			Step:         step,
+			RequiredRole: string(required),
+			Round:        round + 1,
+		}); err != nil {
+			return fmt.Errorf("create approval step %d: %w", step, err)
+		}
+	}
+	return nil
 }
 
 // AuditTrail returns the recorded history for a quotation.
