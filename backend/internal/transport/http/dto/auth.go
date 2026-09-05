@@ -40,21 +40,3 @@ type SessionResponse struct {
 	ExpiresAt int64  `json:"expires_at"`
 	User      User   `json:"user"`
 }
-
-// PortalQuotation is what a customer sees.
-//
-// Note what is absent: unit cost, margin, blended risk score, ceilings,
-// overages, the rep's identity, and the approval chain. Those are internal
-// facts. The omission is enforced by this type rather than by a filter
-// someone could forget to apply.
-type PortalQuotation struct {
-	Reference     string `json:"reference"`
-	Status        string `json:"status"`
-	CustomerName  string `json:"customer_name"`
-	ListSubtotal  string `json:"list_subtotal"`
-	DiscountTotal string `json:"discount_total"`
-	NetSubtotal   string `json:"net_subtotal"`
-	TaxTotal      string `json:"tax_total"`
-	GrandTotal    string `json:"grand_total"`
-	ExpiresAt     any    `json:"expires_at"`
-}

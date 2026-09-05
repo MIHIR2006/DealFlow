@@ -43,6 +43,23 @@ func stepID(t *testing.T, h *harness, quotationID int64, round, step int32) int6
 	return id
 }
 
+// pendingStepID returns the step currently awaiting a decision, whatever
+// round it belongs to. A quotation that was compliant on first submission has
+// no round one, so tests must not assume a round number.
+func pendingStepID(t *testing.T, h *harness, quotationID int64) int64 {
+	t.Helper()
+
+	var id int64
+	err := h.pool.QueryRow(t.Context(),
+		`SELECT id FROM approval_requests
+		 WHERE quotation_id = $1 AND status = 'PENDING'
+		 ORDER BY round DESC, step LIMIT 1`, quotationID).Scan(&id)
+	if err != nil {
+		t.Fatalf("find the pending step for quotation %d: %v", quotationID, err)
+	}
+	return id
+}
+
 func inboxCount(t *testing.T, h *harness, token string) int {
 	t.Helper()
 
