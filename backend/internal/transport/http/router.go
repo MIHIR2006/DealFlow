@@ -222,6 +222,7 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 
 	orders := rg.Group("/orders", authed, staff)
 	{
+		orders.GET("", fh.list)
 		orders.GET("/:id", fh.get)
 		orders.GET("/:id/fulfillment/suggest", fh.suggest)
 		orders.POST("/:id/fulfillment", fh.accept)

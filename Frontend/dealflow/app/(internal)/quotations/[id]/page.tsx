@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, use } from "react";
+import React, { useState, useMemo, use, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,7 +12,6 @@ import {
   CheckCircle,
   Clock,
   ShieldAlert,
-  Sparkles,
   Copy,
   ExternalLink,
 } from "lucide-react";
@@ -21,76 +20,20 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { MarginBar } from "@/components/ui/margin-bar";
 import { UpsellPanel } from "@/components/workspace/upsell-panel";
-import { UpsellSuggestion } from "@/lib/types";
+import { useFetch, useMutation, inr } from "@/lib/hooks";
+import { api } from "@/lib/api";
+import type { Quotation, QuotationLine, UpsellSuggestion } from "@/lib/types";
 
-interface CartLineItem {
-  id: string;
-  productId: number;
-  productName: string;
+interface Product {
+  id: number;
+  name: string;
   sku: string;
-  category: "Hardware" | "Service" | "Subscription";
-  unitPrice: number;
-  costPrice: number;
-  qty: number;
-  discountPct: number;
-  taxRatePct: number;
-  lineType: "ONE_TIME" | "RECURRING";
-  planPeriod?: string;
+  category_name: string;
+  unit_price: string;
+  stock_total: number;
+  line_type: string;
+  plan_period?: string;
 }
-
-const CATALOG = [
-  {
-    id: 1,
-    name: "Laptop Pro 16\"",
-    sku: "HW-LP-16",
-    category: "Hardware" as const,
-    unitPrice: 220000,
-    costPrice: 155000,
-    stock: "Mumbai: 42 · East: 12",
-    lineType: "ONE_TIME" as const,
-  },
-  {
-    id: 2,
-    name: "Setup & Migration Service",
-    sku: "SRV-SETUP-PRO",
-    category: "Service" as const,
-    unitPrice: 45000,
-    costPrice: 38000,
-    stock: "Available Immediately",
-    lineType: "ONE_TIME" as const,
-  },
-  {
-    id: 3,
-    name: "Enterprise Cloud Support 24/7",
-    sku: "SUB-CLOUD-247",
-    category: "Subscription" as const,
-    unitPrice: 25000,
-    costPrice: 8000,
-    stock: "Unlimited Seats",
-    lineType: "RECURRING" as const,
-    planPeriod: "Monthly",
-  },
-  {
-    id: 4,
-    name: "Server Rack Unit 2U",
-    sku: "HW-SRV-2U",
-    category: "Hardware" as const,
-    unitPrice: 180000,
-    costPrice: 130000,
-    stock: "Kolkata: 4 · Mumbai: 0",
-    lineType: "ONE_TIME" as const,
-  },
-  {
-    id: 5,
-    name: "Docking Station Ultra Dual-4K",
-    sku: "HW-DOCK-4K",
-    category: "Hardware" as const,
-    unitPrice: 18500,
-    costPrice: 11000,
-    stock: "Out of Stock (Backorder)",
-    lineType: "ONE_TIME" as const,
-  },
-];
 
 export default function QuotationBuilderPage({
   params,
@@ -99,249 +42,147 @@ export default function QuotationBuilderPage({
 }) {
   const resolvedParams = use(params);
   const router = useRouter();
-  const quoteId = resolvedParams.id || "Q-1042";
+  const quoteId = resolvedParams.id;
 
-  // Initial cart seeded to mirror the spec §10 worked example
-  const [lines, setLines] = useState<CartLineItem[]>([
-    {
-      id: "l1",
-      productId: 1,
-      productName: "Laptop Pro 16\"",
-      sku: "HW-LP-16",
-      category: "Hardware",
-      unitPrice: 220000,
-      costPrice: 155000,
-      qty: 2,
-      discountPct: 12, // Gold allowed: 15% -> 0pt over
-      taxRatePct: 18,
-      lineType: "ONE_TIME",
-    },
-    {
-      id: "l2",
-      productId: 2,
-      productName: "Setup & Migration Service",
-      sku: "SRV-SETUP-PRO",
-      category: "Service",
-      unitPrice: 45000,
-      costPrice: 38000,
-      qty: 1,
-      discountPct: 18, // Service allowed: 10% -> 8pt OVER
-      taxRatePct: 18,
-      lineType: "ONE_TIME",
-    },
-  ]);
+  // Load quotation from backend
+  const { data: quoteRes, loading: quoteLoading, refetch: refetchQuote } =
+    useFetch<{ data: Quotation }>(`/v1/quotations/${quoteId}`);
+  const quote = quoteRes?.data;
 
-  const [orderDiscountPct, setOrderDiscountPct] = useState(0);
-  const [customerTier] = useState<"Gold" | "Silver" | "Bronze">("Gold");
-  const [customerName] = useState("Acme Corporation");
+  // Load product catalog
+  const { data: productsRes } = useFetch<{ data: Product[] }>("/v1/products");
+  const catalog = productsRes?.data ?? [];
+
+  // Mutation helper
+  const mutation = useMutation<{ data: Quotation }>();
+
   const [catalogSearch, setCatalogSearch] = useState("");
   const [categoryTab, setCategoryTab] = useState("ALL");
   const [portalCopied, setPortalCopied] = useState(false);
-  const [submittedStatus, setSubmittedStatus] = useState<string | null>(null);
 
-  // Ceilings Matrix (Spec §10 & A3)
-  const tierCeiling = customerTier === "Gold" ? 15 : customerTier === "Silver" ? 10 : 5;
-  const categoryCeilings: Record<string, number> = {
-    Hardware: 15,
-    Service: 10,
-    Subscription: 20,
-  };
-
-  // Live Recalculations (Pricing & Risk Engine logic)
-  const totals = useMemo(() => {
-    let listSubtotal = 0;
-    let lineDiscountTotal = 0;
-    let totalCost = 0;
-    let oneTimeTotal = 0;
-    let recurringTotal = 0;
-
-    let weightedOverageSum = 0;
-    let maxLineOverage = 0;
-
-    const computedLines = lines.map((line) => {
-      const lineList = line.unitPrice * line.qty;
-      const lineCost = line.costPrice * line.qty;
-      const lineDiscountAmt = (lineList * line.discountPct) / 100;
-      const lineNet = lineList - lineDiscountAmt;
-      const lineTax = (lineNet * line.taxRatePct) / 100;
-      const lineMargin = lineNet - lineCost;
-      const lineMarginPct = lineNet > 0 ? (lineMargin / lineNet) * 100 : 0;
-
-      // Effective ceiling = min(tier, category)
-      const allowedCeiling = Math.min(tierCeiling, categoryCeilings[line.category] ?? tierCeiling);
-      const overagePts = Math.max(0, line.discountPct - allowedCeiling);
-
-      weightedOverageSum += overagePts * lineList;
-      if (overagePts > maxLineOverage) {
-        maxLineOverage = overagePts;
-      }
-
-      listSubtotal += lineList;
-      lineDiscountTotal += lineDiscountAmt;
-      totalCost += lineCost;
-
-      if (line.lineType === "ONE_TIME") {
-        oneTimeTotal += lineNet + lineTax;
-      } else {
-        recurringTotal += lineNet + lineTax;
-      }
-
-      return {
-        ...line,
-        lineList,
-        lineNet,
-        lineTax,
-        lineMarginPct,
-        allowedCeiling,
-        overagePts,
-        isOver: overagePts > 0,
-      };
-    });
-
-    const netBeforeOrderDisc = listSubtotal - lineDiscountTotal;
-    const orderDiscountAmt = (netBeforeOrderDisc * orderDiscountPct) / 100;
-    const finalNet = netBeforeOrderDisc - orderDiscountAmt;
-    const finalTax = (finalNet * 18) / 100;
-    const grandTotal = finalNet + finalTax;
-
-    const totalMarginAmt = finalNet - totalCost;
-    const totalMarginPct = finalNet > 0 ? (totalMarginAmt / finalNet) * 100 : 0;
-
-    // Blended risk calculation: value-weighted overage
-    const blendedRiskScore =
-      listSubtotal > 0 ? Number((weightedOverageSum / listSubtotal).toFixed(1)) : 0;
-
-    // Governance determination
-    let requiredLevel: "NONE" | "MANAGER" | "FINANCE" = "NONE";
-    let rationale = "Discounts are fully within customer tier and category discretion.";
-
-    if (blendedRiskScore >= 5.0 || maxLineOverage >= 10) {
-      requiredLevel = "FINANCE";
-      rationale = `Blended risk score is ${blendedRiskScore}% (≥5%) or maximum single-line overage is ${maxLineOverage}pt (≥10pt). Two-level approval required (Sales Manager ➔ Finance).`;
-    } else if (maxLineOverage > 0 || blendedRiskScore > 0) {
-      requiredLevel = "MANAGER";
-      rationale = `Line item exceeds category discretion by ${maxLineOverage}pt. Requires Sales Manager review.`;
+  // All mutations call the backend and refetch the quotation (server is source of truth)
+  const mutateQuote = useCallback(async (path: string, init?: RequestInit) => {
+    try {
+      await mutation.trigger(path, init);
+      refetchQuote();
+    } catch {
+      // Error state is in mutation.error
     }
+  }, [mutation, refetchQuote]);
 
-    return {
-      listSubtotal,
-      lineDiscountTotal,
-      orderDiscountAmt,
-      finalNet,
-      finalTax,
-      grandTotal,
-      totalCost,
-      totalMarginAmt,
-      totalMarginPct,
-      oneTimeTotal,
-      recurringTotal,
-      blendedRiskScore,
-      maxLineOverage,
-      requiredLevel,
-      rationale,
-      computedLines,
-    };
-  }, [lines, orderDiscountPct, tierCeiling]);
-
-  // Cart operations
-  function updateQty(id: string, delta: number) {
-    setLines((prev) =>
-      prev
-        .map((item) => {
-          if (item.id === id) {
-            const newQty = item.qty + delta;
-            return newQty > 0 ? { ...item, qty: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean) as CartLineItem[]
-    );
+  async function addProductToCart(product: Product) {
+    await mutateQuote(`/v1/quotations/${quoteId}/lines`, {
+      method: "POST",
+      body: JSON.stringify({
+        product_id: product.id,
+        qty: "1",
+        discount_pct: "0",
+      }),
+    });
   }
 
-  function updateDiscount(id: string, pct: number) {
-    setLines((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, discountPct: Math.max(0, Math.min(100, pct)) } : item))
-    );
+  async function updateLine(lineId: number, qty: string, discountPct: string) {
+    await mutateQuote(`/v1/quotations/${quoteId}/lines/${lineId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ qty, discount_pct: discountPct }),
+    });
   }
 
-  function removeLine(id: string) {
-    setLines((prev) => prev.filter((i) => i.id !== id));
+  async function removeLine(lineId: number) {
+    await mutateQuote(`/v1/quotations/${quoteId}/lines/${lineId}`, {
+      method: "DELETE",
+    });
   }
 
-  function addProductToCart(product: (typeof CATALOG)[0]) {
-    setLines((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.productId === product.id ? { ...i, qty: i.qty + 1 } : i
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: `l_${Date.now()}`,
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          category: product.category,
-          unitPrice: product.unitPrice,
-          costPrice: product.costPrice,
-          qty: 1,
-          discountPct: 0,
-          taxRatePct: 18,
-          lineType: product.lineType,
-          planPeriod: product.planPeriod,
-        },
-      ];
+  async function setOrderDiscount(pct: string) {
+    await mutateQuote(`/v1/quotations/${quoteId}/order-discount`, {
+      method: "PUT",
+      body: JSON.stringify({ order_discount_pct: pct }),
+    });
+  }
+
+  async function handleSubmitQuote() {
+    await mutateQuote(`/v1/quotations/${quoteId}/submit`, {
+      method: "POST",
+    });
+    // After submit, the status changes; redirect appropriately
+    const updated = await api<{ data: Quotation }>(`/v1/quotations/${quoteId}`);
+    if (updated.data.status === "PENDING_APPROVAL") {
+      router.push(`/approvals/${quoteId}`);
+    } else {
+      router.push(`/quotations`);
+    }
+  }
+
+  async function handleSendToPortal() {
+    await mutateQuote(`/v1/quotations/${quoteId}/send`, {
+      method: "POST",
     });
   }
 
   function handleAddUpsell(suggestion: UpsellSuggestion) {
-    setLines((prev) => [
-      ...prev,
-      {
-        id: `l_upsell_${Date.now()}`,
-        productId: suggestion.product_id,
-        productName: suggestion.product_name,
-        sku: suggestion.sku,
-        category: (suggestion.category_name as any) || "Service",
-        unitPrice: 34000,
-        costPrice: 18000,
-        qty: 1,
-        discountPct: 0,
-        taxRatePct: 18,
-        lineType: "ONE_TIME",
-      },
-    ]);
+    mutateQuote(`/v1/quotations/${quoteId}/lines`, {
+      method: "POST",
+      body: JSON.stringify({
+        product_id: suggestion.product_id,
+        qty: "1",
+        discount_pct: "0",
+      }),
+    });
   }
 
   function copyPortalLink() {
-    const token = "pt_acme_839f201d4a67b8e";
-    const portalUrl = `${window.location.origin}/portal/q/${token}`;
+    if (!quote?.portal_token) return;
+    const portalUrl = `${window.location.origin}/portal/q/${quote.portal_token}`;
     navigator.clipboard.writeText(portalUrl);
     setPortalCopied(true);
     setTimeout(() => setPortalCopied(false), 3000);
   }
 
-  function handleSubmitQuote() {
-    if (totals.requiredLevel === "FINANCE" || totals.requiredLevel === "MANAGER") {
-      setSubmittedStatus("PENDING_APPROVAL");
-      router.push(`/approvals/${quoteId}`);
-    } else {
-      setSubmittedStatus("APPROVED");
-      router.push(`/fulfillment/${quoteId}`);
-    }
-  }
-
-  const filteredCatalog = CATALOG.filter((p) => {
+  const filteredCatalog = catalog.filter((p) => {
+    const s = catalogSearch.toLowerCase();
     const matchSearch =
-      p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-      p.sku.toLowerCase().includes(catalogSearch.toLowerCase());
+      !s ||
+      p.name.toLowerCase().includes(s) ||
+      p.sku.toLowerCase().includes(s);
     const matchCategory =
       categoryTab === "ALL" ||
-      p.category.toUpperCase() === categoryTab.toUpperCase();
+      p.category_name.toUpperCase() === categoryTab.toUpperCase();
     return matchSearch && matchCategory;
   });
+
+  // Loading state
+  if (quoteLoading || !quote) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/quotations"
+            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white shadow-xs hover:bg-cream transition-colors text-ink"
+          >
+            <ArrowLeft className="size-4" />
+          </Link>
+          <div>
+            <div className="h-7 w-64 rounded bg-ink/5 animate-pulse" />
+            <div className="mt-2 h-4 w-40 rounded bg-ink/5 animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="h-[740px] rounded-[24px] bg-ink/5 animate-pulse lg:col-span-3" />
+          <div className="h-[740px] rounded-[24px] bg-ink/5 animate-pulse lg:col-span-5" />
+          <div className="space-y-4 lg:col-span-4">
+            <div className="h-80 rounded-[24px] bg-ink/5 animate-pulse" />
+            <div className="h-40 rounded-[24px] bg-ink/5 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const lines = quote.lines;
+  const totals = quote.totals;
+  const risk = quote.risk;
+  const isDraft = quote.status === "DRAFT";
 
   return (
     <div className="space-y-6">
@@ -357,49 +198,72 @@ export default function QuotationBuilderPage({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif text-[24px] font-medium tracking-tight text-ink sm:text-[28px]">
-                {quoteId} &middot; {customerName}
+                {quote.reference} &middot; {quote.customer_name}
               </h1>
+              <StatusBadge status={quote.status} size="sm" />
               <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900 border border-amber-500/20">
-                {customerTier} Customer (15% Discretion)
+                {quote.customer_tier} Customer
               </span>
             </div>
             <p className="text-[12.5px] text-mist">
-              Created by J. Rao &middot; Last modified 4 mins ago
+              Created by {quote.rep_name} &middot; Version {quote.version ?? 1}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={copyPortalLink}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors"
-          >
-            {portalCopied ? (
-              <>
-                <CheckCircle className="size-3.5 text-emerald-600" />
-                Copied Link!
-              </>
-            ) : (
-              <>
-                <Copy className="size-3.5 text-mist" />
-                Customer Portal Link
-              </>
-            )}
-          </button>
+          {quote.portal_token && (
+            <>
+              <button
+                type="button"
+                onClick={copyPortalLink}
+                className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors"
+              >
+                {portalCopied ? (
+                  <>
+                    <CheckCircle className="size-3.5 text-emerald-600" />
+                    Copied Link!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3.5 text-mist" />
+                    Customer Portal Link
+                  </>
+                )}
+              </button>
 
-          <Link
-            href={`/portal/q/pt_acme_839f201d4a67b8e`}
-            target="_blank"
-            className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-white px-3 py-2 text-[12.5px] font-medium text-mist hover:text-ink transition-colors"
-            title="Open customer portal in isolated view"
-          >
-            <ExternalLink className="size-3.5" />
-          </Link>
+              <Link
+                href={`/portal/q/${quote.portal_token}`}
+                target="_blank"
+                className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-white px-3 py-2 text-[12.5px] font-medium text-mist hover:text-ink transition-colors"
+                title="Open customer portal in isolated view"
+              >
+                <ExternalLink className="size-3.5" />
+              </Link>
+            </>
+          )}
+
+          {!quote.portal_token && isDraft && (
+            <button
+              type="button"
+              onClick={handleSendToPortal}
+              disabled={mutation.loading}
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors disabled:opacity-50"
+            >
+              <Send className="size-3.5" />
+              Send to Customer Portal
+            </button>
+          )}
         </div>
       </div>
 
       <LifecycleBar currentStage="PRICING" />
+
+      {mutation.error && (
+        <div className="rounded-[18px] bg-rose-50 p-3 border border-rose-200 text-[13px] text-rose-900">
+          <strong>Error:</strong> {mutation.error.message}
+        </div>
+      )}
 
       {/* ASYMMETRIC 3-PANEL WORKSPACE */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -419,7 +283,6 @@ export default function QuotationBuilderPage({
               className="mt-3 w-full rounded-full bg-ink/[0.03] px-3 py-1.5 text-[12px] border border-ink/6 focus:outline-hidden"
             />
 
-            {/* Category tabs */}
             <div className="mt-2.5 flex items-center gap-1 overflow-x-auto pb-1">
               {["ALL", "Hardware", "Service", "Subscription"].map((tab) => (
                 <button
@@ -450,20 +313,23 @@ export default function QuotationBuilderPage({
                       {product.name}
                     </h4>
                     <span className="text-[9.5px] uppercase font-bold px-1.5 py-0.5 rounded bg-ink/5 text-mist">
-                      {product.category}
+                      {product.category_name}
                     </span>
                   </div>
-                  <p className="text-[11px] text-mist mt-1">{product.stock}</p>
+                  <p className="text-[11px] text-mist mt-1">
+                    {product.stock_total > 0 ? `${product.stock_total} units` : "Backorder"}
+                  </p>
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-ink/6">
                   <span className="font-mono text-[12px] font-semibold tabular-nums text-ink">
-                    &#8377;{product.unitPrice.toLocaleString("en-IN")}
+                    {inr(product.unit_price)}
                   </span>
                   <button
                     type="button"
                     onClick={() => addProductToCart(product)}
-                    className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium text-bone hover:bg-ink/90 transition-colors"
+                    disabled={!isDraft || mutation.loading}
+                    className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
                   >
                     <Plus className="size-3" /> Add
                   </button>
@@ -482,7 +348,7 @@ export default function QuotationBuilderPage({
                   Quotation Cart
                 </h2>
                 <p className="text-[12px] text-mist">
-                  {totals.computedLines.length} line items configured
+                  {lines.length} line items configured
                 </p>
               </div>
 
@@ -491,118 +357,141 @@ export default function QuotationBuilderPage({
                   Net Cart Value
                 </span>
                 <p className="font-mono text-[18px] font-serif font-semibold text-ink tabular-nums">
-                  &#8377;{totals.finalNet.toLocaleString("en-IN")}
+                  {inr(totals.net_subtotal)}
                 </p>
               </div>
             </div>
 
             {/* Lines List */}
             <div className="mt-4 space-y-3 max-h-[460px] overflow-y-auto pr-1">
-              {totals.computedLines.map((line) => (
-                <div
-                  key={line.id}
-                  className={`rounded-[18px] p-3.5 border transition-all ${
-                    line.isOver
-                      ? "border-amber-500/40 bg-amber-500/[0.04]"
-                      : "border-ink/8 bg-white shadow-2xs"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[13.5px] text-ink">
-                          {line.productName}
+              {lines.map((line) => {
+                const riskLine = risk.breakdown.find((r) => r.line_id === line.id);
+                const isOver = riskLine?.is_over ?? false;
+                return (
+                  <div
+                    key={line.id}
+                    className={`rounded-[18px] p-3.5 border transition-all ${
+                      isOver
+                        ? "border-amber-500/40 bg-amber-500/[0.04]"
+                        : "border-ink/8 bg-white shadow-2xs"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-[13.5px] text-ink">
+                            {line.product_name}
+                          </span>
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-ink/5 text-mist">
+                            {line.category_name}
+                          </span>
+                        </div>
+                        <p className="font-mono text-[11px] text-mist">
+                          {line.sku} &middot; List: {inr(line.unit_price)} each
+                        </p>
+                      </div>
+
+                      {isDraft && (
+                        <button
+                          type="button"
+                          onClick={() => removeLine(line.id)}
+                          disabled={mutation.loading}
+                          className="text-mist hover:text-rose-600 transition-colors p-1 disabled:opacity-50"
+                          title="Remove line item"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Qty & Discount Controls */}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-ink/6">
+                      {/* Qty Stepper */}
+                      <div className="flex items-center gap-1.5 rounded-full border border-ink/10 bg-cream/60 px-2 py-0.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateLine(
+                              line.id,
+                              String(Math.max(1, parseInt(line.qty) - 1)),
+                              line.line_discount_pct
+                            )
+                          }
+                          disabled={!isDraft || mutation.loading}
+                          className="text-mist hover:text-ink transition-colors disabled:opacity-50"
+                        >
+                          <Minus className="size-3" />
+                        </button>
+                        <span className="font-mono text-[12px] font-semibold px-2 tabular-nums">
+                          {line.qty}
                         </span>
-                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-ink/5 text-mist">
-                          {line.category}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateLine(
+                              line.id,
+                              String(parseInt(line.qty) + 1),
+                              line.line_discount_pct
+                            )
+                          }
+                          disabled={!isDraft || mutation.loading}
+                          className="text-mist hover:text-ink transition-colors disabled:opacity-50"
+                        >
+                          <Plus className="size-3" />
+                        </button>
+                      </div>
+
+                      {/* Discount Input */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11.5px] text-mist font-medium">
+                          Disc %:
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={line.line_discount_pct}
+                          onChange={(e) =>
+                            updateLine(line.id, line.qty, e.target.value || "0")
+                          }
+                          disabled={!isDraft}
+                          className={`w-14 rounded-md px-1.5 py-0.5 text-right font-mono text-[12.5px] font-semibold border focus:outline-hidden ${
+                            isOver
+                              ? "border-amber-500 bg-amber-50 text-amber-900"
+                              : "border-ink/15 bg-white text-ink"
+                          } disabled:opacity-60`}
+                        />
+                      </div>
+
+                      {/* Line Total & Line Margin */}
+                      <div className="text-right">
+                        <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
+                          {inr(line.net_amount)}
+                        </span>
+                        <span className="ml-1.5 text-[11px] font-mono font-medium text-emerald-800">
+                          ({line.margin_pct}% mg)
                         </span>
                       </div>
-                      <p className="font-mono text-[11px] text-mist">
-                        {line.sku} &middot; List: &#8377;
-                        {line.unitPrice.toLocaleString("en-IN")} each
-                      </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => removeLine(line.id)}
-                      className="text-mist hover:text-rose-600 transition-colors p-1"
-                      title="Remove line item"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
+                    {/* Ceiling Violation Warning Box */}
+                    {isOver && riskLine && (
+                      <div className="mt-2 rounded-lg bg-amber-500/10 p-2 text-[11.5px] text-amber-900 border border-amber-500/20 flex items-start gap-1.5">
+                        <ShieldAlert className="size-3.5 text-amber-700 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>Exceeds category discretion:</strong> Allowed{" "}
+                          {riskLine.allowed_pct}% ({line.category_name}), Applied{" "}
+                          {riskLine.given_pct}%.{" "}
+                          <strong>+{riskLine.overage_pts}pt over limit.</strong>{" "}
+                          Will auto-route to Approvals.
+                        </span>
+                      </div>
+                    )}
                   </div>
+                );
+              })}
 
-                  {/* Qty & Discount Controls */}
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-ink/6">
-                    {/* Qty Stepper */}
-                    <div className="flex items-center gap-1.5 rounded-full border border-ink/10 bg-cream/60 px-2 py-0.5">
-                      <button
-                        type="button"
-                        onClick={() => updateQty(line.id, -1)}
-                        className="text-mist hover:text-ink transition-colors"
-                      >
-                        <Minus className="size-3" />
-                      </button>
-                      <span className="font-mono text-[12px] font-semibold px-2 tabular-nums">
-                        {line.qty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => updateQty(line.id, 1)}
-                        className="text-mist hover:text-ink transition-colors"
-                      >
-                        <Plus className="size-3" />
-                      </button>
-                    </div>
-
-                    {/* Discount Input */}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11.5px] text-mist font-medium">
-                        Disc %:
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={line.discountPct}
-                        onChange={(e) =>
-                          updateDiscount(line.id, parseFloat(e.target.value) || 0)
-                        }
-                        className={`w-14 rounded-md px-1.5 py-0.5 text-right font-mono text-[12.5px] font-semibold border focus:outline-hidden ${
-                          line.isOver
-                            ? "border-amber-500 bg-amber-50 text-amber-900"
-                            : "border-ink/15 bg-white text-ink"
-                        }`}
-                      />
-                    </div>
-
-                    {/* Line Total & Line Margin */}
-                    <div className="text-right">
-                      <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
-                        &#8377;{line.lineNet.toLocaleString("en-IN")}
-                      </span>
-                      <span className="ml-1.5 text-[11px] font-mono font-medium text-emerald-800">
-                        ({line.lineMarginPct.toFixed(0)}% mg)
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Ceiling Violation Warning Box */}
-                  {line.isOver && (
-                    <div className="mt-2 rounded-lg bg-amber-500/10 p-2 text-[11.5px] text-amber-900 border border-amber-500/20 flex items-start gap-1.5">
-                      <ShieldAlert className="size-3.5 text-amber-700 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Exceeds category discretion:</strong> Allowed{" "}
-                        {line.allowedCeiling}% ({line.category}), Applied{" "}
-                        {line.discountPct}%. <strong>+{line.overagePts}pt over limit.</strong> Will auto-route to Approvals.
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {totals.computedLines.length === 0 && (
+              {lines.length === 0 && (
                 <div className="flex h-40 flex-col items-center justify-center rounded-[18px] border border-dashed border-ink/15 text-center p-4">
                   <p className="text-[13px] font-medium text-ink">
                     Quotation cart is empty
@@ -615,62 +504,65 @@ export default function QuotationBuilderPage({
             </div>
 
             {/* Order Level Discount */}
-            <div className="mt-4 pt-3 border-t border-ink/6 flex items-center justify-between text-[12.5px]">
-              <span className="text-mist font-medium">
-                Overall Order Discount (%):
-              </span>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={orderDiscountPct}
-                  onChange={(e) =>
-                    setOrderDiscountPct(parseFloat(e.target.value) || 0)
-                  }
-                  className="w-16 rounded-md border border-ink/15 bg-white px-2 py-1 text-right font-mono text-[12.5px] font-semibold focus:outline-hidden"
-                />
-                <span className="font-mono text-mist">%</span>
+            {isDraft && (
+              <div className="mt-4 pt-3 border-t border-ink/6 flex items-center justify-between text-[12.5px]">
+                <span className="text-mist font-medium">
+                  Overall Order Discount (%):
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={quote.order_discount_pct}
+                    onChange={(e) => setOrderDiscount(e.target.value || "0")}
+                    className="w-16 rounded-md border border-ink/15 bg-white px-2 py-1 text-right font-mono text-[12.5px] font-semibold focus:outline-hidden"
+                  />
+                  <span className="font-mono text-mist">%</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Workflow Action Bar */}
-          <div className="mt-6 pt-4 border-t border-ink/8 space-y-2">
-            <button
-              type="button"
-              onClick={handleSubmitQuote}
-              className={`w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-[13.5px] font-semibold transition-all shadow-sm ${
-                totals.requiredLevel === "FINANCE"
-                  ? "bg-rose-700 text-white hover:bg-rose-800"
-                  : totals.requiredLevel === "MANAGER"
-                  ? "bg-amber-600 text-white hover:bg-amber-700"
-                  : "bg-ink text-bone hover:bg-ink/90"
-              }`}
-            >
-              {totals.requiredLevel === "FINANCE" ? (
-                <>
-                  <ShieldAlert className="size-4" />
-                  Submit for Approval (Manager + Finance) &rarr;
-                </>
-              ) : totals.requiredLevel === "MANAGER" ? (
-                <>
-                  <Clock className="size-4" />
-                  Submit for Approval (Sales Manager) &rarr;
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="size-4" />
-                  Submit &amp; Move to Fulfillment &rarr;
-                </>
-              )}
-            </button>
+          {isDraft && (
+            <div className="mt-6 pt-4 border-t border-ink/8 space-y-2">
+              <button
+                type="button"
+                onClick={handleSubmitQuote}
+                disabled={mutation.loading || lines.length === 0}
+                className={`w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-[13.5px] font-semibold transition-all shadow-sm disabled:opacity-50 ${
+                  risk.required_level === "FINANCE"
+                    ? "bg-rose-700 text-white hover:bg-rose-800"
+                    : risk.required_level === "MANAGER"
+                    ? "bg-amber-600 text-white hover:bg-amber-700"
+                    : "bg-ink text-bone hover:bg-ink/90"
+                }`}
+              >
+                {risk.required_level === "FINANCE" ? (
+                  <>
+                    <ShieldAlert className="size-4" />
+                    Submit for Approval (Manager + Finance) &rarr;
+                  </>
+                ) : risk.required_level === "MANAGER" ? (
+                  <>
+                    <Clock className="size-4" />
+                    Submit for Approval (Sales Manager) &rarr;
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="size-4" />
+                    Submit &amp; Move to Fulfillment &rarr;
+                  </>
+                )}
+              </button>
 
-            <div className="flex items-center justify-between text-[11.5px] text-mist px-1">
-              <span>Status: Draft (Unsaved)</span>
-              <span>Blended Engine: Auto-Routing Active</span>
+              <div className="flex items-center justify-between text-[11.5px] text-mist px-1">
+                <span>Status: {quote.status}</span>
+                <span>Blended Engine: Auto-Routing Active</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* PANEL 3: FINANCIAL SUMMARY, LIVE MARGIN & INTELLIGENCE (4 cols) */}
@@ -685,51 +577,48 @@ export default function QuotationBuilderPage({
               <div className="flex justify-between">
                 <dt className="text-mist">List Subtotal</dt>
                 <dd className="font-mono tabular-nums text-ink">
-                  &#8377;{totals.listSubtotal.toLocaleString("en-IN")}
+                  {inr(totals.list_subtotal)}
                 </dd>
               </div>
 
               <div className="flex justify-between text-amber-800 font-medium">
                 <dt>Discount Reductions</dt>
                 <dd className="font-mono tabular-nums">
-                  -&#8377;
-                  {(totals.lineDiscountTotal + totals.orderDiscountAmt).toLocaleString(
-                    "en-IN"
-                  )}
+                  -{inr(totals.discount_total)}
                 </dd>
               </div>
 
               <div className="flex justify-between">
                 <dt className="text-mist">Net Subtotal</dt>
                 <dd className="font-mono tabular-nums text-ink font-semibold">
-                  &#8377;{totals.finalNet.toLocaleString("en-IN")}
+                  {inr(totals.net_subtotal)}
                 </dd>
               </div>
 
               <div className="flex justify-between">
-                <dt className="text-mist">Applicable GST (18%)</dt>
+                <dt className="text-mist">Applicable GST</dt>
                 <dd className="font-mono tabular-nums text-ink">
-                  &#8377;{totals.finalTax.toLocaleString("en-IN")}
+                  {inr(totals.tax_total)}
                 </dd>
               </div>
 
               <div className="pt-2 border-t border-ink/8 flex justify-between text-[15px] font-semibold">
                 <dt className="text-ink">Grand Total</dt>
                 <dd className="font-mono text-ink tabular-nums">
-                  &#8377;{totals.grandTotal.toLocaleString("en-IN")}
+                  {inr(totals.grand_total)}
                 </dd>
               </div>
 
               <div className="pt-2 border-t border-ink/4 flex justify-between text-[11.5px] text-mist">
                 <dt>One-time items:</dt>
                 <dd className="font-mono tabular-nums font-medium">
-                  &#8377;{totals.oneTimeTotal.toLocaleString("en-IN")}
+                  {inr(totals.one_time_total)}
                 </dd>
               </div>
               <div className="flex justify-between text-[11.5px] text-mist">
                 <dt>Recurring subscriptions:</dt>
                 <dd className="font-mono tabular-nums font-medium">
-                  &#8377;{totals.recurringTotal.toLocaleString("en-IN")}
+                  {inr(totals.recurring_total)}
                 </dd>
               </div>
             </dl>
@@ -737,7 +626,7 @@ export default function QuotationBuilderPage({
             {/* Live Margin Indicator Bar */}
             <div className="mt-4 pt-3 border-t border-ink/6">
               <MarginBar
-                marginPct={totals.totalMarginPct}
+                marginPct={parseFloat(totals.margin_pct) || 0}
                 targetPct={25}
                 floorPct={12}
               />
@@ -747,9 +636,9 @@ export default function QuotationBuilderPage({
           {/* Governance Risk Verdict Card */}
           <div
             className={`rounded-[24px] p-5 border shadow-xs transition-all ${
-              totals.requiredLevel === "FINANCE"
+              risk.required_level === "FINANCE"
                 ? "bg-rose-50/70 border-rose-200"
-                : totals.requiredLevel === "MANAGER"
+                : risk.required_level === "MANAGER"
                 ? "bg-amber-50/70 border-amber-200"
                 : "bg-emerald-50/70 border-emerald-200"
             }`}
@@ -759,18 +648,18 @@ export default function QuotationBuilderPage({
                 Governance Determination
               </h3>
               <RiskBadge
-                score={totals.blendedRiskScore}
-                requiredLevel={totals.requiredLevel}
+                score={risk.blended_score}
+                requiredLevel={risk.required_level}
                 size="sm"
               />
             </div>
 
             <p className="mt-2.5 text-[12px] leading-relaxed text-ink/80">
-              {totals.rationale}
+              {risk.rationale}
             </p>
 
             <div className="mt-3 pt-2.5 border-t border-ink/6 flex items-center justify-between text-[11.5px] text-mist">
-              <span>Max line overage: +{totals.maxLineOverage}pt</span>
+              <span>Max line overage: +{risk.max_line_overage}pt</span>
               <Link
                 href={`/approvals/${quoteId}`}
                 className="font-semibold text-ink hover:underline"
@@ -780,7 +669,7 @@ export default function QuotationBuilderPage({
             </div>
           </div>
 
-          {/* Smart Recommendations Upsell Panel (SALES-06) */}
+          {/* Smart Recommendations Upsell Panel */}
           <UpsellPanel onAddSuggestion={handleAddUpsell} />
         </div>
       </div>

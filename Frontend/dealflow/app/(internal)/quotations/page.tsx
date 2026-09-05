@@ -2,23 +2,26 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, LayoutList, Columns, Search, Filter } from "lucide-react";
+import { Plus, LayoutList, Columns, Search } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { RiskBadge } from "@/components/ui/risk-badge";
-import { MarginBar } from "@/components/ui/margin-bar";
-import { quotes, QuoteRow } from "@/lib/demo/dashboard";
+import { useFetch, inr, timeAgo } from "@/lib/hooks";
+import type { QuotationSummary } from "@/lib/types";
 
 type ViewMode = "table" | "kanban";
 
 const KANBAN_COLUMNS = [
-  { id: "Draft", title: "Draft", bg: "bg-ink/[0.02]" },
-  { id: "Pending Approval", title: "Pending Approval", bg: "bg-amber-500/[0.04]" },
-  { id: "Under negotiation", title: "Under Negotiation", bg: "bg-purple-500/[0.04]" },
-  { id: "Approved", title: "Approved / Ready", bg: "bg-blue-500/[0.04]" },
-  { id: "Confirmed", title: "Confirmed / Won", bg: "bg-emerald-500/[0.04]" },
+  { id: "DRAFT", title: "Draft", bg: "bg-ink/[0.02]" },
+  { id: "PENDING_APPROVAL", title: "Pending Approval", bg: "bg-amber-500/[0.04]" },
+  { id: "UNDER_NEGOTIATION", title: "Under Negotiation", bg: "bg-purple-500/[0.04]" },
+  { id: "APPROVED", title: "Approved / Ready", bg: "bg-blue-500/[0.04]" },
+  { id: "CONFIRMED", title: "Confirmed / Won", bg: "bg-emerald-500/[0.04]" },
 ];
 
 export default function QuotationsPage() {
+  const { data: res, loading } = useFetch<{ data: QuotationSummary[] }>("/v1/quotations");
+  const quotes = res?.data ?? [];
+
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("ALL");
@@ -26,22 +29,29 @@ export default function QuotationsPage() {
 
   const filteredQuotes = useMemo(() => {
     return quotes.filter((q) => {
+      const s = search.toLowerCase();
       const matchSearch =
-        q.id.toLowerCase().includes(search.toLowerCase()) ||
-        q.customer.toLowerCase().includes(search.toLowerCase()) ||
-        q.owner.toLowerCase().includes(search.toLowerCase());
+        !s ||
+        q.reference.toLowerCase().includes(s) ||
+        q.customer_name.toLowerCase().includes(s) ||
+        q.rep_name.toLowerCase().includes(s);
 
       const matchStage =
         stageFilter === "ALL" ||
-        (stageFilter === "PENDING" &&
-          (q.status === "Pending Manager" || q.status === "Pending Finance")) ||
-        (stageFilter === "DRAFT" && q.status === "Draft") ||
-        (stageFilter === "NEGOTIATION" && q.status === "Under negotiation") ||
-        (stageFilter === "APPROVED" && q.status === "Approved");
+        (stageFilter === "PENDING" && q.status === "PENDING_APPROVAL") ||
+        q.status === stageFilter;
 
-      return matchSearch && matchStage;
+      const matchTier = tierFilter === "ALL" || q.customer_tier === tierFilter;
+
+      return matchSearch && matchStage && matchTier;
     });
-  }, [search, stageFilter]);
+  }, [quotes, search, stageFilter, tierFilter]);
+
+  const stageCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    quotes.forEach((q) => { m[q.status] = (m[q.status] || 0) + 1; });
+    return m;
+  }, [quotes]);
 
   return (
     <div className="space-y-6">
@@ -113,10 +123,10 @@ export default function QuotationsPage() {
           {/* Stage Filter Pills */}
           <div className="flex items-center rounded-full bg-ink/[0.03] p-1 border border-ink/6">
             {[
-              { id: "ALL", label: "All (6)" },
-              { id: "DRAFT", label: "Draft" },
-              { id: "PENDING", label: "Pending Approval" },
-              { id: "NEGOTIATION", label: "Negotiating" },
+              { id: "ALL", label: `All (${quotes.length})` },
+              { id: "DRAFT", label: `Draft (${stageCounts["DRAFT"] || 0})` },
+              { id: "PENDING", label: `Pending (${stageCounts["PENDING_APPROVAL"] || 0})` },
+              { id: "UNDER_NEGOTIATION", label: "Negotiating" },
               { id: "APPROVED", label: "Approved" },
             ].map((st) => (
               <button
@@ -141,9 +151,9 @@ export default function QuotationsPage() {
             className="rounded-full border border-ink/10 bg-white px-3 py-1.5 text-[12px] text-ink font-medium focus:outline-hidden cursor-pointer"
           >
             <option value="ALL">All Customer Tiers</option>
-            <option value="GOLD">Gold Tier (15% Max)</option>
-            <option value="SILVER">Silver Tier (10% Max)</option>
-            <option value="BRONZE">Bronze Tier (5% Max)</option>
+            <option value="GOLD">Gold Tier</option>
+            <option value="SILVER">Silver Tier</option>
+            <option value="BRONZE">Bronze Tier</option>
           </select>
         </div>
       </div>
@@ -165,6 +175,17 @@ export default function QuotationsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">
+              {loading && (
+                <>
+                  {[1, 2, 3].map((i) => (
+                    <tr key={i}>
+                      <td colSpan={8} className="px-6 py-4">
+                        <div className="h-5 w-full rounded bg-ink/5 animate-pulse" />
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
               {filteredQuotes.map((q) => (
                 <tr
                   key={q.id}
@@ -172,14 +193,14 @@ export default function QuotationsPage() {
                 >
                   <td className="px-6 py-4 font-mono font-medium text-ink">
                     <Link href={`/quotations/${q.id}`} className="hover:underline">
-                      {q.id}
+                      {q.reference}
                     </Link>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-ink">{q.customer}</span>
+                      <span className="font-medium text-ink">{q.customer_name}</span>
                       <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-800 border border-amber-500/20">
-                        Gold
+                        {q.customer_tier}
                       </span>
                     </div>
                   </td>
@@ -187,13 +208,13 @@ export default function QuotationsPage() {
                     <StatusBadge status={q.status} size="sm" />
                   </td>
                   <td className="px-6 py-4 font-mono font-semibold tabular-nums text-ink">
-                    {q.amount}
+                    {inr(q.grand_total)}
                   </td>
                   <td className="px-6 py-4">
-                    <RiskBadge score={q.risk} size="sm" />
+                    <RiskBadge score={q.blended_risk_score} size="sm" />
                   </td>
-                  <td className="px-6 py-4 text-mist">{q.owner}</td>
-                  <td className="px-6 py-4 text-mist text-[12.5px]">{q.updated}</td>
+                  <td className="px-6 py-4 text-mist">{q.rep_name}</td>
+                  <td className="px-6 py-4 text-mist text-[12.5px]">{timeAgo(q.last_activity_at)}</td>
                   <td className="px-6 py-4 text-right">
                     <Link
                       href={`/quotations/${q.id}`}
@@ -204,23 +225,24 @@ export default function QuotationsPage() {
                   </td>
                 </tr>
               ))}
+              {!loading && filteredQuotes.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-mist">
+                    <p className="font-medium text-[14px] text-ink">No quotations match your filters</p>
+                    <p className="text-[12px] mt-0.5">Try adjusting the search or stage filter.</p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       ) : (
-        /* VIEW B: KANBAN PIPELINE VIEW (SALES-03) */
+        /* VIEW B: KANBAN PIPELINE VIEW */
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {KANBAN_COLUMNS.map((col) => {
             const colQuotes = quotes.filter((q) => {
-              if (col.id === "Draft") return q.status === "Draft";
-              if (col.id === "Pending Approval")
-                return (
-                  q.status === "Pending Manager" || q.status === "Pending Finance"
-                );
-              if (col.id === "Under negotiation")
-                return q.status === "Under negotiation";
-              if (col.id === "Approved") return q.status === "Approved";
-              return false;
+              // PENDING_APPROVAL covers both manager + finance pending
+              return q.status === col.id;
             });
 
             return (
@@ -246,20 +268,20 @@ export default function QuotationsPage() {
                     >
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-mono font-semibold text-mist group-hover:text-ink">
-                          {q.id}
+                          {q.reference}
                         </span>
-                        <span className="text-mist">{q.updated}</span>
+                        <span className="text-mist">{timeAgo(q.last_activity_at)}</span>
                       </div>
 
                       <p className="mt-1.5 font-medium text-[14px] text-ink group-hover:underline">
-                        {q.customer}
+                        {q.customer_name}
                       </p>
 
                       <div className="mt-3 flex items-center justify-between">
                         <span className="font-mono font-semibold tabular-nums text-[13.5px] text-ink">
-                          {q.amount}
+                          {inr(q.grand_total)}
                         </span>
-                        <RiskBadge score={q.risk} size="sm" />
+                        <RiskBadge score={q.blended_risk_score} size="sm" />
                       </div>
                     </Link>
                   ))}

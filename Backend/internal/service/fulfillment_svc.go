@@ -153,6 +153,60 @@ func (s *FulfillmentService) Get(ctx context.Context, actor auth.Principal, orde
 	return out, nil
 }
 
+// OrderSummary is a lightweight view of a sales order for listings.
+type OrderSummary struct {
+	ID                 int64
+	Reference          string
+	QuotationID        int64
+	QuotationReference string
+	CustomerID         int64
+	CustomerName       string
+	Status             string
+	PromisedDate       *time.Time
+	ConfirmedAt        *time.Time
+	CreatedAt          time.Time
+	ShipmentCount      int64
+	BackorderCount     int64
+}
+
+// List returns all sales orders ordered newest first.
+func (s *FulfillmentService) List(ctx context.Context, actor auth.Principal, limit int32) ([]OrderSummary, error) {
+	const query = `
+		SELECT so.id, so.reference, so.quotation_id, so.customer_id, so.status,
+		       so.promised_date, so.confirmed_at, so.created_at,
+		       q.reference AS quotation_reference, c.name AS customer_name,
+		       COALESCE(f.shipment_count, 0) AS shipment_count,
+		       COUNT(DISTINCT b.id) FILTER (WHERE b.status = 'OPEN') AS backorder_count
+		FROM sales_orders so
+		JOIN quotations q ON q.id = so.quotation_id
+		JOIN customers  c ON c.id = so.customer_id
+		LEFT JOIN fulfillments f ON f.sales_order_id = so.id
+		LEFT JOIN backorders   b ON b.sales_order_id = so.id
+		GROUP BY so.id, q.reference, c.name, f.shipment_count
+		ORDER BY so.id DESC
+		LIMIT $1`
+	rows, err := s.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, apierr.Internal(fmt.Errorf("list sales orders: %w", err))
+	}
+	defer rows.Close()
+
+	var out []OrderSummary
+	for rows.Next() {
+		var o OrderSummary
+		if err := rows.Scan(
+			&o.ID, &o.Reference, &o.QuotationID, &o.CustomerID, &o.Status,
+			&o.PromisedDate, &o.ConfirmedAt, &o.CreatedAt,
+			&o.QuotationReference, &o.CustomerName,
+			&o.ShipmentCount, &o.BackorderCount,
+		); err != nil {
+			return nil, apierr.Internal(fmt.Errorf("scan sales order: %w", err))
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
 // buildPlan loads demand, stock, and warehouses for an order and runs the
 // split engine. Called both by Suggest, which never writes, and by Accept,
 // which re-runs it against locked rows so the reservation matches exactly

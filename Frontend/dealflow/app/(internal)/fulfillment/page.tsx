@@ -1,47 +1,39 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { Package, Truck, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useFetch, timeAgo } from "@/lib/hooks";
 
-const ORDERS = [
-  {
-    id: "SO-9042",
-    quoteRef: "Q-1042",
-    customer: "Acme Corp",
-    destination: "Bengaluru, KA",
-    lineCount: 3,
-    status: "SUGGESTED",
-    shipmentCount: 2,
-    backorderCount: 1,
-    date: "Aug 22",
-  },
-  {
-    id: "SO-9038",
-    quoteRef: "Q-1031",
-    customer: "Beta Industries",
-    destination: "Mumbai, MH",
-    lineCount: 2,
-    status: "FULFILLED",
-    shipmentCount: 1,
-    backorderCount: 0,
-    date: "Aug 21",
-  },
-  {
-    id: "SO-9031",
-    quoteRef: "Q-1018",
-    customer: "Northwind Trading",
-    destination: "Delhi, DL",
-    lineCount: 4,
-    status: "BACKORDERED",
-    shipmentCount: 1,
-    backorderCount: 3,
-    date: "Aug 20",
-  },
-];
+interface OrderSummary {
+  id: number;
+  reference: string;
+  quotation_id: number;
+  quotation_reference: string;
+  customer_id: number;
+  customer_name: string;
+  status: string;
+  promised_date?: string | null;
+  confirmed_at?: string | null;
+  created_at: string;
+  shipment_count: number;
+  backorder_count: number;
+}
 
 export default function FulfillmentPage() {
+  const { data: res, loading, error } = useFetch<{ data: OrderSummary[] }>("/v1/orders");
+  const orders = res?.data ?? [];
+
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
+  const filteredOrders = useMemo(() => {
+    if (statusFilter === "ALL") return orders;
+    return orders.filter((o) => o.status === statusFilter);
+  }, [orders, statusFilter]);
+
+  const activeBackordersTotal = orders.reduce((sum, o) => sum + (o.backorder_count || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -57,74 +49,146 @@ export default function FulfillmentPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[12px] font-medium text-emerald-800 border border-emerald-500/20">
-            <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
-            Stock Synchronized: 3 Depots Live
-          </span>
+          {activeBackordersTotal > 0 ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1.5 text-[12px] font-medium text-amber-900 border border-amber-500/20">
+              <AlertCircle className="size-3.5 text-amber-700" />
+              {activeBackordersTotal} Backorder lines pending restock
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[12px] font-medium text-emerald-800 border border-emerald-500/20">
+              <CheckCircle2 className="size-3.5 text-emerald-600" />
+              All warehouse depots optimal
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Orders Table */}
-      <div className="overflow-hidden rounded-[24px] bg-white border border-ink/8 shadow-xs">
-        <table className="w-full text-left text-[13.5px]">
-          <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
-            <tr>
-              <th className="px-6 py-3.5">Order #</th>
-              <th className="px-6 py-3.5">Quote Ref</th>
-              <th className="px-6 py-3.5">Customer &amp; City</th>
-              <th className="px-6 py-3.5">Fulfillment Status</th>
-              <th className="px-6 py-3.5">Shipments</th>
-              <th className="px-6 py-3.5">Backorders</th>
-              <th className="px-6 py-3.5 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink/5">
-            {ORDERS.map((ord) => (
-              <tr
-                key={ord.id}
-                className="hover:bg-cream/40 transition-colors group cursor-pointer"
+      {/* Orders Ledger */}
+      <div className="rounded-[24px] bg-white border border-ink/8 shadow-xs overflow-hidden">
+        <div className="px-6 py-4 border-b border-ink/6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[17px] font-semibold text-ink">Confirmed Sales Orders</h2>
+            <p className="text-[12.5px] text-mist">
+              Orders created from confirmed quotations awaiting fulfillment routing.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-full bg-cream/40 p-1 border border-ink/8 text-[12px]">
+            {["ALL", "OPEN", "ALLOCATED", "FULFILLED"].map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(st)}
+                className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                  statusFilter === st
+                    ? "bg-ink text-bone shadow-xs"
+                    : "text-mist hover:text-ink"
+                }`}
               >
-                <td className="px-6 py-4 font-mono font-medium text-ink">
-                  <Link href={`/fulfillment/${ord.id}`} className="hover:underline">
-                    {ord.id}
-                  </Link>
-                </td>
-                <td className="px-6 py-4 font-mono text-mist text-[12.5px]">
-                  {ord.quoteRef}
-                </td>
-                <td className="px-6 py-4">
-                  <p className="font-medium text-ink">{ord.customer}</p>
-                  <p className="text-[11.5px] text-mist">{ord.destination}</p>
-                </td>
-                <td className="px-6 py-4">
-                  <StatusBadge status={ord.status} size="sm" />
-                </td>
-                <td className="px-6 py-4 font-mono text-[13px] text-ink font-semibold">
-                  {ord.shipmentCount} {ord.shipmentCount === 1 ? "depot" : "depots"}
-                </td>
-                <td className="px-6 py-4">
-                  {ord.backorderCount > 0 ? (
-                    <span className="text-[12px] font-semibold text-rose-700 font-mono">
-                      {ord.backorderCount} line backordered
-                    </span>
-                  ) : (
-                    <span className="text-[12px] text-emerald-700 font-medium">
-                      Zero backorder
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <Link
-                    href={`/fulfillment/${ord.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 shadow-xs transition-colors"
-                  >
-                    Manage Split <ArrowRight className="size-3" />
-                  </Link>
-                </td>
-              </tr>
+                {st === "ALL" ? `All (${orders.length})` : st}
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[13px]">
+            <thead className="text-[11.5px] font-semibold uppercase tracking-wider text-mist bg-ink/[0.02] border-b border-ink/6">
+              <tr>
+                <th className="px-6 py-3">Order Ref</th>
+                <th className="px-6 py-3">Quotation</th>
+                <th className="px-6 py-3">Customer</th>
+                <th className="px-6 py-3">Fulfillment Status</th>
+                <th className="px-6 py-3">Shipments</th>
+                <th className="px-6 py-3">Backorders</th>
+                <th className="px-6 py-3">Confirmed Date</th>
+                <th className="px-6 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink/5">
+              {loading && orders.length === 0 && (
+                <>
+                  {[1, 2, 3].map((i) => (
+                    <tr key={i}>
+                      <td colSpan={8} className="px-6 py-4">
+                        <div className="h-5 w-full rounded bg-ink/5 animate-pulse" />
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
+
+              {filteredOrders.map((order) => (
+                <tr
+                  key={order.id}
+                  className="hover:bg-cream/40 transition-colors group cursor-pointer"
+                >
+                  <td className="px-6 py-4 font-mono font-medium text-ink">
+                    <Link href={`/fulfillment/${order.id}`} className="hover:underline">
+                      {order.reference}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-4 font-mono text-[12.5px] text-mist">
+                    <Link href={`/quotations/${order.quotation_id}`} className="hover:underline text-ink">
+                      {order.quotation_reference}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-4 font-medium text-ink">
+                    {order.customer_name}
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge status={order.status} size="sm" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-ink">
+                      <Truck className="size-3.5 text-mist" />
+                      {order.shipment_count > 0 ? `${order.shipment_count} shipments` : "Unsplit"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {order.backorder_count > 0 ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 text-[11.5px]">
+                        <Package className="size-3" />
+                        {order.backorder_count} backordered
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-emerald-800 font-medium">None (In Stock)</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-mist text-[12px]">
+                    {timeAgo(order.created_at)}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <Link
+                      href={`/fulfillment/${order.id}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors shadow-xs"
+                    >
+                      Open Plan <ArrowRight className="size-3" />
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+
+              {!loading && filteredOrders.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-mist">
+                    <Truck className="size-8 mx-auto mb-2 text-mist opacity-60" />
+                    <p className="font-medium text-[14px] text-ink">No sales orders found</p>
+                    <p className="text-[12.5px] mt-0.5">
+                      Confirm an approved quotation to initialize its warehouse split plan.
+                    </p>
+                    <Link
+                      href="/quotations"
+                      className="mt-3 inline-flex items-center gap-1 rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-bone"
+                    >
+                      View Quotations &rarr;
+                    </Link>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

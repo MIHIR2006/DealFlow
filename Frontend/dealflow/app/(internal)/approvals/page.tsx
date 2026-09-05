@@ -2,24 +2,22 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { ShieldCheck, Filter, Clock, AlertTriangle, ArrowRight } from "lucide-react";
+import { ShieldCheck, AlertTriangle, ArrowRight } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { RiskBadge } from "@/components/ui/risk-badge";
-import { quotes } from "@/lib/demo/dashboard";
+import { useFetch, inr } from "@/lib/hooks";
+import type { ApprovalInboxRow } from "@/lib/types";
 
 export default function ApprovalsInboxPage() {
+  const { data: res, loading } = useFetch<{ data: ApprovalInboxRow[] }>("/v1/approvals");
+  const allPending = res?.data ?? [];
+
   const [roleFilter, setRoleFilter] = useState<"ALL" | "MANAGER" | "FINANCE">("ALL");
 
   const pendingQuotes = useMemo(() => {
-    return quotes.filter((q) => {
-      const isPending =
-        q.status === "Pending Manager" || q.status === "Pending Finance";
-      if (!isPending) return false;
-      if (roleFilter === "MANAGER") return q.status === "Pending Manager";
-      if (roleFilter === "FINANCE") return q.status === "Pending Finance";
-      return true;
-    });
-  }, [roleFilter]);
+    if (roleFilter === "ALL") return allPending;
+    return allPending.filter((q) => q.required_level === roleFilter);
+  }, [allPending, roleFilter]);
 
   return (
     <div className="space-y-6">
@@ -36,17 +34,16 @@ export default function ApprovalsInboxPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Role Filter Pills */}
           <div className="flex items-center rounded-full bg-white p-1 border border-ink/8 shadow-xs">
             {[
-              { id: "ALL", label: `All Pending (${quotes.filter(q => q.status.includes("Pending")).length})` },
+              { id: "ALL", label: `All Pending (${allPending.length})` },
               { id: "MANAGER", label: "Sales Manager (Step 1)" },
               { id: "FINANCE", label: "Finance Review (Step 2)" },
             ].map((rf) => (
               <button
                 key={rf.id}
                 type="button"
-                onClick={() => setRoleFilter(rf.id as any)}
+                onClick={() => setRoleFilter(rf.id as "ALL" | "MANAGER" | "FINANCE")}
                 className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
                   roleFilter === rf.id
                     ? "bg-ink text-bone shadow-xs"
@@ -83,26 +80,37 @@ export default function ApprovalsInboxPage() {
               <th className="px-6 py-3.5">Required Step</th>
               <th className="px-6 py-3.5">Order Amount</th>
               <th className="px-6 py-3.5">Blended Risk</th>
-              <th className="px-6 py-3.5">Violation Summary</th>
+              <th className="px-6 py-3.5">Approval Level</th>
               <th className="px-6 py-3.5 text-right">Review Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink/5">
+            {loading && (
+              <>
+                {[1, 2].map((i) => (
+                  <tr key={i}>
+                    <td colSpan={7} className="px-6 py-4">
+                      <div className="h-5 w-full rounded bg-ink/5 animate-pulse" />
+                    </td>
+                  </tr>
+                ))}
+              </>
+            )}
             {pendingQuotes.map((q) => (
               <tr
                 key={q.id}
                 className="hover:bg-cream/40 transition-colors group cursor-pointer"
               >
                 <td className="px-6 py-4 font-mono font-medium text-ink">
-                  <Link href={`/approvals/${q.id}`} className="hover:underline">
-                    {q.id}
+                  <Link href={`/approvals/${q.quotation_id}`} className="hover:underline">
+                    {q.reference}
                   </Link>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-ink">{q.customer}</span>
+                    <span className="font-medium text-ink">{q.customer_name}</span>
                     <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-800 border border-amber-500/20">
-                      Gold
+                      {q.customer_tier}
                     </span>
                   </div>
                 </td>
@@ -110,19 +118,17 @@ export default function ApprovalsInboxPage() {
                   <StatusBadge status={q.status} size="sm" />
                 </td>
                 <td className="px-6 py-4 font-mono font-semibold tabular-nums text-ink">
-                  {q.amount}
+                  {inr(q.grand_total)}
                 </td>
                 <td className="px-6 py-4">
-                  <RiskBadge score={q.risk} size="sm" />
+                  <RiskBadge score={q.blended_risk_score} size="sm" />
                 </td>
-                <td className="px-6 py-4 text-[12.5px] text-mist">
-                  {q.id === "Q-1042"
-                    ? "Setup Service: 18% given vs 10% allowed (+8pt)"
-                    : "Category ceiling exceeded on 2 lines"}
+                <td className="px-6 py-4 text-[12.5px] text-mist font-medium">
+                  {q.required_level === "FINANCE" ? "Manager + Finance" : "Manager Only"}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <Link
-                    href={`/approvals/${q.id}`}
+                    href={`/approvals/${q.quotation_id}`}
                     className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 shadow-xs transition-colors"
                   >
                     Open Review <ArrowRight className="size-3" />
@@ -131,7 +137,7 @@ export default function ApprovalsInboxPage() {
               </tr>
             ))}
 
-            {pendingQuotes.length === 0 && (
+            {!loading && pendingQuotes.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-6 py-12 text-center text-mist">
                   <ShieldCheck className="size-8 text-emerald-600 mx-auto mb-2 opacity-60" />

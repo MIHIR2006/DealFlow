@@ -10,6 +10,7 @@ import (
 	"dealflow360/backend/internal/platform/apierr"
 	"dealflow360/backend/internal/service"
 	"dealflow360/backend/internal/transport/http/dto"
+	"dealflow360/backend/internal/transport/http/middleware"
 )
 
 type fulfillmentHandler struct {
@@ -49,6 +50,42 @@ func (h fulfillmentHandler) confirm(c *gin.Context) {
 		return
 	}
 	OK(c, http.StatusCreated, orderDTO(order))
+}
+
+func (h fulfillmentHandler) list(c *gin.Context) {
+	actor, ok := middleware.PrincipalOf(c)
+	if !ok {
+		Fail(c, apierr.Unauthenticated(""))
+		return
+	}
+	limit := pageLimit(c)
+	orders, err := h.svc.List(c.Request.Context(), actor, limit)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	out := make([]dto.OrderSummary, 0, len(orders))
+	for _, o := range orders {
+		row := dto.OrderSummary{
+			ID: o.ID, Reference: o.Reference, QuotationID: o.QuotationID,
+			QuotationReference: o.QuotationReference,
+			CustomerID: o.CustomerID, CustomerName: o.CustomerName,
+			Status: o.Status, CreatedAt: iso(o.CreatedAt),
+			ShipmentCount: o.ShipmentCount, BackorderCount: o.BackorderCount,
+		}
+		if o.PromisedDate != nil {
+			d := iso(*o.PromisedDate)
+			row.PromisedDate = &d
+		}
+		if o.ConfirmedAt != nil {
+			d := iso(*o.ConfirmedAt)
+			row.ConfirmedAt = &d
+		}
+		out = append(out, row)
+	}
+
+	OK(c, http.StatusOK, Page[dto.OrderSummary]{Data: out})
 }
 
 func (h fulfillmentHandler) get(c *gin.Context) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useState, use, useMemo } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -9,12 +9,57 @@ import {
   Package,
   AlertTriangle,
   CheckCircle,
-  Sliders,
   Sparkles,
   Layers,
 } from "lucide-react";
 import { LifecycleBar } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useFetch, useMutation, inr } from "@/lib/hooks";
+
+interface FulfillmentLine {
+  warehouse_id: number;
+  warehouse_name: string;
+  product_id: number;
+  product_name: string;
+  qty: number;
+  shipment_group: number;
+}
+
+interface Backorder {
+  id?: number;
+  product_id: number;
+  product_name: string;
+  qty: number;
+  status?: string;
+}
+
+interface SalesOrder {
+  id: number;
+  reference: string;
+  quotation_id: number;
+  quotation_reference: string;
+  customer_id: number;
+  customer_name: string;
+  status: string;
+  promised_date?: string;
+  created_at: string;
+  fulfillment?: {
+    id: number;
+    strategy: string;
+    shipment_count: number;
+    estimated_cost: string;
+    lines: FulfillmentLine[];
+  };
+  backorders: Backorder[];
+}
+
+interface FulfillmentPlan {
+  strategy: string;
+  shipment_count: number;
+  estimated_cost: string;
+  allocations: FulfillmentLine[];
+  backorders: Backorder[];
+}
 
 export default function WarehouseSplitDetailPage({
   params,
@@ -22,25 +67,113 @@ export default function WarehouseSplitDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = use(params);
-  const orderId = resolvedParams.id || "SO-9042";
+  const orderId = resolvedParams.id;
 
-  const [splitAccepted, setSplitAccepted] = useState(false);
-  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
-  const [backorderConsolidated, setBackorderConsolidated] = useState(false);
-  const [stockArrivalTriggered, setStockArrivalTriggered] = useState(true);
+  const {
+    data: orderRes,
+    loading: orderLoading,
+    error: orderError,
+    refetch: refetchOrder,
+  } = useFetch<{ data: SalesOrder }>(`/v1/orders/${orderId}`);
+  const order = orderRes?.data;
 
-  // Allocations state
-  const [mumbaiQty, setMumbaiQty] = useState(8);
-  const [eastQty, setEastQty] = useState(2);
+  const isFulfilled = !!order?.fulfillment;
 
-  function handleAcceptSplit() {
-    setSplitAccepted(true);
+  // Suggest plan if not yet fulfilled
+  const {
+    data: planRes,
+    loading: planLoading,
+    refetch: refetchPlan,
+  } = useFetch<{ data: FulfillmentPlan }>(
+    isFulfilled ? null : `/v1/orders/${orderId}/fulfillment/suggest`
+  );
+  const plan = planRes?.data;
+
+  const { trigger: acceptSplit, loading: accepting } = useMutation();
+  const { trigger: consolidate, loading: consolidating } = useMutation();
+
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  async function handleAcceptSplit() {
+    try {
+      await acceptSplit(`/v1/orders/${orderId}/fulfillment`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setActionNotice("Fulfillment plan accepted and inventory reserved across depots!");
+      refetchOrder();
+    } catch (e: any) {
+      setActionNotice(`Error: ${e.message}`);
+    }
   }
 
-  function handleConsolidateBackorder() {
-    setBackorderConsolidated(true);
-    setStockArrivalTriggered(false);
+  async function handleConsolidate() {
+    try {
+      await consolidate(`/v1/orders/${orderId}/backorders/consolidate`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setActionNotice("Open backorders successfully consolidated with newly available stock!");
+      refetchOrder();
+    } catch (e: any) {
+      setActionNotice(`Consolidation check: ${e.message}`);
+    }
   }
+
+  const activeLines: FulfillmentLine[] = useMemo(() => {
+    if (order?.fulfillment?.lines?.length) return order.fulfillment.lines;
+    if (plan?.allocations?.length) return plan.allocations;
+    return [];
+  }, [order, plan]);
+
+  const activeBackorders: Backorder[] = useMemo(() => {
+    if (order?.backorders?.length) return order.backorders;
+    if (plan?.backorders?.length) return plan.backorders;
+    return [];
+  }, [order, plan]);
+
+  // Group lines by warehouse
+  const groupedByWarehouse = useMemo(() => {
+    const map = new Map<number, { name: string; lines: FulfillmentLine[] }>();
+    activeLines.forEach((line) => {
+      const entry = map.get(line.warehouse_id) || {
+        name: line.warehouse_name,
+        lines: [],
+      };
+      entry.lines.push(line);
+      map.set(line.warehouse_id, entry);
+    });
+    return Array.from(map.entries());
+  }, [activeLines]);
+
+  if (orderLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="size-6 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (orderError || !order) {
+    return (
+      <div className="space-y-4">
+        <Link
+          href="/fulfillment"
+          className="inline-flex items-center gap-1.5 text-[13px] text-mist hover:text-ink"
+        >
+          <ArrowLeft className="size-4" /> Back to Fulfillment
+        </Link>
+        <div className="rounded-[20px] bg-rose-50 border border-rose-200 p-6 text-center">
+          <p className="font-semibold text-rose-900">Failed to load sales order</p>
+          <p className="text-[13px] text-rose-700 mt-1">{orderError?.message ?? "Order not found"}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const shipmentCount = order.fulfillment?.shipment_count ?? plan?.shipment_count ?? 1;
+  const estimatedCost = order.fulfillment?.estimated_cost ?? plan?.estimated_cost ?? "0";
+  const strategy = order.fulfillment?.strategy ?? plan?.strategy ?? "GREEDY_SET_COVER";
 
   return (
     <div className="space-y-6">
@@ -56,297 +189,163 @@ export default function WarehouseSplitDetailPage({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
-                Fulfillment Plan: {orderId} (Acme Corp)
+                Fulfillment Plan: {order.reference} ({order.customer_name})
               </h1>
               <StatusBadge
-                status={splitAccepted ? "ALLOCATED" : "SUGGESTED"}
+                status={isFulfilled ? "ALLOCATED" : "SUGGESTED"}
                 size="sm"
               />
             </div>
             <p className="text-[12.5px] text-mist">
-              Destination: <strong>Bengaluru Hub, KA</strong> &middot; Promised
-              Delivery Date: <strong>Aug 28, 2026</strong>
+              Quotation:{" "}
+              <Link href={`/quotations/${order.quotation_id}`} className="hover:underline font-mono text-ink">
+                {order.quotation_reference}
+              </Link>{" "}
+              {order.promised_date && (
+                <>
+                  &middot; Promised Delivery:{" "}
+                  <strong>{new Date(order.promised_date).toLocaleDateString()}</strong>
+                </>
+              )}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setOverrideModalOpen(true)}
+          <Link
+            href={`/subscriptions/${order.id}`}
             className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink shadow-xs hover:bg-cream transition-colors"
           >
-            <Sliders className="size-3.5" />
-            Manual Override
-          </button>
+            View Billing &rarr;
+          </Link>
 
-          <button
-            type="button"
-            disabled={splitAccepted}
-            onClick={handleAcceptSplit}
-            className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-[13px] font-semibold shadow-xs transition-colors ${
-              splitAccepted
-                ? "bg-emerald-700 text-white cursor-default"
-                : "bg-ink text-bone hover:bg-ink/90"
-            }`}
-          >
-            <CheckCircle className="size-3.5" />
-            {splitAccepted ? "Split Confirmed & Reserved" : "Accept Suggested Split"}
-          </button>
+          {!isFulfilled ? (
+            <button
+              type="button"
+              disabled={accepting}
+              onClick={handleAcceptSplit}
+              className="inline-flex items-center gap-1.5 rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-bone hover:bg-ink/90 shadow-xs transition-colors disabled:opacity-50"
+            >
+              <CheckCircle className="size-3.5" />
+              {accepting ? "Reserving Stock..." : "Accept Suggested Split"}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 text-white px-4 py-2 text-[13px] font-semibold shadow-xs">
+              <CheckCircle className="size-3.5" />
+              Split Confirmed &amp; Stock Reserved
+            </span>
+          )}
         </div>
       </div>
 
-      <LifecycleBar currentStage="FULFILLMENT" />
+      <LifecycleBar currentStage="FULFILLMENT" quoteId={String(order.quotation_id)} />
+
+      {actionNotice && (
+        <div className="rounded-[18px] bg-emerald-500/10 p-4 border border-emerald-500/20 text-[13px] text-emerald-950 font-medium">
+          {actionNotice}
+        </div>
+      )}
 
       {/* Heuristic Evaluation Callout */}
       <div className="rounded-[20px] bg-white p-5 border border-ink/8 shadow-xs flex items-start gap-3">
         <Sparkles className="size-5 text-emerald-700 shrink-0 mt-0.5" />
         <div className="text-[13px] text-ink">
           <p className="font-semibold">
-            Heuristic Warehouse Split Decision (Objective: Fewest Shipments)
+            Heuristic Warehouse Split Decision (Strategy: {strategy})
           </p>
           <p className="mt-0.5 text-mist leading-relaxed">
-            Main Warehouse in Mumbai holds 8 of the 10 requested Laptop units. East Depot in Kolkata holds remaining stock. The split engine allocated 8 units to Mumbai and 2 to Kolkata, tie-breaking by lowest freight cost weight (1.0 vs 1.4). Total shipments minimized to <strong>2 packages</strong>.
+            The optimization engine analyzed depot inventory and grouped allocations to minimize total dispatch shipments ({shipmentCount} {shipmentCount === 1 ? "shipment" : "shipments"}). Estimated consolidated freight cost: <strong>{inr(estimatedCost)}</strong>.
           </p>
         </div>
       </div>
 
-      {/* Reactive Backorder Stock Arrival Notification (Spec B6) */}
-      {stockArrivalTriggered && !backorderConsolidated && (
-        <div className="rounded-[20px] bg-emerald-500/10 p-4 border border-emerald-500/25 flex flex-wrap items-center justify-between gap-3">
+      {/* Reactive Backorder Stock Notice */}
+      {activeBackorders.length > 0 && (
+        <div className="rounded-[20px] bg-amber-500/10 p-4 border border-amber-500/25 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Package className="size-5 text-emerald-700" />
+            <Package className="size-5 text-amber-700" />
             <div className="text-[13px]">
-              <span className="font-semibold text-emerald-950">
-                New Stock Received Mid-Fulfillment:
+              <span className="font-semibold text-amber-950">
+                {activeBackorders.length} Open Backorder {activeBackorders.length === 1 ? "Line" : "Lines"}:
               </span>{" "}
-              <span className="text-emerald-900">
-                5 units of <em>Docking Station Ultra Dual-4K</em> just arrived at Main Warehouse (Mumbai).
+              <span className="text-amber-900">
+                {activeBackorders.map((b) => `${b.qty}x ${b.product_name}`).join(", ")}
               </span>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={handleConsolidateBackorder}
-            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 text-white px-3.5 py-1.5 text-[12px] font-semibold hover:bg-emerald-800 shadow-xs transition-colors"
+            disabled={consolidating}
+            onClick={handleConsolidate}
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 text-white px-3.5 py-1.5 text-[12px] font-semibold hover:bg-emerald-800 shadow-xs transition-colors disabled:opacity-50"
           >
-            Consolidate Remaining Backorder &rarr;
+            {consolidating ? "Checking Stock..." : "Consolidate When Stock Arrives \u2192"}
           </button>
         </div>
       )}
 
-      {backorderConsolidated && (
-        <div className="rounded-[18px] bg-emerald-100/80 p-3.5 border border-emerald-300 text-[12.5px] text-emerald-950 font-medium flex items-center gap-2">
-          <CheckCircle className="size-4 text-emerald-700" />
-          Backorder consolidated! All docking station units merged into Shipment 1 (Main Warehouse). Total freight cost saved: ₹1,400.
-        </div>
-      )}
-
-      {/* THREE DISPATCH CARDS */}
+      {/* DISPATCH WAREHOUSE CARDS */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {/* Shipment 1: Main Warehouse */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-              <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
-                <Warehouse className="size-4 text-ink/70" />
-                Main Warehouse
-              </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                Mumbai Depot
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[16px] bg-cream/40 p-3 border border-ink/6">
-                <p className="text-[13px] font-medium text-ink">
-                  Laptop Pro 16&quot;
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[12px]">
-                  <span className="font-mono text-ink font-semibold">
-                    Qty: {mumbaiQty} units
-                  </span>
-                  <span className="text-emerald-700 font-medium">In Stock</span>
-                </div>
+        {groupedByWarehouse.map(([warehouseId, data], idx) => (
+          <div
+            key={warehouseId}
+            className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-ink/6">
+                <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
+                  <Warehouse className="size-4 text-ink/70" />
+                  {data.name}
+                </span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  Shipment #{idx + 1}
+                </span>
               </div>
 
-              {backorderConsolidated && (
-                <div className="rounded-[16px] bg-emerald-50/70 p-3 border border-emerald-200">
-                  <p className="text-[13px] font-medium text-ink">
-                    Docking Station Ultra Dual-4K
-                  </p>
-                  <div className="mt-1 flex items-center justify-between text-[12px]">
-                    <span className="font-mono text-emerald-900 font-semibold">
-                      Qty: 5 units (Merged)
-                    </span>
-                    <span className="text-emerald-800 font-medium">Stock Arrived</span>
+              <div className="mt-4 space-y-3">
+                {data.lines.map((line, lIdx) => (
+                  <div
+                    key={lIdx}
+                    className="rounded-[16px] bg-cream/40 p-3 border border-ink/6"
+                  >
+                    <p className="text-[13px] font-medium text-ink">
+                      {line.product_name}
+                    </p>
+                    <div className="mt-1 flex items-center justify-between text-[12px]">
+                      <span className="font-mono text-ink font-semibold">
+                        Qty: {line.qty} units
+                      </span>
+                      <span className="text-emerald-700 font-medium">
+                        {isFulfilled ? "Reserved" : "Available"}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span className="flex items-center gap-1">
-              <Truck className="size-3.5" /> Shipment #1
-            </span>
-            <span className="font-mono font-semibold text-ink">
-              Est. Freight: ₹3,200
-            </span>
-          </div>
-        </div>
-
-        {/* Shipment 2: East Depot */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-              <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
-                <Warehouse className="size-4 text-ink/70" />
-                East Depot
-              </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
-                Kolkata Depot
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[16px] bg-cream/40 p-3 border border-ink/6">
-                <p className="text-[13px] font-medium text-ink">
-                  Laptop Pro 16&quot;
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[12px]">
-                  <span className="font-mono text-ink font-semibold">
-                    Qty: {eastQty} units
-                  </span>
-                  <span className="text-blue-700 font-medium">In Stock</span>
-                </div>
+                ))}
               </div>
             </div>
-          </div>
 
-          <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span className="flex items-center gap-1">
-              <Truck className="size-3.5" /> Shipment #2
-            </span>
-            <span className="font-mono font-semibold text-ink">
-              Est. Freight: ₹2,800
-            </span>
-          </div>
-        </div>
-
-        {/* Shipment 3: Backorder Queue */}
-        <div className="rounded-[24px] bg-white p-6 border border-ink/8 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-              <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
-                <Layers className="size-4 text-ink/70" />
-                Backorder Queue
+            <div className="mt-6 pt-3 border-t border-ink/6 text-[12px] text-mist flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <Truck className="size-3.5" /> Direct Freight Dispatch
               </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200">
-                {backorderConsolidated ? "Zero Pending" : "1 Item Shortfall"}
+              <span className="font-medium text-ink">
+                {data.lines.reduce((acc, l) => acc + l.qty, 0)} items
               </span>
             </div>
-
-            <div className="mt-4 space-y-3">
-              {!backorderConsolidated ? (
-                <div className="rounded-[16px] bg-rose-50/50 p-3 border border-rose-200">
-                  <p className="text-[13px] font-medium text-ink">
-                    Docking Station Ultra Dual-4K
-                  </p>
-                  <div className="mt-1 flex items-center justify-between text-[12px]">
-                    <span className="font-mono text-rose-900 font-semibold">
-                      Qty: 5 units
-                    </span>
-                    <span className="text-rose-700 font-medium">
-                      Est. Restock: Aug 26
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-[16px] bg-cream/30 p-4 text-center text-[12px] text-mist">
-                  All backorder lines resolved and consolidated into warehouse pickings.
-                </div>
-              )}
-            </div>
           </div>
+        ))}
 
-          <div className="mt-6 pt-4 border-t border-ink/6 flex items-center justify-between text-[12px] text-mist">
-            <span>Network Stock Status</span>
-            <span className="font-semibold text-ink">
-              {backorderConsolidated ? "100% Ready" : "Partially Ready (80%)"}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Manual Override Modal */}
-      {overrideModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl border border-ink/10">
-            <h3 className="text-[18px] font-semibold text-ink">
-              Manual Warehouse Allocation Override
-            </h3>
-            <p className="text-[13px] text-mist mt-1">
-              Adjust quantities allocated to specific warehouses. The heuristic cost engine will re-evaluate freight charges.
+        {groupedByWarehouse.length === 0 && (
+          <div className="col-span-3 p-12 text-center text-mist bg-white rounded-[24px] border border-ink/8">
+            <Package className="size-8 mx-auto mb-2 text-mist opacity-60" />
+            <p className="font-medium text-[14px] text-ink">No physical items to ship</p>
+            <p className="text-[12.5px] mt-0.5">
+              This order contains only digital/service subscriptions that bypass physical depots.
             </p>
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="text-[12.5px] font-medium text-ink block mb-1">
-                  Main Warehouse (Mumbai Depot) — Laptop Qty
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={mumbaiQty}
-                  onChange={(e) => setMumbaiQty(parseInt(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 font-mono text-[13.5px] font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-[12.5px] font-medium text-ink block mb-1">
-                  East Depot (Kolkata Depot) — Laptop Qty
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={eastQty}
-                  onChange={(e) => setEastQty(parseInt(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-ink/15 p-2.5 font-mono text-[13.5px] font-semibold"
-                />
-              </div>
-
-              <div className="rounded-xl bg-amber-500/10 p-3 text-[12px] text-amber-950 border border-amber-500/20">
-                <strong>Cost Consequence:</strong> Overriding the automatic split preserves manual quantities, but may increase total freight charges by up to <strong>₹1,800</strong>.
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-ink/8">
-              <button
-                type="button"
-                onClick={() => setOverrideModalOpen(false)}
-                className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOverrideModalOpen(false);
-                  setSplitAccepted(true);
-                }}
-                className="rounded-full bg-ink text-bone px-5 py-2 text-[13px] font-semibold hover:bg-ink/90"
-              >
-                Apply Override Allocation
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

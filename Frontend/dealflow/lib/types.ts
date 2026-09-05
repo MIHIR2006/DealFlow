@@ -113,10 +113,29 @@ export interface AuditEntry {
   created_at: string;
 }
 
+export interface ApprovalInboxRow {
+  id: number;
+  quotation_id: number;
+  round: number;
+  step: number;
+  required_role: string;
+  status: string;
+  created_at: string;
+  reference: string;
+  customer_name: string;
+  customer_tier: string;
+  rep_name: string;
+  grand_total: string;
+  blended_risk_score: string;
+  max_line_overage: string;
+  required_level: string;
+}
+
 export interface Quotation {
   id: number;
   reference: string;
   status: QuotationStatus;
+  version?: number;
   customer_id: number;
   customer_name: string;
   customer_tier: "BRONZE" | "SILVER" | "GOLD" | string;
