@@ -167,6 +167,7 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		quotes.GET("", qh.list)
 		quotes.POST("", qh.create)
 		quotes.GET("/:id", qh.get)
+		quotes.GET("/:id/upsell", qh.upsell)
 
 		quotes.POST("/:id/lines", qh.addLine)
 		quotes.PATCH("/:id/lines/:lineId", qh.updateLine)

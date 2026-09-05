@@ -12,6 +12,30 @@ curl localhost:8080/healthz
 
 `make help` lists every target. `make ci` runs exactly what the pipeline runs.
 
+## Proving it works
+
+```bash
+make db-reset                    # migrate and load the demo dataset
+make run &                       # start the API
+make acceptance                  # the problem statement's eight steps, over curl
+```
+
+`scripts/acceptance.sh` walks the whole flow with nothing but curl: an
+over-limit discount that routes itself for approval, a two-step chain, a
+warehouse split with a backorder, hybrid billing, a portal counter-offer that
+re-enters approval on its own, and a payment that cannot be charged twice.
+
+It exists so the backend is demonstrable without a frontend. It runs in CI.
+
+```bash
+make seed-scale                  # demo dataset plus 2,000 filler quotations
+TEST_DATABASE_URL=... make test-integration
+```
+
+The scale tests assert that query budgets hold with a populated table: a page
+of results costs the same at 2,000 rows as at 20, and a quotation with five
+lines costs the same to read as one with a single line.
+
 ## Layout
 
 ```
@@ -75,6 +99,10 @@ carries `request_id`, method and path.
 
 **Probes.** `/healthz` is liveness and never touches the database.
 `/readyz` is readiness and does.
+
+**Profiling.** Set `PPROF_ADDR=127.0.0.1:6060` to expose the standard pprof
+endpoints on a second listener. Configuration refuses any address that is not
+loopback: these endpoints publish memory contents and goroutine stacks.
 
 ## Config
 
