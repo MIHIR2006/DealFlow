@@ -22,7 +22,6 @@ LIMIT sqlc.arg('page_size');
 -- name: FindDiscountAnomalies :many
 WITH rep_baseline AS (
     SELECT q.rep_id,
-           AVG(q.blended_risk_score) AS avg_risk,
            AVG(NULLIF(q.discount_total / NULLIF(q.list_subtotal, 0) * 100, 0)) AS avg_discount_pct,
            count(*) AS sample_size
     FROM quotations q
@@ -105,3 +104,29 @@ LIMIT $1;
 
 -- name: ResolveDealAlert :exec
 UPDATE deal_alerts SET resolved_at = now() WHERE id = $1;
+
+-- A nudge counts as activity, which is what takes the deal off the stalled
+-- list. The alert it came from is resolved separately.
+-- name: NudgeQuotation :one
+UPDATE quotations
+SET last_activity_at = now(), updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ResolveAlertsForQuotation :execrows
+UPDATE deal_alerts SET resolved_at = now()
+WHERE quotation_id = $1 AND alert_type = sqlc.arg('alert_type')::text AND resolved_at IS NULL;
+
+-- Headline figures for the dashboard, in one pass rather than one query per
+-- tile.
+-- name: PipelineSummary :one
+SELECT
+    count(*)::bigint AS total_quotations,
+    COALESCE(SUM(grand_total), 0)::numeric AS pipeline_value,
+    COALESCE(SUM(grand_total) FILTER (WHERE status = 'CONFIRMED'), 0)::numeric AS won_value,
+    COALESCE(AVG(NULLIF(margin_pct, 0)), 0)::numeric AS avg_margin_pct,
+    count(*) FILTER (WHERE status = 'PENDING_APPROVAL')::bigint AS awaiting_approval,
+    COALESCE(AVG(NULLIF(blended_risk_score, 0)), 0)::numeric AS avg_risk_score
+FROM quotations
+WHERE (sqlc.narg('from')::timestamptz IS NULL OR created_at >= sqlc.narg('from')::timestamptz)
+  AND (sqlc.narg('to')::timestamptz   IS NULL OR created_at <  sqlc.narg('to')::timestamptz);

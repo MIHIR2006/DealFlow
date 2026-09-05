@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"golang.org/x/crypto/bcrypt"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
@@ -55,7 +56,11 @@ func newHarness(t *testing.T) *harness {
 		JWTTTL:         time.Hour,
 		PortalTokenTTL: 14 * 24 * time.Hour,
 		CORSOrigins:    []string{"http://localhost:3000"},
-		ExposeDBStats:  true,
+
+		StallDays:         7,
+		AnomalyMultiplier: decimal.RequireFromString("1.5"),
+		AnomalyMinSample:  3,
+		ExposeDBStats:     true,
 	}
 
 	pool, err := db.Open(context.Background(), cfg)

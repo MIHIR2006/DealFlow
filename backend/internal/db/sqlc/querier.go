@@ -153,6 +153,12 @@ type Querier interface {
 	NextInvoiceReference(ctx context.Context) (string, error)
 	NextQuotationReference(ctx context.Context) (string, error)
 	NextSalesOrderReference(ctx context.Context) (string, error)
+	// A nudge counts as activity, which is what takes the deal off the stalled
+	// list. The alert it came from is resolved separately.
+	NudgeQuotation(ctx context.Context, id int64) (Quotation, error)
+	// Headline figures for the dashboard, in one pass rather than one query per
+	// tile.
+	PipelineSummary(ctx context.Context, arg PipelineSummaryParams) (PipelineSummaryRow, error)
 	QuotationStatusCounts(ctx context.Context) ([]QuotationStatusCountsRow, error)
 	// Recomputes paid amount and status from the payments actually recorded, so
 	// the invoice can never drift from its ledger. A short payment lands on
@@ -164,6 +170,7 @@ type Querier interface {
 	// execute. Returning no row means someone else owns this key.
 	ReserveIdempotencyKey(ctx context.Context, arg ReserveIdempotencyKeyParams) (IdempotencyKey, error)
 	ReserveStock(ctx context.Context, arg ReserveStockParams) (StockItem, error)
+	ResolveAlertsForQuotation(ctx context.Context, arg ResolveAlertsForQuotationParams) (int64, error)
 	ResolveBackorder(ctx context.Context, id int64) (Backorder, error)
 	ResolveDealAlert(ctx context.Context, id int64) error
 	RevokePortalTokensForQuotation(ctx context.Context, quotationID int64) (int64, error)

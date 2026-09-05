@@ -246,7 +246,22 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	}
 
 	// Phase 9 → portal negotiation routes
-	// Phase 10 → analytics routes
+	// Analytics. Every figure is an aggregate computed in Postgres, so the
+	// dashboard costs the same at twenty quotations as at twenty thousand.
+	anh := analyticsHandler{svc: service.NewAnalyticsService(d.Pool, queries, d.Config, quoteSvc)}
+	quotes.POST("/:id/nudge", anh.nudge)
+
+	analytics := rg.Group("", authed,
+		middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager, auth.RoleFinance))
+	{
+		analytics.GET("/dashboard/deal-health", anh.dealHealth)
+		analytics.GET("/dashboard/alerts", anh.alerts)
+	}
+
+	// Reports are open to any staff member; the service narrows what each
+	// role actually sees.
+	rg.GET("/reports", authed, staff, anh.report)
+
 }
 
 // adminSignupGuard keeps account creation open while the platform is being
