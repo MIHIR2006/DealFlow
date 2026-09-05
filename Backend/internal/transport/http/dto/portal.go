@@ -74,10 +74,21 @@ type PortalCounterOffer struct {
 
 // PortalQuotation is the whole customer-facing document.
 type PortalQuotation struct {
-	Reference    string `json:"reference"`
-	Status       string `json:"status"`
-	CustomerName string `json:"customer_name"`
-	ExpiresAt    string `json:"expires_at"`
+	Reference string `json:"reference"`
+	Status    string `json:"status"`
+
+	// CustomerName and CustomerEmail are the account this link was issued
+	// to. They are the customer's own details; the tier they sit in is not,
+	// because it is an input to our own discount policy.
+	CustomerName  string `json:"customer_name"`
+	CustomerEmail string `json:"customer_email"`
+
+	ExpiresAt string `json:"expires_at"`
+
+	// OrderDiscountPct is the discount applied across the whole order. It is
+	// part of the customer's own commercial terms, and the portal needs it to
+	// show what an order-wide counter-offer would be moving from.
+	OrderDiscountPct string `json:"order_discount_pct"`
 
 	// AwaitingReview tells the customer their proposal is with us, without
 	// exposing who is reviewing it or against what threshold.

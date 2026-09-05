@@ -7,19 +7,32 @@ import { clearToken } from "@/lib/api";
 import type { AuthUser } from "@/lib/hooks";
 import { UserCircle2, ChevronDown } from "lucide-react";
 
-// Nav visibility mirrors the backend's route guards (router.go): a link a
-// role's token would 403 on is not shown to that role. `roles` omitted means
+// Nav visibility follows the role definitions in the problem statement, so a
+// role only carries the screens its own duties name. `roles` omitted means
 // every staff role can see it.
+//
+//   Rep      builds quotations, tracks approval and fulfillment progress,
+//            responds to negotiation requests.
+//   Manager  approves over-threshold discounts, configures tiers and chains,
+//            monitors deal health.
+//   Finance  second-level approvals, warehouse splits and backorders,
+//            recurring billing and credit notes.
+//   Admin    backend setup (catalog, warehouses, plans, tiers) and
+//            platform-wide analytics.
 const links: { href: string; label: string; roles?: AuthUser["role"][] }[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/quotations", label: "Quotations" },
   { href: "/approvals", label: "Approvals", roles: ["ADMIN", "MANAGER", "FINANCE"] },
+  // A rep tracks fulfillment progress here; deciding splits and backorders is
+  // gated inside the screen itself.
   { href: "/fulfillment", label: "Fulfillment" },
-  { href: "/subscriptions", label: "Subscriptions" },
-  { href: "/invoices", label: "Invoices" },
+  // Recurring billing and credit notes are Finance's to reconcile.
+  { href: "/subscriptions", label: "Subscriptions", roles: ["ADMIN", "FINANCE"] },
+  { href: "/invoices", label: "Invoices", roles: ["ADMIN", "FINANCE"] },
   { href: "/deal-health", label: "Deal Health", roles: ["ADMIN", "MANAGER", "FINANCE"] },
   { href: "/reports", label: "Reports" },
-  { href: "/products", label: "Catalog" },
+  // Backend setup: products, price lists, warehouses, subscription plans.
+  { href: "/products", label: "Catalog", roles: ["ADMIN"] },
   { href: "/governance", label: "Governance", roles: ["ADMIN", "MANAGER"] },
 ];
 

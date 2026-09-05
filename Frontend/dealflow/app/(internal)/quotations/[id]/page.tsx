@@ -14,6 +14,7 @@ import {
   Copy,
   ExternalLink,
   Lock,
+  Info,
 } from "lucide-react";
 import { LifecycleBar, type DealStage } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -226,6 +227,21 @@ export default function QuotationBuilderPage({
   const blended = parseFloat(risk.blended_score) || 0;
   const maxOverage = parseFloat(risk.max_line_overage) || 0;
 
+  // A quotation reaches the customer only once it has cleared approval. The
+  // backend enforces this; the button explains it rather than disappearing,
+  // so the rep can see where the deal actually is.
+  const canSendToPortal =
+    quote.status === "APPROVED" || quote.status === "SENT" || quote.status === "UNDER_NEGOTIATION";
+  const sendBlockedReason = canSendToPortal
+    ? null
+    : quote.status === "DRAFT"
+      ? "Submit this quotation first — it has to clear approval before the customer can see it."
+      : quote.status === "PENDING_APPROVAL"
+        ? "Waiting on internal approval. You can send the portal link as soon as it is approved."
+        : quote.status === "CONFIRMED"
+          ? "The customer already confirmed this quotation."
+          : "This quotation cannot be sent to the customer portal.";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -253,12 +269,16 @@ export default function QuotationBuilderPage({
         </div>
 
         <div className="flex items-center gap-2.5">
-          {quote.status === "APPROVED" || quote.status === "SENT" || quote.status === "UNDER_NEGOTIATION" ? (
+          {/* The rep's own step in the flow. It stays on screen in every state
+              so the action is discoverable, and says why when it cannot run --
+              a quotation still in approval has nothing to send yet. */}
+          {quote.status !== "REJECTED" ? (
             <button
               type="button"
               onClick={portalLink ? copyPortalLink : sendToPortal}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50"
+              disabled={busy || !canSendToPortal}
+              title={sendBlockedReason ?? undefined}
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {portalCopied ? (
                 <>
@@ -286,6 +306,13 @@ export default function QuotationBuilderPage({
       </div>
 
       <LifecycleBar currentStage={STAGE_BY_STATUS[quote.status] ?? "PRICING"} />
+
+      {sendBlockedReason && quote.status !== "REJECTED" ? (
+        <p className="flex items-center gap-1.5 text-[12px] text-mist">
+          <Info className="size-3.5 shrink-0" />
+          {sendBlockedReason}
+        </p>
+      ) : null}
 
       {error ? (
         <div className="rounded-[16px] tone-bad p-3 text-[12.5px] text-bad">{error}</div>

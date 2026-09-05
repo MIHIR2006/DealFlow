@@ -15,7 +15,7 @@ import {
 import { LifecycleBar, type DealStage } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { OrderApi, ApiError } from "@/lib/api";
-import { inr } from "@/lib/hooks";
+import { inr, useAuth } from "@/lib/hooks";
 import type { SalesOrder, FulfillmentPlan, FulfillmentLine, Backorder } from "@/lib/types";
 
 const STAGE_BY_STATUS: Record<string, DealStage> = {
@@ -42,6 +42,13 @@ export default function WarehouseSplitDetailPage({
 }) {
   const { id: idParam } = use(params);
   const orderId = Number(idParam);
+
+  // Warehouse splits and backorder decisions belong to Finance & Operations
+  // (a manager may override too). A rep opens this screen to track progress,
+  // which is what their role calls for, and sees no decision controls.
+  const { user } = useAuth();
+  const canDecideFulfillment =
+    user?.role === "FINANCE" || user?.role === "MANAGER" || user?.role === "ADMIN";
 
   const [order, setOrder] = useState<SalesOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -178,18 +185,24 @@ export default function WarehouseSplitDetailPage({
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            disabled
-            title="Manual override isn't available in this build — accepting always applies the engine's suggested split."
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-mist opacity-50 cursor-not-allowed"
-          >
-            <Sliders className="size-3.5" />
-            Manual Override
-          </button>
+          {canDecideFulfillment ? (
+            <button
+              type="button"
+              disabled
+              title="Manual override isn't available in this build — accepting always applies the engine's suggested split."
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-mist opacity-50 cursor-not-allowed"
+            >
+              <Sliders className="size-3.5" />
+              Manual Override
+            </button>
+          ) : null}
 
-
-          {isPreview ? (
+          {!isPreview ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-semibold text-white">
+              <CheckCircle className="size-3.5" />
+              Split Confirmed &amp; Reserved
+            </span>
+          ) : canDecideFulfillment ? (
             <button
               type="button"
               disabled={busy || planLoading || !plan}
@@ -200,9 +213,8 @@ export default function WarehouseSplitDetailPage({
               {busy ? "Accepting…" : "Accept Suggested Split"}
             </button>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-semibold text-white">
-              <CheckCircle className="size-3.5" />
-              Split Confirmed &amp; Reserved
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-mist">
+              Awaiting Finance &amp; Operations
             </span>
           )}
         </div>
@@ -266,14 +278,16 @@ export default function WarehouseSplitDetailPage({
             </div>
           </div>
 
-          <button
-            type="button"
-            disabled={busy}
-            onClick={consolidateBackorders}
-            className="inline-flex items-center gap-1.5 rounded-full fill-warn text-white px-3.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50"
-          >
-            {busy ? "Consolidating…" : "Consolidate Remaining Backorder →"}
-          </button>
+          {canDecideFulfillment ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={consolidateBackorders}
+              className="inline-flex items-center gap-1.5 rounded-full fill-warn text-white px-3.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50"
+            >
+              {busy ? "Consolidating…" : "Consolidate Remaining Backorder →"}
+            </button>
+          ) : null}
         </div>
       )}
 

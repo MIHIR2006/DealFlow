@@ -52,6 +52,11 @@ type View struct {
 	Messages  []sqlcgen.NegotiationMessage
 	Offers    []sqlcgen.ListCounterOffersRow
 	ExpiresAt time.Time
+
+	// CustomerEmail is the account the link was issued to. It is the
+	// customer's own contact detail, not an internal fact, and it lets the
+	// portal show who this session belongs to.
+	CustomerEmail string
 }
 
 // DefaultPortalTTL is how long a link lives when the caller does not say.
@@ -146,9 +151,10 @@ func (s *PortalService) View(ctx context.Context, row sqlcgen.GetQuotationByPort
 			Header: header, Lines: lines,
 			Risk: verdict, Totals: totals, ConfigVersion: version,
 		},
-		Messages:  messages,
-		Offers:    offers,
-		ExpiresAt: row.ExpiresAt,
+		Messages:      messages,
+		Offers:        offers,
+		ExpiresAt:     row.ExpiresAt,
+		CustomerEmail: row.CustomerEmail,
 	}, nil
 }
 

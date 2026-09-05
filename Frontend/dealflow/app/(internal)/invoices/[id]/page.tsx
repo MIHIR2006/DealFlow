@@ -4,7 +4,7 @@ import React, { useState, use } from "react";
 import Link from "next/link";
 import { ArrowLeft, CreditCard, Printer } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useFetch, inr } from "@/lib/hooks";
+import { useFetch, inr, useAuth } from "@/lib/hooks";
 import { InvoiceApi, ApiError } from "@/lib/api";
 import type { InvoiceDetail } from "@/lib/types";
 
@@ -22,6 +22,11 @@ export default function InvoiceDetailPage({
   const invoiceId = resolvedParams.id;
 
   const { data, loading, error, refetch } = useFetch<InvoiceDetail>(`/v1/invoices/${invoiceId}`);
+
+  // Reconciling billing is Finance & Operations' duty; an admin keeps it for
+  // platform administration. Other roles read the invoice without settling it.
+  const { user } = useAuth();
+  const canRecordPayment = user?.role === "FINANCE" || user?.role === "ADMIN";
 
   // Local invoice override — set wholesale with the server's response after
   // a payment is recorded. Never patched by hand: amount_paid and status are
@@ -131,7 +136,7 @@ export default function InvoiceDetailPage({
             <Printer className="size-3.5" /> Print Invoice
           </button>
 
-          {invoice.status !== "PAID" && (
+          {invoice.status !== "PAID" && canRecordPayment && (
             <button
               type="button"
               onClick={openPaymentModal}

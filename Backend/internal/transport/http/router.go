@@ -116,6 +116,16 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	authGroup := rg.Group("/auth")
 	authGroup.Use(middleware.RateLimit(30, 10, Fail))
 	{
+		// TEMPORARY, FOR THE DEMO: signup is open to anyone.
+		//
+		// adminSignupGuard below closes this once an administrator exists, and
+		// is the state this should ship in: signup accepts a role, so an open
+		// endpoint lets anyone mint themselves FINANCE and approve their own
+		// discounts. Re-enable by restoring the guard as the first handler:
+		//
+		//	authGroup.POST("/signup", adminSignupGuard(queries, signer), ah.signup)
+		//
+		// TestSignupIsAdminOnlyOnceBootstrapped is skipped while this is open.
 		authGroup.POST("/signup", ah.signup)
 		authGroup.POST("/login", ah.login)
 		authGroup.GET("/me", authed, ah.me)
@@ -282,6 +292,11 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 // The authentication is done inline rather than by delegating to RequireAuth:
 // that middleware calls c.Next(), which would run the signup handler before
 // this guard had finished deciding.
+//
+// Currently unwired: signup is deliberately open for the demo. See the /auth
+// group in registerRoutes for how to put it back.
+//
+//nolint:unused // kept wired-ready; the demo runs with open signup on purpose.
 func adminSignupGuard(queries *sqlcgen.Queries, signer *auth.Signer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		admins, err := queries.ListUsersByRole(c.Request.Context(), string(auth.RoleAdmin))
