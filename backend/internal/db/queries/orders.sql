@@ -17,7 +17,7 @@ SELECT * FROM sales_orders WHERE quotation_id = $1;
 UPDATE sales_orders SET status = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
 -- name: NextSalesOrderReference :one
-SELECT 'SO-' || to_char(nextval('sales_orders_id_seq'), 'FM0000') AS reference;
+SELECT ('SO-' || to_char(nextval('sales_orders_id_seq'), 'FM0000'))::text AS reference;
 
 -- name: CreateFulfillment :one
 INSERT INTO fulfillments
@@ -70,3 +70,22 @@ HAVING COALESCE(SUM(si.on_hand - si.reserved), 0) >= b.qty;
 UPDATE backorders SET status = 'CONSOLIDATED', resolved_at = now()
 WHERE id = $1 AND status = 'OPEN'
 RETURNING *;
+
+-- The physical lines of an order. Recurring subscription lines are billed,
+-- never shipped, so they are excluded here rather than filtered in Go.
+-- name: ListFulfillableLines :many
+SELECT ql.id, ql.product_id, ql.qty, ql.unit_price, ql.list_value,
+       p.name AS product_name
+FROM quotation_lines ql
+JOIN products p       ON p.id  = ql.product_id
+JOIN sales_orders so  ON so.quotation_id = ql.quotation_id
+WHERE so.id = $1 AND ql.line_type = 'ONETIME'
+ORDER BY ql.position, ql.id;
+
+-- name: CountFulfillmentsForOrder :one
+SELECT count(*)::bigint FROM fulfillments WHERE sales_order_id = $1;
+
+-- name: ReleaseStock :exec
+UPDATE stock_items
+SET reserved = GREATEST(reserved - sqlc.arg('qty')::bigint, 0), updated_at = now()
+WHERE warehouse_id = sqlc.arg('warehouse_id') AND product_id = sqlc.arg('product_id');

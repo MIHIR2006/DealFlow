@@ -19,14 +19,25 @@ WHERE si.product_id = ANY($1::bigint[])
   AND w.is_active
 ORDER BY si.warehouse_id, si.product_id;
 
--- Locks the rows before reserving so two orders racing for the last unit
--- cannot both win. Must run inside a transaction.
+-- Locks the stock rows for a set of products and returns them with the
+-- warehouse context the split engine needs.
+--
+-- Planning and reserving must see the same numbers. Without the lock, two
+-- orders could each be told the last unit is available and both reserve it.
+-- Rows are locked in id order so concurrent transactions queue rather than
+-- deadlock. Only the stock rows are locked, not the warehouse rows, which
+-- are read-mostly configuration.
 -- name: LockStockForProducts :many
-SELECT si.id, si.warehouse_id, si.product_id, si.on_hand, si.reserved
+SELECT si.id, si.warehouse_id, si.product_id, si.on_hand, si.reserved,
+       (si.on_hand - si.reserved)::bigint AS available,
+       w.name AS warehouse_name,
+       w.shipping_cost_weight
 FROM stock_items si
+JOIN warehouses w ON w.id = si.warehouse_id
 WHERE si.product_id = ANY($1::bigint[])
+  AND w.is_active
 ORDER BY si.id
-FOR UPDATE;
+FOR UPDATE OF si;
 
 -- name: ReserveStock :one
 UPDATE stock_items

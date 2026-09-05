@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+	"golang.org/x/crypto/bcrypt"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/domain/risk"
@@ -36,7 +37,7 @@ func loaded(t *testing.T) (*cache.Config, *sqlcgen.Queries) {
 	}
 	t.Cleanup(pool.Close)
 
-	if err := seed.Run(context.Background(), pool); err != nil {
+	if err := seed.RunWith(context.Background(), pool, fixtureSeed); err != nil {
 		t.Fatalf("seed.Run: %v", err)
 	}
 
@@ -171,3 +172,6 @@ func TestFailedReloadKeepsThePreviousSnapshot(t *testing.T) {
 		t.Errorf("version moved to %d on a failed reload, want %d", c.Version(), versionBefore)
 	}
 }
+
+// fixtureSeed keeps password hashing cheap; these tests never sign in.
+var fixtureSeed = seed.Options{BcryptCost: bcrypt.MinCost}

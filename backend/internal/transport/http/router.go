@@ -165,10 +165,74 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		cfg.POST("/upsell-rules", adminOnly, ch.createUpsellRule)
 	}
 
-	// Phase 5 → quotation routes
-	// Phase 6 → approval routes
-	// Phase 7 → fulfillment routes
-	// Phase 8 → billing + invoicing routes
+	// Quotations. Every pricing mutation returns the whole recalculated
+	// document, so the client never recomputes money and cannot disagree
+	// with the server about a total.
+	quoteSvc := service.NewQuoteService(d.Pool, queries, cfgCache)
+	qh := quotationHandler{svc: quoteSvc}
+	quotes := rg.Group("/quotations", authed, staff)
+	{
+		quotes.GET("", qh.list)
+		quotes.POST("", qh.create)
+		quotes.GET("/:id", qh.get)
+
+		quotes.POST("/:id/lines", qh.addLine)
+		quotes.PATCH("/:id/lines/:lineId", qh.updateLine)
+		quotes.DELETE("/:id/lines/:lineId", qh.deleteLine)
+
+		quotes.PUT("/:id/order-discount", qh.setOrderDiscount)
+
+		// The rep never chooses an approver: the blended risk score decides
+		// whether this needs one and which chain it takes.
+		quotes.POST("/:id/submit", qh.submit)
+	}
+
+	// The approvals inbox and the three decisions a reviewer can take.
+	// Approve and reject are terminal for a step; return sends the quotation
+	// back to draft so the rep can revise and resubmit, which the audit trail
+	// records alongside the original submission.
+	ah2 := approvalHandler{svc: service.NewApprovalService(d.Pool, queries, quoteSvc)}
+	approvals := rg.Group("/approvals", authed,
+		middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager, auth.RoleFinance))
+	{
+		approvals.GET("", ah2.inbox)
+		approvals.POST("/:id/approve", ah2.approve)
+		approvals.POST("/:id/return", ah2.returnForRevision)
+		approvals.POST("/:id/reject", ah2.reject)
+	}
+
+	// Fulfilment. Suggesting is free and persists nothing; accepting reserves
+	// stock inside one transaction over locked rows, so the warehouses the
+	// engine chose are the ones the order actually takes from.
+	fh := fulfillmentHandler{svc: service.NewFulfillmentService(d.Pool, queries, quoteSvc)}
+	quotes.POST("/:id/confirm", fh.confirm)
+
+	orders := rg.Group("/orders", authed, staff)
+	{
+		orders.GET("/:id", fh.get)
+		orders.GET("/:id/fulfillment/suggest", fh.suggest)
+		orders.POST("/:id/fulfillment", fh.accept)
+		orders.POST("/:id/backorders/consolidate", fh.consolidate)
+	}
+
+	// Billing. One order carries two tracks: a single invoice for the
+	// one-time lines, and a schedule of future periods for the recurring
+	// ones. Money-moving endpoints accept an Idempotency-Key.
+	bh := billingHandler{
+		svc:  service.NewBillingService(d.Pool, queries, quoteSvc),
+		idem: service.NewIdempotency(queries),
+	}
+	orders.POST("/:id/invoices", bh.generate)
+	orders.GET("/:id/billing", bh.getForOrder)
+	orders.POST("/:id/subscriptions/:lineId/change", bh.changeSubscription)
+
+	invoices := rg.Group("/invoices", authed, staff)
+	{
+		invoices.GET("", bh.listInvoices)
+		invoices.GET("/:id", bh.getInvoice)
+		invoices.POST("/:id/payments", bh.recordPayment)
+	}
+
 	// Phase 9 → portal negotiation routes
 	// Phase 10 → analytics routes
 }

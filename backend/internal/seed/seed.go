@@ -31,17 +31,37 @@ import (
 // forgotten credential. Seeded data is not production data.
 const DemoPassword = "dealflow360"
 
+// Options tunes how the dataset is built.
+type Options struct {
+	// BcryptCost is the work factor for seeded passwords. Zero means the
+	// production default. Tests lower it: the suite logs in dozens of times
+	// and a production cost turns that into a minute of pure key stretching.
+	BcryptCost int
+}
+
+func (o Options) cost() int {
+	if o.BcryptCost <= 0 {
+		return bcrypt.DefaultCost
+	}
+	return o.BcryptCost
+}
+
 func dec(s string) decimal.Decimal { return money.MustFromString(s) }
 
 // Run truncates and repopulates every table. It is destructive by design:
 // resetting to a known state between rehearsals must be one command.
 func Run(ctx context.Context, pool *pgxpool.Pool) error {
+	return RunWith(ctx, pool, Options{})
+}
+
+// RunWith is Run with explicit options.
+func RunWith(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	q := sqlcgen.New(pool)
 
 	if err := truncateAll(ctx, pool); err != nil {
 		return fmt.Errorf("truncate: %w", err)
 	}
-	if err := seedUsers(ctx, q); err != nil {
+	if err := seedUsers(ctx, q, opts.cost()); err != nil {
 		return fmt.Errorf("users: %w", err)
 	}
 
@@ -101,8 +121,8 @@ type userSpec struct {
 	email, name, role, team string
 }
 
-func seedUsers(ctx context.Context, q *sqlcgen.Queries) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(DemoPassword), bcrypt.DefaultCost)
+func seedUsers(ctx context.Context, q *sqlcgen.Queries, cost int) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(DemoPassword), cost)
 	if err != nil {
 		return err
 	}

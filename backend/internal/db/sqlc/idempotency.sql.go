@@ -9,6 +9,29 @@ import (
 	"context"
 )
 
+const completeIdempotencyKey = `-- name: CompleteIdempotencyKey :exec
+UPDATE idempotency_keys
+SET response_status = $3, response_body = $4
+WHERE key = $1 AND endpoint = $2
+`
+
+type CompleteIdempotencyKeyParams struct {
+	Key            string
+	Endpoint       string
+	ResponseStatus int32
+	ResponseBody   string
+}
+
+func (q *Queries) CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error {
+	_, err := q.db.Exec(ctx, completeIdempotencyKey,
+		arg.Key,
+		arg.Endpoint,
+		arg.ResponseStatus,
+		arg.ResponseBody,
+	)
+	return err
+}
+
 const getIdempotentResponse = `-- name: GetIdempotentResponse :one
 SELECT id, key, endpoint, request_hash, response_status, response_body, created_at FROM idempotency_keys WHERE key = $1 AND endpoint = $2
 `
@@ -20,6 +43,51 @@ type GetIdempotentResponseParams struct {
 
 func (q *Queries) GetIdempotentResponse(ctx context.Context, arg GetIdempotentResponseParams) (IdempotencyKey, error) {
 	row := q.db.QueryRow(ctx, getIdempotentResponse, arg.Key, arg.Endpoint)
+	var i IdempotencyKey
+	err := row.Scan(
+		&i.ID,
+		&i.Key,
+		&i.Endpoint,
+		&i.RequestHash,
+		&i.ResponseStatus,
+		&i.ResponseBody,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const releaseIdempotencyKey = `-- name: ReleaseIdempotencyKey :exec
+DELETE FROM idempotency_keys
+WHERE key = $1 AND endpoint = $2 AND response_status = 0
+`
+
+type ReleaseIdempotencyKeyParams struct {
+	Key      string
+	Endpoint string
+}
+
+func (q *Queries) ReleaseIdempotencyKey(ctx context.Context, arg ReleaseIdempotencyKeyParams) error {
+	_, err := q.db.Exec(ctx, releaseIdempotencyKey, arg.Key, arg.Endpoint)
+	return err
+}
+
+const reserveIdempotencyKey = `-- name: ReserveIdempotencyKey :one
+INSERT INTO idempotency_keys (key, endpoint, request_hash, response_status, response_body)
+VALUES ($1, $2, $3, 0, '{}')
+ON CONFLICT (key, endpoint) DO NOTHING
+RETURNING id, key, endpoint, request_hash, response_status, response_body, created_at
+`
+
+type ReserveIdempotencyKeyParams struct {
+	Key         string
+	Endpoint    string
+	RequestHash string
+}
+
+// Reserves a key before the work runs, so two concurrent replays cannot both
+// execute. Returning no row means someone else owns this key.
+func (q *Queries) ReserveIdempotencyKey(ctx context.Context, arg ReserveIdempotencyKeyParams) (IdempotencyKey, error) {
+	row := q.db.QueryRow(ctx, reserveIdempotencyKey, arg.Key, arg.Endpoint, arg.RequestHash)
 	var i IdempotencyKey
 	err := row.Scan(
 		&i.ID,
@@ -45,7 +113,7 @@ type SaveIdempotentResponseParams struct {
 	Endpoint       string
 	RequestHash    string
 	ResponseStatus int32
-	ResponseBody   []byte
+	ResponseBody   string
 }
 
 // Returns nothing when the key already exists, which is how a concurrent

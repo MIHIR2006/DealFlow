@@ -153,12 +153,94 @@ func (q *Queries) GetQuotation(ctx context.Context, id int64) (GetQuotationRow, 
 	return i, err
 }
 
+const getQuotationLine = `-- name: GetQuotationLine :one
+SELECT ql.id, ql.quotation_id, ql.product_id, ql.category_id, ql.position, ql.qty, ql.unit_price, ql.unit_cost, ql.line_discount_pct, ql.tax_rate_pct, ql.effective_discount_pct, ql.list_value, ql.discount_amount, ql.net_amount, ql.tax_amount, ql.cost_amount, ql.margin_amount, ql.margin_pct, ql.ceiling_pct, ql.overage_pts, ql.line_type, ql.plan_id, ql.created_at, ql.updated_at, p.name AS product_name, cat.name AS category_name
+FROM quotation_lines ql
+JOIN products   p   ON p.id   = ql.product_id
+JOIN categories cat ON cat.id = ql.category_id
+WHERE ql.id = $1 AND ql.quotation_id = $2
+`
+
+type GetQuotationLineParams struct {
+	ID          int64
+	QuotationID int64
+}
+
+type GetQuotationLineRow struct {
+	ID                   int64
+	QuotationID          int64
+	ProductID            int64
+	CategoryID           int64
+	Position             int32
+	Qty                  decimal.Decimal
+	UnitPrice            decimal.Decimal
+	UnitCost             decimal.Decimal
+	LineDiscountPct      decimal.Decimal
+	TaxRatePct           decimal.Decimal
+	EffectiveDiscountPct decimal.Decimal
+	ListValue            decimal.Decimal
+	DiscountAmount       decimal.Decimal
+	NetAmount            decimal.Decimal
+	TaxAmount            decimal.Decimal
+	CostAmount           decimal.Decimal
+	MarginAmount         decimal.Decimal
+	MarginPct            decimal.Decimal
+	CeilingPct           decimal.Decimal
+	OveragePts           decimal.Decimal
+	LineType             string
+	PlanID               *int64
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	ProductName          string
+	CategoryName         string
+}
+
+func (q *Queries) GetQuotationLine(ctx context.Context, arg GetQuotationLineParams) (GetQuotationLineRow, error) {
+	row := q.db.QueryRow(ctx, getQuotationLine, arg.ID, arg.QuotationID)
+	var i GetQuotationLineRow
+	err := row.Scan(
+		&i.ID,
+		&i.QuotationID,
+		&i.ProductID,
+		&i.CategoryID,
+		&i.Position,
+		&i.Qty,
+		&i.UnitPrice,
+		&i.UnitCost,
+		&i.LineDiscountPct,
+		&i.TaxRatePct,
+		&i.EffectiveDiscountPct,
+		&i.ListValue,
+		&i.DiscountAmount,
+		&i.NetAmount,
+		&i.TaxAmount,
+		&i.CostAmount,
+		&i.MarginAmount,
+		&i.MarginPct,
+		&i.CeilingPct,
+		&i.OveragePts,
+		&i.LineType,
+		&i.PlanID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ProductName,
+		&i.CategoryName,
+	)
+	return i, err
+}
+
 const insertQuotationLine = `-- name: InsertQuotationLine :one
 INSERT INTO quotation_lines (
     quotation_id, product_id, category_id, position,
     qty, unit_price, unit_cost, line_discount_pct, tax_rate_pct,
     line_type, plan_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+) VALUES (
+    $1, $2, $3,
+    (SELECT COALESCE(max(position), 0) + 1
+       FROM quotation_lines WHERE quotation_id = $1),
+    $4, $5, $6, $7, $8,
+    $9, $10
+)
 RETURNING id, quotation_id, product_id, category_id, position, qty, unit_price, unit_cost, line_discount_pct, tax_rate_pct, effective_discount_pct, list_value, discount_amount, net_amount, tax_amount, cost_amount, margin_amount, margin_pct, ceiling_pct, overage_pts, line_type, plan_id, created_at, updated_at
 `
 
@@ -166,7 +248,6 @@ type InsertQuotationLineParams struct {
 	QuotationID     int64
 	ProductID       int64
 	CategoryID      int64
-	Position        int32
 	Qty             decimal.Decimal
 	UnitPrice       decimal.Decimal
 	UnitCost        decimal.Decimal
@@ -176,12 +257,14 @@ type InsertQuotationLineParams struct {
 	PlanID          *int64
 }
 
+// The next position is computed in the same statement rather than fetched
+// first: a separate SELECT would double the round trips on the hottest write
+// in the builder, and could race with a concurrent insert besides.
 func (q *Queries) InsertQuotationLine(ctx context.Context, arg InsertQuotationLineParams) (QuotationLine, error) {
 	row := q.db.QueryRow(ctx, insertQuotationLine,
 		arg.QuotationID,
 		arg.ProductID,
 		arg.CategoryID,
-		arg.Position,
 		arg.Qty,
 		arg.UnitPrice,
 		arg.UnitCost,
@@ -521,12 +604,12 @@ func (q *Queries) ListQuotations(ctx context.Context, arg ListQuotationsParams) 
 }
 
 const nextQuotationReference = `-- name: NextQuotationReference :one
-SELECT 'Q-' || to_char(nextval('quotations_id_seq'), 'FM0000') AS reference
+SELECT ('Q-' || to_char(nextval('quotations_id_seq'), 'FM0000'))::text AS reference
 `
 
-func (q *Queries) NextQuotationReference(ctx context.Context) (interface{}, error) {
+func (q *Queries) NextQuotationReference(ctx context.Context) (string, error) {
 	row := q.db.QueryRow(ctx, nextQuotationReference)
-	var reference interface{}
+	var reference string
 	err := row.Scan(&reference)
 	return reference, err
 }
@@ -634,6 +717,54 @@ func (q *Queries) UpdateQuotationLineInput(ctx context.Context, arg UpdateQuotat
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateQuotationLinesComputed = `-- name: UpdateQuotationLinesComputed :exec
+UPDATE quotation_lines ql
+SET effective_discount_pct = v.effective_discount_pct::numeric,
+    list_value             = v.list_value::numeric,
+    discount_amount        = v.discount_amount::numeric,
+    net_amount             = v.net_amount::numeric,
+    tax_amount             = v.tax_amount::numeric,
+    cost_amount            = v.cost_amount::numeric,
+    margin_amount          = v.margin_amount::numeric,
+    margin_pct             = v.margin_pct::numeric,
+    ceiling_pct            = v.ceiling_pct::numeric,
+    overage_pts            = v.overage_pts::numeric,
+    updated_at             = now()
+FROM jsonb_to_recordset($2::jsonb) AS v(
+    id                     bigint,
+    effective_discount_pct text,
+    list_value             text,
+    discount_amount        text,
+    net_amount             text,
+    tax_amount             text,
+    cost_amount            text,
+    margin_amount          text,
+    margin_pct             text,
+    ceiling_pct            text,
+    overage_pts            text
+)
+WHERE ql.id = v.id AND ql.quotation_id = $1
+`
+
+type UpdateQuotationLinesComputedParams struct {
+	QuotationID int64
+	Lines       []byte
+}
+
+// Writes every line's computed values in one statement.
+//
+// Recalculation touches all lines of a quotation on every keystroke, so
+// updating them one at a time would make the builder's cost grow with the
+// size of the deal. The whole batch arrives as one JSONB document and is
+// expanded into rows, keeping the write at a single round trip.
+//
+// Every numeric arrives as text and is cast here: decimal values serialise as
+// JSON strings precisely so they never pass through a float on the way.
+func (q *Queries) UpdateQuotationLinesComputed(ctx context.Context, arg UpdateQuotationLinesComputedParams) error {
+	_, err := q.db.Exec(ctx, updateQuotationLinesComputed, arg.QuotationID, arg.Lines)
+	return err
 }
 
 const updateQuotationStatus = `-- name: UpdateQuotationStatus :one
