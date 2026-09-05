@@ -33,7 +33,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7);
 SELECT * FROM invoice_lines WHERE invoice_id = $1 ORDER BY id;
 
 -- name: NextInvoiceReference :one
-SELECT 'INV-' || to_char(nextval('invoices_id_seq'), 'FM0000') AS reference;
+SELECT ('INV-' || to_char(nextval('invoices_id_seq'), 'FM0000'))::text AS reference;
 
 -- name: CreatePayment :one
 INSERT INTO payments (invoice_id, amount, method, reference, recorded_by)

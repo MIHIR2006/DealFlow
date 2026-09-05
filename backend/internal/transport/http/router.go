@@ -165,7 +165,27 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		cfg.POST("/upsell-rules", adminOnly, ch.createUpsellRule)
 	}
 
-	// Phase 5 → quotation routes
+	// Quotations. Every pricing mutation returns the whole recalculated
+	// document, so the client never recomputes money and cannot disagree
+	// with the server about a total.
+	qh := quotationHandler{svc: service.NewQuoteService(d.Pool, queries, cfgCache)}
+	quotes := rg.Group("/quotations", authed, staff)
+	{
+		quotes.GET("", qh.list)
+		quotes.POST("", qh.create)
+		quotes.GET("/:id", qh.get)
+
+		quotes.POST("/:id/lines", qh.addLine)
+		quotes.PATCH("/:id/lines/:lineId", qh.updateLine)
+		quotes.DELETE("/:id/lines/:lineId", qh.deleteLine)
+
+		quotes.PUT("/:id/order-discount", qh.setOrderDiscount)
+
+		// The rep never chooses an approver: the blended risk score decides
+		// whether this needs one and which chain it takes.
+		quotes.POST("/:id/submit", qh.submit)
+	}
+
 	// Phase 6 → approval routes
 	// Phase 7 → fulfillment routes
 	// Phase 8 → billing + invoicing routes

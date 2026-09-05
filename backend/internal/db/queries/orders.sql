@@ -17,7 +17,7 @@ SELECT * FROM sales_orders WHERE quotation_id = $1;
 UPDATE sales_orders SET status = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
 -- name: NextSalesOrderReference :one
-SELECT 'SO-' || to_char(nextval('sales_orders_id_seq'), 'FM0000') AS reference;
+SELECT ('SO-' || to_char(nextval('sales_orders_id_seq'), 'FM0000'))::text AS reference;
 
 -- name: CreateFulfillment :one
 INSERT INTO fulfillments

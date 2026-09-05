@@ -65,6 +65,7 @@ type Querier interface {
 	// quotation id, so a token for one quotation cannot reach another: the
 	// isolation is structural, not a check that could be forgotten.
 	GetQuotationByPortalToken(ctx context.Context, token string) (GetQuotationByPortalTokenRow, error)
+	GetQuotationLine(ctx context.Context, arg GetQuotationLineParams) (GetQuotationLineRow, error)
 	GetSalesOrder(ctx context.Context, id int64) (GetSalesOrderRow, error)
 	GetSalesOrderByQuotation(ctx context.Context, quotationID int64) (SalesOrder, error)
 	// Availability for a set of products across every warehouse, in one query.
@@ -77,6 +78,9 @@ type Querier interface {
 	// never one insert per warehouse line.
 	InsertFulfillmentLines(ctx context.Context, arg []InsertFulfillmentLinesParams) (int64, error)
 	InsertInvoiceLines(ctx context.Context, arg []InsertInvoiceLinesParams) (int64, error)
+	// The next position is computed in the same statement rather than fetched
+	// first: a separate SELECT would double the round trips on the hottest write
+	// in the builder, and could race with a concurrent insert besides.
 	InsertQuotationLine(ctx context.Context, arg InsertQuotationLineParams) (QuotationLine, error)
 	ListApprovalPolicies(ctx context.Context) ([]ApprovalPolicy, error)
 	// Every round, including superseded ones. The approval screen shows the full
@@ -129,9 +133,9 @@ type Querier interface {
 	LockStockForProducts(ctx context.Context, dollar_1 []int64) ([]LockStockForProductsRow, error)
 	MarkBillingScheduleInvoiced(ctx context.Context, arg MarkBillingScheduleInvoicedParams) error
 	MarkPortalTokenUsed(ctx context.Context, id int64) error
-	NextInvoiceReference(ctx context.Context) (interface{}, error)
-	NextQuotationReference(ctx context.Context) (interface{}, error)
-	NextSalesOrderReference(ctx context.Context) (interface{}, error)
+	NextInvoiceReference(ctx context.Context) (string, error)
+	NextQuotationReference(ctx context.Context) (string, error)
+	NextSalesOrderReference(ctx context.Context) (string, error)
 	QuotationStatusCounts(ctx context.Context) ([]QuotationStatusCountsRow, error)
 	// Recomputes paid amount and status from the payments actually recorded, so
 	// the invoice can never drift from its ledger. A short payment lands on
@@ -161,6 +165,16 @@ type Querier interface {
 	// views and dashboards read columns instead of re-running the engine per row.
 	UpdateQuotationLineComputed(ctx context.Context, arg UpdateQuotationLineComputedParams) error
 	UpdateQuotationLineInput(ctx context.Context, arg UpdateQuotationLineInputParams) (QuotationLine, error)
+	// Writes every line's computed values in one statement.
+	//
+	// Recalculation touches all lines of a quotation on every keystroke, so
+	// updating them one at a time would make the builder's cost grow with the
+	// size of the deal. The whole batch arrives as one JSONB document and is
+	// expanded into rows, keeping the write at a single round trip.
+	//
+	// Every numeric arrives as text and is cast here: decimal values serialise as
+	// JSON strings precisely so they never pass through a float on the way.
+	UpdateQuotationLinesComputed(ctx context.Context, arg UpdateQuotationLinesComputedParams) error
 	UpdateQuotationStatus(ctx context.Context, arg UpdateQuotationStatusParams) (Quotation, error)
 	// Optimistic locking: the update only applies when the caller's version is
 	// still current, so two reps editing one quotation cannot silently clobber

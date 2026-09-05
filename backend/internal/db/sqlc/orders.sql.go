@@ -354,12 +354,12 @@ func (q *Queries) ListOpenBackorders(ctx context.Context, salesOrderID int64) ([
 }
 
 const nextSalesOrderReference = `-- name: NextSalesOrderReference :one
-SELECT 'SO-' || to_char(nextval('sales_orders_id_seq'), 'FM0000') AS reference
+SELECT ('SO-' || to_char(nextval('sales_orders_id_seq'), 'FM0000'))::text AS reference
 `
 
-func (q *Queries) NextSalesOrderReference(ctx context.Context) (interface{}, error) {
+func (q *Queries) NextSalesOrderReference(ctx context.Context) (string, error) {
 	row := q.db.QueryRow(ctx, nextSalesOrderReference)
-	var reference interface{}
+	var reference string
 	err := row.Scan(&reference)
 	return reference, err
 }

@@ -464,12 +464,12 @@ func (q *Queries) MarkBillingScheduleInvoiced(ctx context.Context, arg MarkBilli
 }
 
 const nextInvoiceReference = `-- name: NextInvoiceReference :one
-SELECT 'INV-' || to_char(nextval('invoices_id_seq'), 'FM0000') AS reference
+SELECT ('INV-' || to_char(nextval('invoices_id_seq'), 'FM0000'))::text AS reference
 `
 
-func (q *Queries) NextInvoiceReference(ctx context.Context) (interface{}, error) {
+func (q *Queries) NextInvoiceReference(ctx context.Context) (string, error) {
 	row := q.db.QueryRow(ctx, nextInvoiceReference)
-	var reference interface{}
+	var reference string
 	err := row.Scan(&reference)
 	return reference, err
 }
