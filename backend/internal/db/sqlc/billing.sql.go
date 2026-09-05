@@ -12,6 +12,99 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const adjustScheduleAmount = `-- name: AdjustScheduleAmount :one
+UPDATE billing_schedules
+SET amount = amount + $1::numeric
+WHERE id = $2
+RETURNING id, sales_order_id, quotation_line_id, plan_id, seq, period_start, period_end, amount, proration_factor, status, invoice_id, created_at
+`
+
+type AdjustScheduleAmountParams struct {
+	Delta decimal.Decimal
+	ID    int64
+}
+
+func (q *Queries) AdjustScheduleAmount(ctx context.Context, arg AdjustScheduleAmountParams) (BillingSchedule, error) {
+	row := q.db.QueryRow(ctx, adjustScheduleAmount, arg.Delta, arg.ID)
+	var i BillingSchedule
+	err := row.Scan(
+		&i.ID,
+		&i.SalesOrderID,
+		&i.QuotationLineID,
+		&i.PlanID,
+		&i.Seq,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.Amount,
+		&i.ProrationFactor,
+		&i.Status,
+		&i.InvoiceID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const cancelRemainingSchedules = `-- name: CancelRemainingSchedules :execrows
+UPDATE billing_schedules
+SET status = 'CANCELLED'
+WHERE quotation_line_id = $1 AND status = 'SCHEDULED' AND period_start > now()
+`
+
+func (q *Queries) CancelRemainingSchedules(ctx context.Context, quotationLineID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelRemainingSchedules, quotationLineID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const createCreditNote = `-- name: CreateCreditNote :one
+INSERT INTO credit_notes
+    (reference, sales_order_id, billing_schedule_id, quotation_line_id,
+     amount, proration_factor, reason, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, reference, sales_order_id, billing_schedule_id, quotation_line_id, amount, proration_factor, reason, status, created_by, created_at
+`
+
+type CreateCreditNoteParams struct {
+	Reference         string
+	SalesOrderID      int64
+	BillingScheduleID *int64
+	QuotationLineID   *int64
+	Amount            decimal.Decimal
+	ProrationFactor   decimal.Decimal
+	Reason            string
+	CreatedBy         *int64
+}
+
+func (q *Queries) CreateCreditNote(ctx context.Context, arg CreateCreditNoteParams) (CreditNote, error) {
+	row := q.db.QueryRow(ctx, createCreditNote,
+		arg.Reference,
+		arg.SalesOrderID,
+		arg.BillingScheduleID,
+		arg.QuotationLineID,
+		arg.Amount,
+		arg.ProrationFactor,
+		arg.Reason,
+		arg.CreatedBy,
+	)
+	var i CreditNote
+	err := row.Scan(
+		&i.ID,
+		&i.Reference,
+		&i.SalesOrderID,
+		&i.BillingScheduleID,
+		&i.QuotationLineID,
+		&i.Amount,
+		&i.ProrationFactor,
+		&i.Reason,
+		&i.Status,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createInvoice = `-- name: CreateInvoice :one
 INSERT INTO invoices
     (reference, sales_order_id, kind, status, issue_date, due_date,
@@ -94,6 +187,35 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 		&i.Reference,
 		&i.RecordedBy,
 		&i.ReceivedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getCurrentBillingPeriod = `-- name: GetCurrentBillingPeriod :one
+SELECT id, sales_order_id, quotation_line_id, plan_id, seq, period_start, period_end, amount, proration_factor, status, invoice_id, created_at FROM billing_schedules
+WHERE quotation_line_id = $1
+  AND status = 'SCHEDULED'
+  AND period_start <= now() AND period_end > now()
+ORDER BY seq
+LIMIT 1
+`
+
+func (q *Queries) GetCurrentBillingPeriod(ctx context.Context, quotationLineID int64) (BillingSchedule, error) {
+	row := q.db.QueryRow(ctx, getCurrentBillingPeriod, quotationLineID)
+	var i BillingSchedule
+	err := row.Scan(
+		&i.ID,
+		&i.SalesOrderID,
+		&i.QuotationLineID,
+		&i.PlanID,
+		&i.Seq,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.Amount,
+		&i.ProrationFactor,
+		&i.Status,
+		&i.InvoiceID,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -220,6 +342,42 @@ func (q *Queries) ListBillingSchedulesForOrder(ctx context.Context, salesOrderID
 			&i.CreatedAt,
 			&i.PlanName,
 			&i.ProductName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCreditNotesForOrder = `-- name: ListCreditNotesForOrder :many
+SELECT id, reference, sales_order_id, billing_schedule_id, quotation_line_id, amount, proration_factor, reason, status, created_by, created_at FROM credit_notes WHERE sales_order_id = $1 ORDER BY id
+`
+
+func (q *Queries) ListCreditNotesForOrder(ctx context.Context, salesOrderID int64) ([]CreditNote, error) {
+	rows, err := q.db.Query(ctx, listCreditNotesForOrder, salesOrderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CreditNote{}
+	for rows.Next() {
+		var i CreditNote
+		if err := rows.Scan(
+			&i.ID,
+			&i.Reference,
+			&i.SalesOrderID,
+			&i.BillingScheduleID,
+			&i.QuotationLineID,
+			&i.Amount,
+			&i.ProrationFactor,
+			&i.Reason,
+			&i.Status,
+			&i.CreatedBy,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -463,6 +621,17 @@ func (q *Queries) MarkBillingScheduleInvoiced(ctx context.Context, arg MarkBilli
 	return err
 }
 
+const nextCreditNoteReference = `-- name: NextCreditNoteReference :one
+SELECT ('CN-' || to_char(nextval('credit_notes_id_seq'), 'FM0000'))::text AS reference
+`
+
+func (q *Queries) NextCreditNoteReference(ctx context.Context) (string, error) {
+	row := q.db.QueryRow(ctx, nextCreditNoteReference)
+	var reference string
+	err := row.Scan(&reference)
+	return reference, err
+}
+
 const nextInvoiceReference = `-- name: NextInvoiceReference :one
 SELECT ('INV-' || to_char(nextval('invoices_id_seq'), 'FM0000'))::text AS reference
 `
@@ -513,4 +682,26 @@ func (q *Queries) RecalculateInvoicePayment(ctx context.Context, id int64) (Invo
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateScheduleAmountsFrom = `-- name: UpdateScheduleAmountsFrom :execrows
+UPDATE billing_schedules
+SET amount = $1::numeric
+WHERE quotation_line_id = $2
+  AND status = 'SCHEDULED'
+  AND seq > $3::int
+`
+
+type UpdateScheduleAmountsFromParams struct {
+	Amount          decimal.Decimal
+	QuotationLineID int64
+	AfterSeq        int32
+}
+
+func (q *Queries) UpdateScheduleAmountsFrom(ctx context.Context, arg UpdateScheduleAmountsFromParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateScheduleAmountsFrom, arg.Amount, arg.QuotationLineID, arg.AfterSeq)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

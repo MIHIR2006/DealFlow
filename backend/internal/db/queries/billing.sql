@@ -86,3 +86,42 @@ LIMIT $1;
 
 -- name: MarkBillingScheduleInvoiced :exec
 UPDATE billing_schedules SET status = 'INVOICED', invoice_id = $2 WHERE id = $1;
+
+-- name: NextCreditNoteReference :one
+SELECT ('CN-' || to_char(nextval('credit_notes_id_seq'), 'FM0000'))::text AS reference;
+
+-- name: CreateCreditNote :one
+INSERT INTO credit_notes
+    (reference, sales_order_id, billing_schedule_id, quotation_line_id,
+     amount, proration_factor, reason, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: ListCreditNotesForOrder :many
+SELECT * FROM credit_notes WHERE sales_order_id = $1 ORDER BY id;
+
+-- name: CancelRemainingSchedules :execrows
+UPDATE billing_schedules
+SET status = 'CANCELLED'
+WHERE quotation_line_id = $1 AND status = 'SCHEDULED' AND period_start > now();
+
+-- name: GetCurrentBillingPeriod :one
+SELECT * FROM billing_schedules
+WHERE quotation_line_id = $1
+  AND status = 'SCHEDULED'
+  AND period_start <= now() AND period_end > now()
+ORDER BY seq
+LIMIT 1;
+
+-- name: UpdateScheduleAmountsFrom :execrows
+UPDATE billing_schedules
+SET amount = sqlc.arg('amount')::numeric
+WHERE quotation_line_id = sqlc.arg('quotation_line_id')
+  AND status = 'SCHEDULED'
+  AND seq > sqlc.arg('after_seq')::int;
+
+-- name: AdjustScheduleAmount :one
+UPDATE billing_schedules
+SET amount = amount + sqlc.arg('delta')::numeric
+WHERE id = sqlc.arg('id')
+RETURNING *;

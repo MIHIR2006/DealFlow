@@ -10,7 +10,10 @@ import (
 
 type Querier interface {
 	AddStock(ctx context.Context, arg AddStockParams) (StockItem, error)
+	AdjustScheduleAmount(ctx context.Context, arg AdjustScheduleAmountParams) (BillingSchedule, error)
 	AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) (AuditLog, error)
+	CancelRemainingSchedules(ctx context.Context, quotationLineID int64) (int64, error)
+	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	CountFulfillmentsForOrder(ctx context.Context, salesOrderID int64) (int64, error)
 	CountOpenApprovals(ctx context.Context, arg CountOpenApprovalsParams) (int64, error)
 	CreateApprovalPolicy(ctx context.Context, arg CreateApprovalPolicyParams) (ApprovalPolicy, error)
@@ -18,6 +21,7 @@ type Querier interface {
 	CreateBackorder(ctx context.Context, arg CreateBackorderParams) (Backorder, error)
 	CreateCategory(ctx context.Context, name string) (Category, error)
 	CreateCounterOffer(ctx context.Context, arg CreateCounterOfferParams) (CounterOffer, error)
+	CreateCreditNote(ctx context.Context, arg CreateCreditNoteParams) (CreditNote, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateDealAlert(ctx context.Context, arg CreateDealAlertParams) (DealAlert, error)
 	CreateFulfillment(ctx context.Context, arg CreateFulfillmentParams) (Fulfillment, error)
@@ -47,6 +51,7 @@ type Querier interface {
 	// Covered by idx_quotations_stalled.
 	FindStalledQuotations(ctx context.Context, arg FindStalledQuotationsParams) ([]FindStalledQuotationsRow, error)
 	GetApprovalRequest(ctx context.Context, id int64) (GetApprovalRequestRow, error)
+	GetCurrentBillingPeriod(ctx context.Context, quotationLineID int64) (BillingSchedule, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
 	GetFulfillmentForOrder(ctx context.Context, salesOrderID int64) (Fulfillment, error)
 	GetIdempotentResponse(ctx context.Context, arg GetIdempotentResponseParams) (IdempotencyKey, error)
@@ -95,6 +100,7 @@ type Querier interface {
 	// the "stock arrived, consolidate?" prompt.
 	ListConsolidatableBackorders(ctx context.Context, salesOrderID int64) ([]ListConsolidatableBackordersRow, error)
 	ListCounterOffers(ctx context.Context, quotationID int64) ([]ListCounterOffersRow, error)
+	ListCreditNotesForOrder(ctx context.Context, salesOrderID int64) ([]CreditNote, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]Customer, error)
 	// The governance configuration is small, changes rarely, and is read on every
 	// keystroke in the quotation builder. These four queries populate the
@@ -143,6 +149,7 @@ type Querier interface {
 	LockStockForProducts(ctx context.Context, dollar_1 []int64) ([]LockStockForProductsRow, error)
 	MarkBillingScheduleInvoiced(ctx context.Context, arg MarkBillingScheduleInvoicedParams) error
 	MarkPortalTokenUsed(ctx context.Context, id int64) error
+	NextCreditNoteReference(ctx context.Context) (string, error)
 	NextInvoiceReference(ctx context.Context) (string, error)
 	NextQuotationReference(ctx context.Context) (string, error)
 	NextSalesOrderReference(ctx context.Context) (string, error)
@@ -151,7 +158,11 @@ type Querier interface {
 	// the invoice can never drift from its ledger. A short payment lands on
 	// PARTIAL, not PAID.
 	RecalculateInvoicePayment(ctx context.Context, id int64) (Invoice, error)
+	ReleaseIdempotencyKey(ctx context.Context, arg ReleaseIdempotencyKeyParams) error
 	ReleaseStock(ctx context.Context, arg ReleaseStockParams) error
+	// Reserves a key before the work runs, so two concurrent replays cannot both
+	// execute. Returning no row means someone else owns this key.
+	ReserveIdempotencyKey(ctx context.Context, arg ReserveIdempotencyKeyParams) (IdempotencyKey, error)
 	ReserveStock(ctx context.Context, arg ReserveStockParams) (StockItem, error)
 	ResolveBackorder(ctx context.Context, id int64) (Backorder, error)
 	ResolveDealAlert(ctx context.Context, id int64) error
@@ -192,6 +203,7 @@ type Querier interface {
 	// each other. Zero rows returned means "someone else changed it".
 	UpdateQuotationTotals(ctx context.Context, arg UpdateQuotationTotalsParams) (Quotation, error)
 	UpdateSalesOrderStatus(ctx context.Context, arg UpdateSalesOrderStatusParams) (SalesOrder, error)
+	UpdateScheduleAmountsFrom(ctx context.Context, arg UpdateScheduleAmountsFromParams) (int64, error)
 	UpsertCategoryCeiling(ctx context.Context, arg UpsertCategoryCeilingParams) (CategoryCeiling, error)
 	UpsertDiscountTier(ctx context.Context, arg UpsertDiscountTierParams) (DiscountTier, error)
 	UpsertStock(ctx context.Context, arg UpsertStockParams) (StockItem, error)

@@ -215,7 +215,24 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		orders.POST("/:id/backorders/consolidate", fh.consolidate)
 	}
 
-	// Phase 8 → billing + invoicing routes
+	// Billing. One order carries two tracks: a single invoice for the
+	// one-time lines, and a schedule of future periods for the recurring
+	// ones. Money-moving endpoints accept an Idempotency-Key.
+	bh := billingHandler{
+		svc:  service.NewBillingService(d.Pool, queries, quoteSvc),
+		idem: service.NewIdempotency(queries),
+	}
+	orders.POST("/:id/invoices", bh.generate)
+	orders.GET("/:id/billing", bh.getForOrder)
+	orders.POST("/:id/subscriptions/:lineId/change", bh.changeSubscription)
+
+	invoices := rg.Group("/invoices", authed, staff)
+	{
+		invoices.GET("", bh.listInvoices)
+		invoices.GET("/:id", bh.getInvoice)
+		invoices.POST("/:id/payments", bh.recordPayment)
+	}
+
 	// Phase 9 → portal negotiation routes
 	// Phase 10 → analytics routes
 }

@@ -107,6 +107,32 @@ func (h *harness) do(method, path, token string, body any) *httptest.ResponseRec
 	return w
 }
 
+// request builds a request without sending it, so a test can add headers
+// such as Idempotency-Key before dispatch.
+func (h *harness) request(method, path, token string, body any) *http.Request {
+	var buf io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		buf = bytes.NewReader(b)
+	}
+
+	req := httptest.NewRequest(method, path, buf)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return req
+}
+
+// send dispatches a request built by request.
+func (h *harness) send(req *http.Request) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	h.router.ServeHTTP(w, req)
+	return w
+}
+
 // login returns a session token for a seeded account.
 func (h *harness) login(t *testing.T, email string) string {
 	t.Helper()
