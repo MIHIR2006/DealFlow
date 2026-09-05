@@ -24,11 +24,11 @@ const marquee = [
 const steps = ["Submitted", "Sales Manager", "Finance", "Confirmed"];
 
 const pills = [
-  { name: "J. Rao", note: "Submitted", x: "8%", y: "18%" },
-  { name: "M. Shah", note: "Returned", x: "78%", y: "14%" },
-  { name: "Acme Gold", note: "Q-1042", x: "12%", y: "72%" },
-  { name: "Portal", note: "Counter 20%", x: "70%", y: "68%" },
-  { name: "Finance", note: "Pending", x: "84%", y: "42%" },
+  { name: "J. Rao", note: "Submitted", x: "8%", y: "18%", seed: "JRao", bgHex: "b6e3f4" },
+  { name: "M. Shah", note: "Returned", x: "78%", y: "14%", seed: "MShah", bgHex: "ffdfbf" },
+  { name: "Acme Gold", note: "Q-1042", x: "12%", y: "72%", seed: "AcmeCorp", bgHex: "d1d4f9" },
+  { name: "Portal", note: "Counter 20%", x: "70%", y: "68%", seed: "Portal", bgHex: "c0aedd" },
+  { name: "Finance", note: "Pending", x: "84%", y: "42%", seed: "Finance", bgHex: "ffd5dc" },
 ];
 
 export default function Home() {
@@ -52,7 +52,14 @@ export default function Home() {
             ]}
           />
           <div className="mt-10 flex flex-col items-center">
-            <span className="size-10 rounded-full bg-ink/90" />
+            <div className="size-11 overflow-hidden rounded-full border-2 border-white bg-white p-0.5 shadow-md">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://api.dicebear.com/7.x/notionists/svg?seed=AcmeCorp&backgroundColor=ffdfbf"
+                alt="Acme Corp"
+                className="size-full rounded-full object-cover"
+              />
+            </div>
             <p className="mt-3 text-[15px] font-medium">Q-1042 · Acme Corp</p>
             <p className="text-[13px] text-mist">Gold · Hardware + Service</p>
           </div>
@@ -145,7 +152,17 @@ export default function Home() {
         >
           <SplitCard>
             <div className="flex items-center justify-between">
-              <p className="text-[13px] font-semibold">Q-1018 · Northwind</p>
+              <div className="flex items-center gap-2.5">
+                <div className="size-7 overflow-hidden rounded-full border border-ink/10 bg-white shadow-xs">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="https://api.dicebear.com/7.x/notionists/svg?seed=Northwind&backgroundColor=b6e3f4"
+                    alt="Northwind"
+                    className="size-full rounded-full object-cover"
+                  />
+                </div>
+                <p className="text-[13px] font-semibold">Q-1018 · Northwind</p>
+              </div>
               <span className="text-[12px]" style={{ color: "var(--color-status-warn)" }}>
                 Stalled 9 days
               </span>
@@ -238,18 +255,24 @@ export default function Home() {
             quote="Submitted. Initial 12% discount on the laptop — within the Gold hardware ceiling."
             who="J. Rao"
             role="Sales Rep · Aug 20"
+            seed="JRao"
+            bgHex="b6e3f4"
           />
           <QuoteCard
             tone="peach"
             quote="Returned for revision. Need a margin note on the setup service before this can move."
             who="M. Shah"
             role="Sales Manager · Aug 21"
+            seed="MShah"
+            bgHex="ffdfbf"
           />
           <QuoteCard
             tone="mist"
             quote="A customer action just mutated our internal workflow state and re-entered the chain."
             who="Portal"
             role="Counter-offer · token-scoped"
+            seed="Portal"
+            bgHex="c0aedd"
           />
         </div>
       </section>
@@ -259,10 +282,17 @@ export default function Home() {
         {pills.map((p) => (
           <span
             key={p.name}
-            className="capsule pointer-events-none absolute hidden items-center gap-2 py-1.5 pr-3 pl-1.5 text-[13px] lg:inline-flex"
+            className="capsule pointer-events-none absolute hidden items-center gap-2 py-1.5 pr-3 pl-1.5 text-[13px] shadow-sm lg:inline-flex"
             style={{ left: p.x, top: p.y }}
           >
-            <span className="size-6 rounded-full bg-ink/80" />
+            <div className="size-6 overflow-hidden rounded-full border border-white bg-white shadow-xs">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`https://api.dicebear.com/7.x/notionists/svg?seed=${p.seed}&backgroundColor=${p.bgHex}`}
+                alt={p.name}
+                className="size-full rounded-full object-cover"
+              />
+            </div>
             {p.name}
           </span>
         ))}
@@ -549,10 +579,10 @@ function Orbit() {
       <div className="absolute top-1/2 left-1/2 z-[1] flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-ink text-[11px] font-semibold text-bone">
         Q-1042
       </div>
-      <Bubble className="top-[18%] left-[18%]" text="Love this, I'm in." who="Manager" />
-      <Bubble className="top-[22%] right-[14%]" text="Need a margin note." who="Finance" />
-      <Bubble className="bottom-[28%] left-[10%]" text="Returned. Edit the service line." who="M. Shah" />
-      <Bubble className="right-[12%] bottom-[22%]" text="Counter sent from portal." who="Acme" />
+      <Bubble className="top-[18%] left-[18%]" text="Love this, I'm in." who="Manager" seed="Manager" bgHex="ffdfbf" />
+      <Bubble className="top-[22%] right-[14%]" text="Need a margin note." who="Finance" seed="Finance" bgHex="c0aedd" />
+      <Bubble className="bottom-[28%] left-[10%]" text="Returned. Edit the service line." who="M. Shah" seed="MShah" bgHex="b6e3f4" />
+      <Bubble className="right-[12%] bottom-[22%]" text="Counter sent from portal." who="Acme" seed="AcmeCorp" bgHex="d1d4f9" />
       <div className="capsule absolute bottom-8 left-1/2 z-[2] max-w-[280px] -translate-x-1/2 px-4 py-3 text-left text-[13px] text-ink">
         We&rsquo;d like 20% on Setup Service. Can you take another look?
       </div>
@@ -564,15 +594,26 @@ function Bubble({
   className,
   text,
   who,
+  seed,
+  bgHex = "ffffff",
 }: {
   className: string;
   text: string;
   who: string;
+  seed: string;
+  bgHex?: string;
 }) {
   return (
     <div className={`absolute z-[1] flex items-center gap-2 ${className}`}>
       <span className="capsule px-3 py-1.5 text-[12.5px]">{text}</span>
-      <span className="hidden size-8 rounded-full bg-ink/80 sm:block" title={who} />
+      <div className="hidden size-9.5 overflow-hidden rounded-full border-2 border-white shadow-md sm:block" title={who}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=${bgHex}`}
+          alt={who}
+          className="size-full object-cover rounded-full"
+        />
+      </div>
     </div>
   );
 }
@@ -619,11 +660,15 @@ function QuoteCard({
   who,
   role,
   tone,
+  seed,
+  bgHex = "ffffff",
 }: {
   quote: string;
   who: string;
   role: string;
   tone: "lavender" | "peach" | "mist";
+  seed?: string;
+  bgHex?: string;
 }) {
   const bg =
     tone === "lavender"
@@ -631,6 +676,8 @@ function QuoteCard({
       : tone === "peach"
         ? "linear-gradient(180deg, #fde9d8 0%, #f7f1ea 100%)"
         : "linear-gradient(180deg, #e7eef7 0%, #f7f1ea 100%)";
+  const avatarSeed = seed ?? who.replace(/[^a-zA-Z0-9]/g, "");
+
   return (
     <article
       className="flex min-h-[340px] min-w-[280px] flex-1 flex-col justify-between rounded-[24px] p-6 sm:min-w-[340px]"
@@ -640,7 +687,14 @@ function QuoteCard({
         “{quote}”
       </p>
       <div className="mt-8 flex items-center gap-3">
-        <span className="size-10 rounded-full bg-ink/80" />
+        <div className="size-10 overflow-hidden rounded-full border-2 border-white bg-white shadow-md">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`https://api.dicebear.com/7.x/notionists/svg?seed=${avatarSeed}&backgroundColor=${bgHex}`}
+            alt={who}
+            className="size-full rounded-full object-cover"
+          />
+        </div>
         <div>
           <p className="text-[14px] font-medium">{who}</p>
           <p className="text-[13px] text-mist">{role}</p>

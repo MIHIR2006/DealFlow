@@ -111,9 +111,19 @@ export function EngineCanvas() {
 
       <div className="mx-auto mt-4 max-w-[560px] rounded-[18px] bg-white p-5 card-shadow">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[12.5px] text-mist">Quotation Q-1042</p>
-            <p className="text-[16px] font-semibold">Acme Corp</p>
+          <div className="flex items-center gap-3">
+            <div className="size-9 shrink-0 overflow-hidden rounded-full border border-ink/10 bg-paper shadow-xs">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://api.dicebear.com/7.x/notionists/svg?seed=AcmeCorp&backgroundColor=ffdfbf"
+                alt="Acme Corp"
+                className="size-full rounded-full object-cover"
+              />
+            </div>
+            <div>
+              <p className="text-[12.5px] text-mist">Quotation Q-1042</p>
+              <p className="text-[16px] font-semibold">Acme Corp</p>
+            </div>
           </div>
           <span className="rounded-full border border-ink/10 px-2.5 py-1 text-[12px] font-medium text-mist">
             Gold

@@ -2,9 +2,19 @@ export function RiskCard({ className = "" }: { className?: string }) {
   return (
     <div className={`rounded-[22px] bg-white p-4.5 text-ink card-shadow ${className}`}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[12px] font-medium text-mist">Quotation Q-1042</p>
-          <p className="text-[15px] font-semibold">Acme Corp</p>
+        <div className="flex items-center gap-2.5">
+          <div className="size-8 shrink-0 overflow-hidden rounded-full border border-ink/10 bg-paper shadow-xs">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://api.dicebear.com/7.x/notionists/svg?seed=AcmeCorp&backgroundColor=ffdfbf"
+              alt="Acme Corp"
+              className="size-full rounded-full object-cover"
+            />
+          </div>
+          <div>
+            <p className="text-[12px] font-medium text-mist">Quotation Q-1042</p>
+            <p className="text-[15px] font-semibold">Acme Corp</p>
+          </div>
         </div>
         <span className="rounded-full border border-ink/10 px-2.5 py-0.5 text-[11px] font-medium text-mist">
           Gold
