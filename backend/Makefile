@@ -98,6 +98,14 @@ seed: ## Reset the database to the demo dataset (destructive)
 .PHONY: db-reset
 db-reset: migrate-up seed ## Migrate then reseed from scratch
 
+.PHONY: seed-scale
+seed-scale: ## Reseed with 2,000 filler quotations for plan and budget checks
+	go run ./cmd/seed -bulk 2000
+
+.PHONY: acceptance
+acceptance: ## Run the problem statement's eight steps against a live server
+	./scripts/acceptance.sh $(BASE_URL)
+
 .PHONY: tidy
 tidy: ## Tidy module dependencies
 	go mod tidy

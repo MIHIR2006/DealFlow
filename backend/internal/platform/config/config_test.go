@@ -92,3 +92,46 @@ func TestCORSOriginsParsedAndTrimmed(t *testing.T) {
 		}
 	}
 }
+
+// Profiling endpoints expose memory contents and goroutine stacks, so an
+// address that is not loopback must be refused rather than quietly published.
+func TestPprofMustBindToLoopback(t *testing.T) {
+	setValid(t)
+
+	for _, addr := range []string{"0.0.0.0:6060", ":6060", "10.0.0.5:6060", "example.com:6060"} {
+		t.Run(addr, func(t *testing.T) {
+			t.Setenv("PPROF_ADDR", addr)
+			if _, err := config.Load(); err == nil {
+				t.Errorf("PPROF_ADDR=%q was accepted", addr)
+			}
+		})
+	}
+
+	for _, addr := range []string{"127.0.0.1:6060", "localhost:6060", "[::1]:6060"} {
+		t.Run(addr, func(t *testing.T) {
+			t.Setenv("PPROF_ADDR", addr)
+			if _, err := config.Load(); err != nil {
+				t.Errorf("PPROF_ADDR=%q was rejected: %v", addr, err)
+			}
+		})
+	}
+}
+
+func TestDealHealthThresholdsAreValidated(t *testing.T) {
+	setValid(t)
+
+	// A multiplier at or below one marks every discount as an anomaly, and a
+	// dashboard that flags everything stops being read.
+	for _, v := range []string{"1", "0.9", "0"} {
+		t.Setenv("DEAL_ANOMALY_MULTIPLIER", v)
+		if _, err := config.Load(); err == nil {
+			t.Errorf("DEAL_ANOMALY_MULTIPLIER=%s was accepted", v)
+		}
+	}
+
+	t.Setenv("DEAL_ANOMALY_MULTIPLIER", "1.5")
+	t.Setenv("DEAL_STALL_DAYS", "0")
+	if _, err := config.Load(); err == nil {
+		t.Error("DEAL_STALL_DAYS=0 was accepted; every open deal would be stalled")
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -86,6 +87,24 @@ func main() {
 		serveErr <- nil
 	}()
 
+	// Profiling runs on its own loopback-only listener, so a CPU or heap
+	// profile can be taken from a running process without ever exposing
+	// those endpoints on the API port.
+	var pprofSrv *http.Server
+	if cfg.PprofAddr != "" {
+		pprofSrv = &http.Server{
+			Addr:              cfg.PprofAddr,
+			Handler:           pprofHandler(),
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+		go func() {
+			log.Info("profiling listener started", slog.String("addr", cfg.PprofAddr))
+			if err := pprofSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("profiling listener failed", slog.String("error", err.Error()))
+			}
+		}()
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -102,10 +121,24 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
 
+		if pprofSrv != nil {
+			_ = pprofSrv.Shutdown(shutdownCtx)
+		}
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Error("graceful shutdown failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
 		log.Info("shutdown complete")
 	}
+}
+
+// pprofHandler mounts the standard profiling endpoints.
+func pprofHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	return mux
 }
