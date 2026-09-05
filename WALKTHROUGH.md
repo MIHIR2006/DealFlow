@@ -138,14 +138,131 @@ keep working.
 
 ---
 
-## 5 — Order, fulfilment, billing
+## 5 — Confirmation carries straight into fulfilment
 
-After the customer confirms, the deal still needs an internal order.
+The moment the customer confirms, a sales order is raised — no rep step in
+between. Previously the deal reached CONFIRMED and then sat there, invisible to
+every fulfilment screen, because those are all keyed on an order that did not
+exist yet.
 
-**Rep** — open the confirmed quotation and use the fulfilment action. It creates
-the sales order (idempotently — clicking twice returns the same order) and takes
-you to **/fulfillment/:id**, where you can accept the suggested warehouse split,
-generate an invoice, and record a payment.
+Sign in as **finance@dealflow360.test** (warehouse splits belong to Finance &
+Operations; a rep sees the screen read-only) and open **Fulfillment**. The order
+the customer just confirmed is in the list.
+
+Open it. Each shipment card states the movement end to end:
+
+```
+Main Warehouse  ──▶  Acme Corporation      Shipment #1   7 units total
+East Depot      ──▶  Acme Corporation      Shipment #2   1 unit total
+```
+
+with the strategy, shipment count and estimated freight cost above, and the
+**Backorder Queue** beside them. The queue now tells the truth *before* you
+accept — a preview that will short 1 laptop says "1 Item Shortfall · Projected
+on accept", where it used to claim "Zero Pending" right up until the moment the
+shortfall became permanent.
+
+### Seeing the greedy set cover
+
+Two panels sit above the shipment cards.
+
+**Shipment routes** plots each origin arcing to the delivery city — e.g. Mumbai
+(Shipment #1) and Kolkata (Shipment #2) both heading to New Delhi. A warehouse
+with no coordinates on file is simply not plotted; the cards below stay the
+complete record.
+
+**How this split was chosen** is the algorithm made visible:
+
+```
+The engine repeatedly takes the warehouse covering the most outstanding demand
+for the least shipping cost, because every extra warehouse is another shipment.
+It used 2 of 3 candidates to cover 15 units at ₹2.40 estimated freight.
+
+Candidate warehouse        Could cover   Allocated   Outcome
+Main Warehouse  Mumbai              11          11   Used
+East Depot      Kolkata              5           4   Used
+South Hub       Bengaluru            2           0   Not needed
+```
+
+That last row is the point — South Hub *could* have contributed, and the engine
+declined it, because taking it would have bought a third shipment for two units.
+The implementation is `Split` in
+`Backend/internal/domain/fulfillment/fulfillment.go`, with its own unit tests
+alongside it.
+
+> Geography never influences the split. The engine chooses on stock coverage and
+> `shipping_cost_weight`, exactly as the problem statement specifies; the
+> coordinates only make the decision legible.
+
+### Manual Override
+
+**Manual Override** is now a working control rather than a disabled stub.
+
+Click it. The dialog opens seeded with the engine's own split, and shows what
+each warehouse can actually contribute:
+
+```
+Business Laptop                          allocated 6 of 7
+  Main Warehouse  (5 available)      [ 5 ]
+  East Depot      (1 available)      [ 1 ]
+Docking Station                          allocated 2 of 2
+  Main Warehouse  (10 available)     [ 2 ]
+  East Depot      (7 available)      [ 0 ]
+```
+
+Two things worth testing:
+
+- **Type 9 into Main Warehouse's laptops.** Two warnings appear — *allocating
+  more than the order needs (7)* and *Main Warehouse cannot cover 9* — and Apply
+  is disabled. Those are exactly the two rejections the server enforces (422 and
+  409); the dialog just surfaces them while you can still fix it.
+- **Move the docking stations to East Depot** (Main 0, East 2) and apply. The
+  strategy flips from `GREEDY_SPLIT` to **`MANUAL_OVERRIDE`**, the split follows
+  your choice, and stock is reserved accordingly.
+
+Anything left unallocated is stated up front — *"Will create a backorder for
+1 × Business Laptop"* — and becomes a real backorder on accept.
+
+### Backorder → consolidation
+
+With an open backorder, the **Consolidate Remaining Backorder** prompt appears
+automatically. Add stock as **admin@dealflow360.test** (Products → warehouse
+stock), then click it: the shortfall is allocated into a new shipment and the
+order moves to **FULFILLED**.
+
+### Billing and payment
+
+From the order, generate the invoice. On a hybrid order — one-time hardware plus
+a subscription line — you get **one one-time invoice** and a **separate schedule
+of recurring periods**, not one blended total:
+
+```
+INV-0005   ONETIME    ₹53,100   POSTED
+12 recurring periods  ₹50,000 each, monthly
+```
+
+Change the subscription quantity mid-cycle (10 → 4 seats): a **credit** of
+₹30,000 is prorated and **credit note CN-0001** is issued automatically.
+
+Record a payment on the invoice (Cash or Bank Transfer). The invoice moves to
+**PAID** and the order follows to **PAID**.
+
+---
+
+## 6 — Warehouse admin
+
+As **admin@dealflow360.test**, open **Catalog → Warehouses**.
+
+- Click **Add Warehouse** with the name blank. It now says *"Give the warehouse
+  a name."* Previously it returned silently and the button looked broken.
+- Fill in a latitude but no longitude: *"Latitude and longitude must be given
+  together, or both left blank."*
+- Add a complete one — e.g. `West Hub`, weight `1.1`, `Ahmedabad`, `23.0225`,
+  `72.5714`. The card shows **Ships from: Ahmedabad** with its coordinates, and
+  the warehouse immediately becomes a candidate in the split engine.
+
+Coordinates are optional everywhere. A warehouse without them still takes part
+in every split; it just does not appear on the map.
 
 ---
 
