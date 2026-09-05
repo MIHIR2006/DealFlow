@@ -76,6 +76,10 @@ export async function POST(req: NextRequest) {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
+    const authHeader = req.headers.get("authorization");
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
+    }
 
     const res = await fetch(target, {
       method: "POST",

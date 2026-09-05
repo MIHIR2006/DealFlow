@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
     const payload = {
       email: body.email,
       password: body.password,
-      role: body.role,
     };
 
     const res = await fetch(target, {

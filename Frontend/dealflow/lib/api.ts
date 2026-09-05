@@ -19,6 +19,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
+  // Attach token for authenticated endpoints unless one is already explicitly set
+  const isAuthEndpoint = path.startsWith("/v1/auth/login") || path.startsWith("/v1/auth/signup");
+  if (typeof window !== "undefined" && !isAuthEndpoint && !headers.has("Authorization")) {
+    const token = readToken();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
   const res = await fetch(`/api${path}`, {
     ...init,
     headers,
