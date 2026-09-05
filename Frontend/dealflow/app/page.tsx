@@ -293,16 +293,17 @@ export default function Home() {
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <a
-              href="#engine"
-              className="inline-flex items-center rounded-full bg-ink px-6 py-3 text-[15px] font-medium text-bone hover:bg-ink/85"
+              href="/register"
+              className="inline-flex items-center gap-1.5 rounded-full bg-ink px-6 py-3 text-[15px] font-medium text-bone hover:bg-ink/85"
             >
-              See how it decides
+              Get access
+              <ArrowRight className="size-4" />
             </a>
             <a
-              href="#faq"
+              href="/signin"
               className="inline-flex items-center rounded-full bg-white px-6 py-3 text-[15px] font-medium text-ink card-shadow"
             >
-              Talk through the spec
+              Sign in
             </a>
           </div>
         </div>
@@ -342,7 +343,7 @@ export default function Home() {
               <FooterCol
                 title="Workspace"
                 links={[
-                  ["#get-started", "Sign in"],
+                  ["/signin", "Sign in"],
                   ["#faq", "FAQ"],
                   ["#top", "Home"],
                 ]}
@@ -388,7 +389,7 @@ function Hero() {
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="#get-started"
+            href="/signin"
             className="inline-flex items-center rounded-full bg-white px-6 py-3 text-[15px] font-medium text-ink hover:bg-bone"
           >
             Open the workspace

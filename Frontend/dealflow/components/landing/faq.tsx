@@ -35,7 +35,7 @@ export function Faq() {
           </h2>
           <p className="mt-5 text-[15px] text-mist">
             Don&rsquo;t see the answer you&rsquo;re looking for?{" "}
-            <a href="#get-started" className="text-ink underline decoration-ink/30 underline-offset-4">
+            <a href="/register" className="text-ink underline decoration-ink/30 underline-offset-4">
               Get in touch
             </a>
           </p>

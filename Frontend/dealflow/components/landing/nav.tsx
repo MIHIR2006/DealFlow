@@ -54,13 +54,13 @@ export function Nav() {
           </a>
           <span className="mx-1 h-4 w-px bg-ink/15" />
           <a
-            href="#get-started"
+            href="/signin"
             className="rounded-full px-3 py-1.5 text-[13.5px] text-ink/75 transition-colors hover:text-ink"
           >
             Sign in
           </a>
           <a
-            href="#get-started"
+            href="/register"
             className="ml-1 inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-[13.5px] font-medium text-bone transition-colors hover:bg-ink/85"
           >
             Get access
@@ -69,7 +69,7 @@ export function Nav() {
         </nav>
 
         <a
-          href="#get-started"
+          href="/register"
           className="capsule pointer-events-auto inline-flex items-center gap-1.5 py-2 pr-3 pl-3.5 text-[13px] font-medium text-ink sm:hidden"
         >
           Get access
@@ -90,7 +90,7 @@ export function Nav() {
             </a>
           ))}
           <a
-            href="#get-started"
+            href="/signin"
             className="rounded-xl px-3 py-2.5 text-[14px] text-ink"
             onClick={() => setOpen(false)}
           >
