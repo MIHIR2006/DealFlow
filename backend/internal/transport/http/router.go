@@ -123,14 +123,6 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 
 	// The customer-facing tree. Separate group, separate middleware, and no
 	// handler below it ever accepts a quotation id from the request.
-	portal := rg.Group("/portal/q/:token")
-	portal.Use(
-		middleware.RateLimit(60, 20, Fail),
-		middleware.RequirePortalToken(queries, Fail),
-	)
-	{
-		portal.GET("", portalHandler{}.show)
-	}
 
 	// Administrative configuration. Reads are open to any signed-in staff
 	// member because the quotation builder needs the catalogue; writes are
@@ -187,6 +179,26 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		quotes.POST("/:id/submit", qh.submit)
 	}
 
+	// The customer-facing tree. Separate group, separate middleware, and no
+	// handler below it takes a quotation id: the token names exactly one.
+	ph := portalHandler{
+		svc: service.NewPortalService(d.Pool, queries, quoteSvc),
+		ttl: d.Config.PortalTokenTTL,
+	}
+	quotes.POST("/:id/send", ph.send)
+
+	portal := rg.Group("/portal/q/:token")
+	portal.Use(
+		middleware.RateLimit(60, 20, Fail),
+		middleware.RequirePortalToken(queries, Fail),
+	)
+	{
+		portal.GET("", ph.show)
+		portal.POST("/messages", ph.postMessage)
+		portal.POST("/counter-offer", ph.counterOffer)
+		portal.POST("/confirm", ph.confirm)
+	}
+
 	// The approvals inbox and the three decisions a reviewer can take.
 	// Approve and reject are terminal for a step; return sends the quotation
 	// back to draft so the rep can revise and resubmit, which the audit trail
@@ -234,7 +246,22 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	}
 
 	// Phase 9 → portal negotiation routes
-	// Phase 10 → analytics routes
+	// Analytics. Every figure is an aggregate computed in Postgres, so the
+	// dashboard costs the same at twenty quotations as at twenty thousand.
+	anh := analyticsHandler{svc: service.NewAnalyticsService(d.Pool, queries, d.Config, quoteSvc)}
+	quotes.POST("/:id/nudge", anh.nudge)
+
+	analytics := rg.Group("", authed,
+		middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager, auth.RoleFinance))
+	{
+		analytics.GET("/dashboard/deal-health", anh.dealHealth)
+		analytics.GET("/dashboard/alerts", anh.alerts)
+	}
+
+	// Reports are open to any staff member; the service narrows what each
+	// role actually sees.
+	rg.GET("/reports", authed, staff, anh.report)
+
 }
 
 // adminSignupGuard keeps account creation open while the platform is being

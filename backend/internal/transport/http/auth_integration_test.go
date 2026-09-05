@@ -11,10 +11,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"golang.org/x/crypto/bcrypt"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
@@ -44,16 +46,21 @@ func newHarness(t *testing.T) *harness {
 	gin.SetMode(gin.TestMode)
 
 	cfg := config.Config{
-		Env:           config.EnvTest,
-		DatabaseURL:   url,
-		DBMaxConns:    6,
-		DBMinConns:    1,
-		DBMaxConnLife: time.Hour,
-		DBMaxConnIdle: 30 * time.Minute,
-		JWTSecret:     testSecret,
-		JWTTTL:        time.Hour,
-		CORSOrigins:   []string{"http://localhost:3000"},
-		ExposeDBStats: true,
+		Env:            config.EnvTest,
+		DatabaseURL:    url,
+		DBMaxConns:     6,
+		DBMinConns:     1,
+		DBMaxConnLife:  time.Hour,
+		DBMaxConnIdle:  30 * time.Minute,
+		JWTSecret:      testSecret,
+		JWTTTL:         time.Hour,
+		PortalTokenTTL: 14 * 24 * time.Hour,
+		CORSOrigins:    []string{"http://localhost:3000"},
+
+		StallDays:         7,
+		AnomalyMultiplier: decimal.RequireFromString("1.5"),
+		AnomalyMinSample:  3,
+		ExposeDBStats:     true,
 	}
 
 	pool, err := db.Open(context.Background(), cfg)
@@ -439,3 +446,6 @@ func TestProbesDoNotTouchTheDatabase(t *testing.T) {
 // in dozens of times, and a production bcrypt cost turns that into a minute
 // of pure key stretching for no added confidence.
 var fixtureSeed = seed.Options{BcryptCost: bcrypt.MinCost}
+
+// itoa formats an id for a URL path.
+func itoa(v int64) string { return strconv.FormatInt(v, 10) }
