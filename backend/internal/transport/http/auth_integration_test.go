@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/platform/cache"
@@ -61,7 +62,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	t.Cleanup(pool.Close)
 
-	if err := seed.Run(context.Background(), pool); err != nil {
+	if err := seed.RunWith(context.Background(), pool, fixtureSeed); err != nil {
 		t.Fatalf("seed.Run: %v", err)
 	}
 
@@ -407,3 +408,8 @@ func TestProbesDoNotTouchTheDatabase(t *testing.T) {
 		t.Errorf("liveness ran %s queries, want 0", got)
 	}
 }
+
+// fixtureSeed builds the dataset with a cheap password cost. The suite signs
+// in dozens of times, and a production bcrypt cost turns that into a minute
+// of pure key stretching for no added confidence.
+var fixtureSeed = seed.Options{BcryptCost: bcrypt.MinCost}

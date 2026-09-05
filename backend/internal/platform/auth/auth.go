@@ -86,10 +86,21 @@ const MinPasswordLength = 8
 
 // HashPassword returns a bcrypt hash suitable for storage.
 func HashPassword(plain string) (string, error) {
+	return HashPasswordWithCost(plain, bcrypt.DefaultCost)
+}
+
+// HashPasswordWithCost is HashPassword with an explicit bcrypt cost.
+//
+// The cost is deliberately expensive in production: that is what makes a
+// stolen password table slow to crack. It is also what makes a test suite
+// that logs in a few dozen times take a minute, so fixtures lower it. The
+// cost is stored inside the hash, so a cheap fixture hash also verifies
+// cheaply.
+func HashPasswordWithCost(plain string, cost int) (string, error) {
 	if len(plain) < MinPasswordLength {
 		return "", ErrWeakPassword
 	}
-	h, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(plain), cost)
 	if err != nil {
 		return "", fmt.Errorf("hash password: %w", err)
 	}

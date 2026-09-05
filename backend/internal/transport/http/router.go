@@ -168,7 +168,8 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	// Quotations. Every pricing mutation returns the whole recalculated
 	// document, so the client never recomputes money and cannot disagree
 	// with the server about a total.
-	qh := quotationHandler{svc: service.NewQuoteService(d.Pool, queries, cfgCache)}
+	quoteSvc := service.NewQuoteService(d.Pool, queries, cfgCache)
+	qh := quotationHandler{svc: quoteSvc}
 	quotes := rg.Group("/quotations", authed, staff)
 	{
 		quotes.GET("", qh.list)
@@ -186,7 +187,20 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		quotes.POST("/:id/submit", qh.submit)
 	}
 
-	// Phase 6 → approval routes
+	// The approvals inbox and the three decisions a reviewer can take.
+	// Approve and reject are terminal for a step; return sends the quotation
+	// back to draft so the rep can revise and resubmit, which the audit trail
+	// records alongside the original submission.
+	ah2 := approvalHandler{svc: service.NewApprovalService(d.Pool, queries, quoteSvc)}
+	approvals := rg.Group("/approvals", authed,
+		middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager, auth.RoleFinance))
+	{
+		approvals.GET("", ah2.inbox)
+		approvals.POST("/:id/approve", ah2.approve)
+		approvals.POST("/:id/return", ah2.returnForRevision)
+		approvals.POST("/:id/reject", ah2.reject)
+	}
+
 	// Phase 7 → fulfillment routes
 	// Phase 8 → billing + invoicing routes
 	// Phase 9 → portal negotiation routes
