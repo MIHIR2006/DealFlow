@@ -7,6 +7,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/shopspring/decimal"
 	"os"
@@ -59,6 +60,12 @@ type Config struct {
 	// ExposeDBStats controls the X-DB-Queries / X-DB-Time-Ms response headers.
 	// Safe to leave on for the demo; gate it off in a real production deploy.
 	ExposeDBStats bool
+
+	// PprofAddr, when set, starts the profiling endpoints on a second
+	// listener. It is deliberately separate from the API port so profiles
+	// are never reachable from the internet by accident, and refuses to
+	// bind anywhere but loopback.
+	PprofAddr string
 }
 
 // IsProd reports whether the service is running in production mode.
@@ -90,6 +97,7 @@ func Load() (Config, error) {
 		IdleTimeout:       dur("HTTP_IDLE_TIMEOUT", 120*time.Second),
 		ShutdownTimeout:   dur("HTTP_SHUTDOWN_TIMEOUT", 15*time.Second),
 		ExposeDBStats:     boolean("EXPOSE_DB_STATS", true),
+		PprofAddr:         str("PPROF_ADDR", ""),
 	}
 
 	var problems []string
@@ -136,6 +144,13 @@ func Load() (Config, error) {
 		}
 	}
 
+	// Profiling endpoints expose memory contents and goroutine stacks. Binding
+	// them to anything but loopback would publish that.
+	if c.PprofAddr != "" && !isLoopback(c.PprofAddr) {
+		problems = append(problems,
+			`PPROF_ADDR must bind to loopback, for example "127.0.0.1:6060"`)
+	}
+
 	switch strings.ToLower(c.LogLevel) {
 	case "debug", "info", "warn", "error":
 	default:
@@ -156,6 +171,20 @@ func MustLoad() Config {
 		os.Exit(1)
 	}
 	return c
+}
+
+// isLoopback reports whether an address binds only to the local machine.
+func isLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 func str(key, def string) string {
