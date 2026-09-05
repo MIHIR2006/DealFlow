@@ -2,10 +2,15 @@ package service
 
 import (
 	"context"
+<<<<<<< HEAD
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+=======
+	"errors"
+	"fmt"
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,6 +23,7 @@ import (
 	"dealflow360/backend/internal/platform/db"
 )
 
+<<<<<<< HEAD
 // FulfillmentService turns an approved quotation into an order and decides
 // where its stock ships from.
 //
@@ -26,6 +32,16 @@ import (
 // stock it planned against is locked for the duration, the reservation
 // happens in the same transaction as the plan, and anything unavailable
 // becomes a backorder rather than an error.
+=======
+// FulfillmentService turns a confirmed quotation into a sales order and
+// decides which warehouses ship it.
+//
+// Suggesting a plan is free and persists nothing, so a rep can preview the
+// split before committing to it. Accepting one locks the stock rows,
+// reserves exactly what the plan allocates, and records any shortfall as a
+// backorder — all inside one transaction, so a plan shown to a rep is the
+// plan that gets reserved even under concurrent orders.
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 type FulfillmentService struct {
 	pool  *pgxpool.Pool
 	q     *sqlcgen.Queries
@@ -37,6 +53,7 @@ func NewFulfillmentService(pool *pgxpool.Pool, q *sqlcgen.Queries, quote *QuoteS
 	return &FulfillmentService{pool: pool, q: q, quote: quote}
 }
 
+<<<<<<< HEAD
 // DefaultPromiseDays is how far out an order is promised when the caller does
 // not say. It drives the delivery-slippage alert on the dashboard.
 const DefaultPromiseDays = 7
@@ -55,11 +72,31 @@ type Order struct {
 
 // Confirm turns an approved quotation into a sales order.
 func (s *FulfillmentService) Confirm(ctx context.Context, actor auth.Principal, quotationID int64, promised *time.Time) (Order, error) {
+=======
+// Order is a sales order with its fulfilment state and any open backorders.
+type Order struct {
+	Header      sqlcgen.GetSalesOrderRow
+	Fulfillment *sqlcgen.Fulfillment
+	Lines       []sqlcgen.ListFulfillmentLinesRow
+	Backorders  []sqlcgen.ListOpenBackordersRow
+}
+
+// Confirm closes a deal into a sales order.
+//
+// It accepts a quotation a staff member is closing directly (APPROVED) as
+// well as one a customer already confirmed through the portal (CONFIRMED);
+// the portal is an optional negotiation step, not a requirement to place an
+// order. It is safe to call more than once: a second call returns the order
+// already created rather than erroring, so a retried request cannot create
+// two orders for the same quotation.
+func (s *FulfillmentService) Confirm(ctx context.Context, actor auth.Principal, quotationID int64, promisedDate *time.Time) (Order, error) {
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 	quote, err := s.quote.Get(ctx, actor, quotationID)
 	if err != nil {
 		return Order{}, err
 	}
 
+<<<<<<< HEAD
 	// Only a quotation that has cleared governance may become an order. SENT
 	// is included because a customer confirming from the portal has already
 	// been through the chain.
@@ -106,6 +143,46 @@ func (s *FulfillmentService) Confirm(ctx context.Context, actor auth.Principal, 
 		}); err != nil {
 			return fmt.Errorf("update quotation status: %w", err)
 		}
+=======
+	if existing, err := s.q.GetSalesOrderByQuotation(ctx, quotationID); err == nil {
+		return s.Get(ctx, actor, existing.ID)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return Order{}, apierr.Internal(fmt.Errorf("get sales order by quotation: %w", err))
+	}
+
+	switch quote.Header.Status {
+	case "APPROVED", "CONFIRMED":
+	default:
+		return Order{}, apierr.Conflict(fmt.Sprintf(
+			"a quotation in %s cannot become an order; it must be approved first", quote.Header.Status))
+	}
+
+	var order sqlcgen.SalesOrder
+	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
+
+		if quote.Header.Status != "CONFIRMED" {
+			if _, err := qtx.UpdateQuotationStatus(ctx, sqlcgen.UpdateQuotationStatusParams{
+				ID: quotationID, Status: "CONFIRMED",
+			}); err != nil {
+				return fmt.Errorf("update quotation status: %w", err)
+			}
+		}
+
+		ref, err := qtx.NextSalesOrderReference(ctx)
+		if err != nil {
+			return fmt.Errorf("next sales order reference: %w", err)
+		}
+
+		created, err := qtx.CreateSalesOrder(ctx, sqlcgen.CreateSalesOrderParams{
+			Reference: ref, QuotationID: quotationID, CustomerID: quote.Header.CustomerID,
+			PromisedDate: promisedDate,
+		})
+		if err != nil {
+			return fmt.Errorf("create sales order: %w", err)
+		}
+		order = created
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 		return nil
 	})
 	if err != nil {
@@ -116,6 +193,7 @@ func (s *FulfillmentService) Confirm(ctx context.Context, actor auth.Principal, 
 		return Order{}, apierr.Internal(err)
 	}
 
+<<<<<<< HEAD
 	s.audit(ctx, quotationID, "CONFIRMED", actor,
 		fmt.Sprintf("Confirmed as order %s, promised %s", ref, promisedAt.Format("2006-01-02")),
 		map[string]any{"sales_order_id": orderID, "reference": ref})
@@ -124,44 +202,81 @@ func (s *FulfillmentService) Confirm(ctx context.Context, actor auth.Principal, 
 }
 
 // Get returns an order with whatever fulfilment has been recorded for it.
+=======
+	if quote.Header.Status != "CONFIRMED" {
+		s.quote.audit(ctx, quotationID, "CONFIRMED", actor, "Deal closed by staff", nil)
+	}
+	s.quote.Audit(ctx, quotationID, "ORDER_CREATED", actor,
+		fmt.Sprintf("Sales order %s opened", order.Reference), map[string]any{"sales_order_id": order.ID})
+
+	return s.Get(ctx, actor, order.ID)
+}
+
+// Get loads an order, its most recent fulfilment, and any open backorders.
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 func (s *FulfillmentService) Get(ctx context.Context, actor auth.Principal, orderID int64) (Order, error) {
 	header, err := s.q.GetSalesOrder(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Order{}, apierr.NotFound("order not found")
 		}
+<<<<<<< HEAD
 		return Order{}, apierr.Internal(fmt.Errorf("get order: %w", err))
 	}
 	if err := s.authoriseOrder(ctx, actor, header.QuotationID); err != nil {
+=======
+		return Order{}, apierr.Internal(fmt.Errorf("get sales order: %w", err))
+	}
+	if _, err := s.quote.Get(ctx, actor, header.QuotationID); err != nil {
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 		return Order{}, err
 	}
 
 	out := Order{Header: header}
 
+<<<<<<< HEAD
 	plan, err := s.q.GetFulfillmentForOrder(ctx, orderID)
 	switch {
 	case err == nil:
 		out.Fulfillment = &plan
 		lines, err := s.q.ListFulfillmentLines(ctx, plan.ID)
+=======
+	f, err := s.q.GetFulfillmentForOrder(ctx, orderID)
+	switch {
+	case err == nil:
+		out.Fulfillment = &f
+		lines, err := s.q.ListFulfillmentLines(ctx, f.ID)
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 		if err != nil {
 			return Order{}, apierr.Internal(fmt.Errorf("list fulfillment lines: %w", err))
 		}
 		out.Lines = lines
 	case errors.Is(err, pgx.ErrNoRows):
+<<<<<<< HEAD
 		out.Lines = []sqlcgen.ListFulfillmentLinesRow{}
 	default:
 		return Order{}, apierr.Internal(fmt.Errorf("get fulfillment: %w", err))
+=======
+		// Not yet fulfilled; that is a normal state, not an error.
+	default:
+		return Order{}, apierr.Internal(fmt.Errorf("get fulfillment for order: %w", err))
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 	}
 
 	backorders, err := s.q.ListOpenBackorders(ctx, orderID)
 	if err != nil {
+<<<<<<< HEAD
 		return Order{}, apierr.Internal(fmt.Errorf("list backorders: %w", err))
+=======
+		return Order{}, apierr.Internal(fmt.Errorf("list open backorders: %w", err))
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 	}
 	out.Backorders = backorders
 
 	return out, nil
 }
 
+<<<<<<< HEAD
 // authoriseOrder reuses the quotation's visibility rules: whoever may see the
 // deal may see the order it became.
 func (s *FulfillmentService) authoriseOrder(ctx context.Context, actor auth.Principal, quotationID int64) error {
@@ -176,10 +291,94 @@ func (s *FulfillmentService) authoriseOrder(ctx context.Context, actor auth.Prin
 // The rep sees where the order would ship from before committing to it, which
 // is what makes the manual override meaningful.
 func (s *FulfillmentService) Suggest(ctx context.Context, actor auth.Principal, orderID int64) (Order, error) {
+=======
+// buildPlan loads demand, stock, and warehouses for an order and runs the
+// split engine. Called both by Suggest, which never writes, and by Accept,
+// which re-runs it against locked rows so the reservation matches exactly
+// what was shown.
+func (s *FulfillmentService) buildPlan(ctx context.Context, q *sqlcgen.Queries, orderID int64, locked bool) (fulfillment.Plan, error) {
+	lines, err := q.ListFulfillableLines(ctx, orderID)
+	if err != nil {
+		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list fulfillable lines: %w", err))
+	}
+	if len(lines) == 0 {
+		return fulfillment.Split(nil, nil, nil), nil
+	}
+
+	productIDs := make([]int64, 0, len(lines))
+	demands := make([]fulfillment.Demand, 0, len(lines))
+	for _, l := range lines {
+		productIDs = append(productIDs, l.ProductID)
+		demands = append(demands, fulfillment.Demand{
+			ProductID: l.ProductID, ProductName: l.ProductName,
+			Qty: l.Qty.IntPart(), UnitValue: l.UnitPrice,
+		})
+	}
+
+	warehouseRows, err := q.ListWarehouses(ctx)
+	if err != nil {
+		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list warehouses: %w", err))
+	}
+	warehouses := make([]fulfillment.Warehouse, 0, len(warehouseRows))
+	for _, w := range warehouseRows {
+		warehouses = append(warehouses, fulfillment.Warehouse{
+			ID: w.ID, Name: w.Name, ShippingCostWeight: w.ShippingCostWeight,
+		})
+	}
+
+	stock := make([]fulfillment.Stock, 0)
+	if locked {
+		rows, err := q.LockStockForProducts(ctx, productIDs)
+		if err != nil {
+			return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("lock stock for products: %w", err))
+		}
+		for _, r := range rows {
+			stock = append(stock, fulfillment.Stock{
+				WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
+			})
+		}
+	} else {
+		rows, err := q.GetStockForProducts(ctx, productIDs)
+		if err != nil {
+			return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("get stock for products: %w", err))
+		}
+		for _, r := range rows {
+			stock = append(stock, fulfillment.Stock{
+				WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
+			})
+		}
+	}
+
+	return fulfillment.Split(demands, stock, warehouses), nil
+}
+
+// Suggest previews the fulfilment plan for an order without persisting
+// anything.
+func (s *FulfillmentService) Suggest(ctx context.Context, actor auth.Principal, orderID int64) (fulfillment.Plan, error) {
+	header, err := s.q.GetSalesOrder(ctx, orderID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fulfillment.Plan{}, apierr.NotFound("order not found")
+		}
+		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("get sales order: %w", err))
+	}
+	if _, err := s.quote.Get(ctx, actor, header.QuotationID); err != nil {
+		return fulfillment.Plan{}, err
+	}
+
+	return s.buildPlan(ctx, s.q, orderID, false)
+}
+
+// Accept re-runs the split against locked stock and reserves exactly what it
+// allocates. An order can be accepted only once; consolidating a later
+// backorder is a separate, additive step.
+func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, orderID int64) (Order, error) {
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 	order, err := s.Get(ctx, actor, orderID)
 	if err != nil {
 		return Order{}, err
 	}
+<<<<<<< HEAD
 
 	demands, productIDs, err := s.demandFor(ctx, orderID)
 	if err != nil {
@@ -269,11 +468,29 @@ func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, i
 			ShipmentCount:    shipmentCount(plan.ShipmentCount),
 			EstimatedCost:    plan.EstimatedCost,
 			IsManualOverride: len(in.Overrides) > 0,
+=======
+	if order.Fulfillment != nil {
+		return Order{}, apierr.Conflict("this order has already been fulfilled")
+	}
+
+	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
+
+		plan, err := s.buildPlan(ctx, qtx, orderID, true)
+		if err != nil {
+			return err
+		}
+
+		f, err := qtx.CreateFulfillment(ctx, sqlcgen.CreateFulfillmentParams{
+			SalesOrderID: orderID, Strategy: string(plan.Strategy),
+			ShipmentCount: int32(plan.ShipmentCount), EstimatedCost: plan.EstimatedCost,
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 		})
 		if err != nil {
 			return fmt.Errorf("create fulfillment: %w", err)
 		}
 
+<<<<<<< HEAD
 		// Reserve before writing the lines, so a shortfall that slipped past
 		// the plan aborts the whole transaction rather than recording a
 		// shipment that cannot happen.
@@ -302,15 +519,40 @@ func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, i
 		}
 		if len(rows) > 0 {
 			if _, err := qtx.InsertFulfillmentLines(ctx, rows); err != nil {
+=======
+		if len(plan.Allocations) > 0 {
+			lines := make([]sqlcgen.InsertFulfillmentLinesParams, 0, len(plan.Allocations))
+			for _, a := range plan.Allocations {
+				if _, err := qtx.ReserveStock(ctx, sqlcgen.ReserveStockParams{
+					Qty: a.Qty, WarehouseID: a.WarehouseID, ProductID: a.ProductID,
+				}); err != nil {
+					if errors.Is(err, pgx.ErrNoRows) {
+						return apierr.Conflict("stock changed while this order was being fulfilled; try again")
+					}
+					return fmt.Errorf("reserve stock: %w", err)
+				}
+				lines = append(lines, sqlcgen.InsertFulfillmentLinesParams{
+					FulfillmentID: f.ID, WarehouseID: a.WarehouseID, ProductID: a.ProductID,
+					Qty: a.Qty, ShipmentGroup: int32(a.ShipmentGroup),
+				})
+			}
+			if _, err := qtx.InsertFulfillmentLines(ctx, lines); err != nil {
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 				return fmt.Errorf("insert fulfillment lines: %w", err)
 			}
 		}
 
+<<<<<<< HEAD
 		// A shortfall is a normal outcome, not a failure: the order still
 		// stands and the remainder is consolidated when stock arrives.
 		for _, b := range plan.Backorders {
 			if _, err := qtx.CreateBackorder(ctx, sqlcgen.CreateBackorderParams{
 				SalesOrderID: in.OrderID, ProductID: b.ProductID, Qty: b.Qty,
+=======
+		for _, b := range plan.Backorders {
+			if _, err := qtx.CreateBackorder(ctx, sqlcgen.CreateBackorderParams{
+				SalesOrderID: orderID, ProductID: b.ProductID, Qty: b.Qty,
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 			}); err != nil {
 				return fmt.Errorf("create backorder: %w", err)
 			}
@@ -321,10 +563,22 @@ func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, i
 			status = "PARTIALLY_FULFILLED"
 		}
 		if _, err := qtx.UpdateSalesOrderStatus(ctx, sqlcgen.UpdateSalesOrderStatusParams{
+<<<<<<< HEAD
 			ID: in.OrderID, Status: status,
 		}); err != nil {
 			return fmt.Errorf("update order status: %w", err)
 		}
+=======
+			ID: orderID, Status: status,
+		}); err != nil {
+			return fmt.Errorf("update sales order status: %w", err)
+		}
+
+		s.quote.audit(ctx, order.Header.QuotationID, "FULFILLMENT_ACCEPTED", actor,
+			fmt.Sprintf("%s across %d shipment(s), %d backorder line(s)",
+				plan.Strategy, plan.ShipmentCount, len(plan.Backorders)),
+			map[string]any{"sales_order_id": orderID, "strategy": string(plan.Strategy)})
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 		return nil
 	})
 	if err != nil {
@@ -335,6 +589,7 @@ func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, i
 		return Order{}, apierr.Internal(err)
 	}
 
+<<<<<<< HEAD
 	note := fmt.Sprintf("Fulfilment accepted: %d shipment(s) via %s",
 		plan.ShipmentCount, plan.Strategy)
 	if len(plan.Backorders) > 0 {
@@ -355,11 +610,19 @@ func (s *FulfillmentService) Accept(ctx context.Context, actor auth.Principal, i
 //
 // This is the "stock arrived, consolidate?" prompt: the shortfall is shipped
 // as an additional group on the existing plan rather than as a new order.
+=======
+	return s.Get(ctx, actor, orderID)
+}
+
+// Consolidate allocates stock that has since arrived against open
+// backorders.
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Principal, orderID int64) (Order, error) {
 	order, err := s.Get(ctx, actor, orderID)
 	if err != nil {
 		return Order{}, err
 	}
+<<<<<<< HEAD
 	if order.Fulfillment == nil {
 		return Order{}, apierr.Conflict("this order has no fulfilment plan to consolidate into")
 	}
@@ -389,11 +652,33 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 
 		demands := make([]fulfillment.Demand, 0, len(ready))
 		for _, b := range ready {
+=======
+	if len(order.Backorders) == 0 {
+		return order, nil
+	}
+
+	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
+
+		consolidatable, err := qtx.ListConsolidatableBackorders(ctx, orderID)
+		if err != nil {
+			return fmt.Errorf("list consolidatable backorders: %w", err)
+		}
+		if len(consolidatable) == 0 {
+			return nil
+		}
+
+		productIDs := make([]int64, 0, len(consolidatable))
+		demands := make([]fulfillment.Demand, 0, len(consolidatable))
+		for _, b := range consolidatable {
+			productIDs = append(productIDs, b.ProductID)
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 			demands = append(demands, fulfillment.Demand{
 				ProductID: b.ProductID, ProductName: b.ProductName, Qty: b.Qty,
 			})
 		}
 
+<<<<<<< HEAD
 		plan := fulfillment.Split(demands, stock, warehouses)
 		if len(plan.Allocations) == 0 {
 			return apierr.Conflict("the stock was taken before this consolidation ran")
@@ -439,12 +724,83 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 				return fmt.Errorf("resolve backorder: %w", err)
 			}
 			resolved++
+=======
+		warehouseRows, err := qtx.ListWarehouses(ctx)
+		if err != nil {
+			return fmt.Errorf("list warehouses: %w", err)
+		}
+		warehouses := make([]fulfillment.Warehouse, 0, len(warehouseRows))
+		for _, w := range warehouseRows {
+			warehouses = append(warehouses, fulfillment.Warehouse{
+				ID: w.ID, Name: w.Name, ShippingCostWeight: w.ShippingCostWeight,
+			})
+		}
+
+		lockedStock, err := qtx.LockStockForProducts(ctx, productIDs)
+		if err != nil {
+			return fmt.Errorf("lock stock for products: %w", err)
+		}
+		stock := make([]fulfillment.Stock, 0, len(lockedStock))
+		for _, r := range lockedStock {
+			stock = append(stock, fulfillment.Stock{
+				WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
+			})
+		}
+
+		plan := fulfillment.Split(demands, stock, warehouses)
+		if len(plan.Allocations) == 0 {
+			return nil
+		}
+
+		f, err := qtx.CreateFulfillment(ctx, sqlcgen.CreateFulfillmentParams{
+			SalesOrderID: orderID, Strategy: string(plan.Strategy),
+			ShipmentCount: int32(plan.ShipmentCount), EstimatedCost: plan.EstimatedCost,
+			IsManualOverride: false,
+		})
+		if err != nil {
+			return fmt.Errorf("create fulfillment: %w", err)
+		}
+
+		lines := make([]sqlcgen.InsertFulfillmentLinesParams, 0, len(plan.Allocations))
+		for _, a := range plan.Allocations {
+			if _, err := qtx.ReserveStock(ctx, sqlcgen.ReserveStockParams{
+				Qty: a.Qty, WarehouseID: a.WarehouseID, ProductID: a.ProductID,
+			}); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return apierr.Conflict("stock changed while consolidating backorders; try again")
+				}
+				return fmt.Errorf("reserve stock: %w", err)
+			}
+			lines = append(lines, sqlcgen.InsertFulfillmentLinesParams{
+				FulfillmentID: f.ID, WarehouseID: a.WarehouseID, ProductID: a.ProductID,
+				Qty: a.Qty, ShipmentGroup: int32(a.ShipmentGroup),
+			})
+		}
+		if _, err := qtx.InsertFulfillmentLines(ctx, lines); err != nil {
+			return fmt.Errorf("insert fulfillment lines: %w", err)
+		}
+
+		// A backorder resolves only once the plan covered its product in
+		// full; a partial arrival leaves it open for the next attempt.
+		stillShort := make(map[int64]bool, len(plan.Backorders))
+		for _, b := range plan.Backorders {
+			stillShort[b.ProductID] = true
+		}
+		for _, b := range consolidatable {
+			if stillShort[b.ProductID] {
+				continue
+			}
+			if _, err := qtx.ResolveBackorder(ctx, b.ID); err != nil {
+				return fmt.Errorf("resolve backorder %d: %w", b.ID, err)
+			}
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 		}
 
 		remaining, err := qtx.ListOpenBackorders(ctx, orderID)
 		if err != nil {
 			return fmt.Errorf("list open backorders: %w", err)
 		}
+<<<<<<< HEAD
 		status := "FULFILLED"
 		if len(remaining) > 0 {
 			status = "PARTIALLY_FULFILLED"
@@ -454,6 +810,19 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 		}); err != nil {
 			return fmt.Errorf("update order status: %w", err)
 		}
+=======
+		if len(remaining) == 0 {
+			if _, err := qtx.UpdateSalesOrderStatus(ctx, sqlcgen.UpdateSalesOrderStatusParams{
+				ID: orderID, Status: "FULFILLED",
+			}); err != nil {
+				return fmt.Errorf("update sales order status: %w", err)
+			}
+		}
+
+		s.quote.audit(ctx, order.Header.QuotationID, "BACKORDER_CONSOLIDATED", actor,
+			fmt.Sprintf("%d backorder line(s) allocated from newly arrived stock", len(consolidatable)-len(remaining)),
+			map[string]any{"sales_order_id": orderID})
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
 		return nil
 	})
 	if err != nil {
@@ -464,6 +833,7 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 		return Order{}, apierr.Internal(err)
 	}
 
+<<<<<<< HEAD
 	s.audit(ctx, order.Header.QuotationID, "BACKORDER_CONSOLIDATED", actor,
 		fmt.Sprintf("Consolidated %d backordered line(s) after stock arrived", resolved),
 		map[string]any{"sales_order_id": orderID, "resolved": resolved})
@@ -675,3 +1045,7 @@ func (s *FulfillmentService) audit(ctx context.Context, quotationID int64, actio
 		Payload:    encoded,
 	})
 }
+=======
+	return s.Get(ctx, actor, orderID)
+}
+>>>>>>> 1fbf643eb06c8836adcea4f3d54d1c5ee8c8b248
