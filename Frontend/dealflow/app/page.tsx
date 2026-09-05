@@ -6,6 +6,7 @@ import { EngineCanvas } from "@/components/landing/engine-canvas";
 import { Chapter } from "@/components/landing/chapter";
 import { Faq } from "@/components/landing/faq";
 import { RiskCard } from "@/components/landing/risk-card";
+import { SmoothScroll } from "@/components/landing/smooth-scroll";
 
 const marquee = [
   "Laptop 12% / 15% · OK",
@@ -32,7 +33,8 @@ const pills = [
 
 export default function Home() {
   return (
-    <div id="top" className="bg-cream text-ink">
+    <SmoothScroll>
+      <div id="top" className="bg-cream text-ink">
       <Nav />
 
       <Hero />
@@ -344,6 +346,7 @@ export default function Home() {
         </div>
       </footer>
     </div>
+    </SmoothScroll>
   );
 }
 
