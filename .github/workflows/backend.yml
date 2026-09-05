@@ -1,0 +1,125 @@
+name: backend
+
+on:
+  push:
+    branches: [backend, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  build:
+    name: lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Check formatting
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "::error::unformatted files — run 'make fmt'"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend
+
+      # The whole design rests on internal/domain staying free of
+      # infrastructure. Enforce it mechanically, not by convention.
+      - name: Architecture guard
+        run: make arch
+
+      - name: Tests (race detector)
+        run: go test ./... -race -count=1 -coverprofile=coverage.out
+
+      - name: Build
+        run: go build ./...
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          if ! git diff --quiet -- go.mod go.sum; then
+            echo "::error::go.mod/go.sum are not tidy — run 'make tidy'"
+            git diff -- go.mod go.sum
+            exit 1
+          fi
+
+  schema:
+    name: migrations, sqlc, integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dealflow360_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports: ['5432:5432']
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/dealflow360_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/dealflow360_test?sslmode=disable
+      JWT_SECRET: ci-only-secret-at-least-32-characters-long
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # Proves the migration is reversible, not just applicable.
+      - name: Apply and roll back migrations
+        run: |
+          make migrate-up
+          make migrate-down
+          make migrate-up
+
+      - name: Verify generated query code matches the SQL source
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.27.0
+          sqlc diff
+
+      - name: Seed the demo dataset
+        run: make seed
+
+      - name: Integration tests
+        run: go test -tags=integration ./... -race -count=1
