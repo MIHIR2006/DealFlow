@@ -23,15 +23,24 @@ jobs:
   build:
     name: lint, test, build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 12
+    strategy:
+      matrix:
+        go-version: ['1.22', '1.24']
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
+          cache: true
           cache-dependency-path: backend/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
 
       - name: Download dependencies
         run: go mod download
@@ -54,13 +63,18 @@ jobs:
           version: latest
           working-directory: backend
 
-      # The whole design rests on internal/domain staying free of
-      # infrastructure. Enforce it mechanically, not by convention.
       - name: Architecture guard
         run: make arch
 
       - name: Tests (race detector)
         run: go test ./... -race -count=1 -coverprofile=coverage.out
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.go-version }}
+          path: coverage.out
 
       - name: Build
         run: go build ./...
@@ -77,8 +91,7 @@ jobs:
   schema:
     name: migrations, sqlc, integration
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -104,9 +117,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
+          cache: true
           cache-dependency-path: backend/go.sum
 
-      # Proves the migration is reversible, not just applicable.
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-schema-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
+
       - name: Apply and roll back migrations
         run: |
           make migrate-up

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 // Env identifies the deployment environment.
@@ -59,6 +61,9 @@ func (c Config) IsProd() bool { return c.Env == EnvProd }
 // validates. It returns every problem it finds at once so a misconfigured
 // deploy is fixed in one pass instead of one restart per missing variable.
 func Load() (Config, error) {
+	// Attempt to load .env file; ignore errors if it doesn't exist
+	_ = godotenv.Load()
+
 	c := Config{
 		Env:             Env(str("APP_ENV", string(EnvDev))),
 		Port:            str("PORT", "8080"),
