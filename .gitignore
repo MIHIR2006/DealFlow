@@ -1,5 +1,4 @@
 docs/
-
 # Markdown documentation files (do not push to github)
 *.md
 **/*.md

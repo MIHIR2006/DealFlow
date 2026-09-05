@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, use } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef, use } from "react";
 import {
   MessageSquare,
   CheckCircle,
@@ -8,13 +8,24 @@ import {
   Send,
   Sliders,
   User,
+  Info,
 } from "lucide-react";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { PortalApi, ApiError } from "@/lib/api";
 import { inr } from "@/lib/hooks";
 import type { PortalQuotation } from "@/lib/types";
+import { PortalStatusBadge, portalStatusLabel } from "./portal-status";
+import { NegotiationTable } from "./negotiation-table";
 
 type Tab = "QUOTE" | "MESSAGES" | "PROFILE";
+
+/** A comment or a counter-offer is either about one line or about the order. */
+type Target = number | "ORDER";
+
+// How often the portal re-checks a quotation that is sitting with our team.
+// The customer's own counter-offer is what put it there, so they are actively
+// waiting on an answer; polling only in that state keeps the page live for the
+// one moment it matters and idle the rest of the time.
+const REVIEW_POLL_MS = 15_000;
 
 export default function CustomerQuotationPortalPage({
   params,
@@ -31,7 +42,13 @@ export default function CustomerQuotationPortalPage({
   const [error, setError] = useState<string | null>(null);
 
   const [messageDraft, setMessageDraft] = useState("");
-  const [targetLineId, setTargetLineId] = useState<number | "ORDER">("ORDER");
+
+  // The chat composer and the counter-offer form each carry their own target.
+  // Sharing one piece of state meant picking a line to negotiate on silently
+  // re-scoped every subsequent chat message to that line.
+  const [messageTarget, setMessageTarget] = useState<Target>("ORDER");
+  const [counterTarget, setCounterTarget] = useState<Target>("ORDER");
+
   const [proposedDiscount, setProposedDiscount] = useState(15);
   const [counterNote, setCounterNote] = useState("");
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -59,13 +76,86 @@ export default function CustomerQuotationPortalPage({
     load();
   }, [load]);
 
+  const confirmed = quote?.status === "CONFIRMED";
+  const awaitingReview = !!quote?.awaiting_review;
+
+  // While the deal is with our team, refresh quietly so the decision lands on
+  // the customer's screen without them reloading. No spinner: nothing they did
+  // triggered this.
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+
+  useEffect(() => {
+    if (!awaitingReview || confirmed) return;
+
+    const id = setInterval(async () => {
+      if (busyRef.current) return;
+      try {
+        setQuote(await PortalApi.get(token));
+      } catch {
+        // A transient failure here is not worth interrupting the customer
+        // over; the next tick tries again.
+      }
+    }, REVIEW_POLL_MS);
+
+    return () => clearInterval(id);
+  }, [awaitingReview, confirmed, token]);
+
+  // The discount a target currently carries, which is what a counter-offer
+  // would be moving away from.
+  const currentDiscountOf = useCallback(
+    (target: Target): number => {
+      if (!quote) return 0;
+      if (target === "ORDER") return parseFloat(quote.order_discount_pct) || 0;
+      const line = quote.lines.find((l) => l.id === target);
+      return line ? parseFloat(line.discount_pct) || 0 : 0;
+    },
+    [quote],
+  );
+
+  // Seed the slider from whatever the target is on today rather than a fixed
+  // 15%, so the form opens at the real starting point of the negotiation.
+  //
+  // Seeding is keyed to the target, not to the quotation: a refresh that
+  // arrives while the customer is mid-adjustment -- their own chat message
+  // returns a fresh document -- must not drag the slider back under them.
+  const seededFor = useRef<Target | null>(null);
+  useEffect(() => {
+    if (!quote || seededFor.current === counterTarget) return;
+    seededFor.current = counterTarget;
+    setProposedDiscount(Math.round(currentDiscountOf(counterTarget)));
+  }, [counterTarget, quote, currentDiscountOf]);
+
+  const messagesByLine = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const m of quote?.messages ?? []) {
+      if (m.line_id != null) counts.set(m.line_id, (counts.get(m.line_id) ?? 0) + 1);
+    }
+    return counts;
+  }, [quote?.messages]);
+
+  const lineName = useCallback(
+    (id?: number | null) => {
+      if (id == null) return null;
+      return quote?.lines.find((l) => l.id === id)?.product_name ?? "A line item";
+    },
+    [quote?.lines],
+  );
+
+  /** Jump to the negotiation tab with a line already in hand. */
+  function discussLine(lineId: number) {
+    setMessageTarget(lineId);
+    setCounterTarget(lineId);
+    setActiveTab("MESSAGES");
+  }
+
   async function sendMessage() {
-    if (!messageDraft.trim()) return;
+    if (!messageDraft.trim() || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const lineId = targetLineId === "ORDER" ? null : targetLineId;
-      const updated = await PortalApi.postMessage(token, messageDraft, lineId);
+      const lineId = messageTarget === "ORDER" ? null : messageTarget;
+      const updated = await PortalApi.postMessage(token, messageDraft.trim(), lineId);
       setQuote(updated);
       setMessageDraft("");
     } catch (err) {
@@ -76,13 +166,21 @@ export default function CustomerQuotationPortalPage({
   }
 
   async function submitCounterOffer() {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      const lineId = targetLineId === "ORDER" ? null : targetLineId;
-      const updated = await PortalApi.counterOffer(token, String(proposedDiscount), lineId, counterNote);
+      const lineId = counterTarget === "ORDER" ? null : counterTarget;
+      const updated = await PortalApi.counterOffer(
+        token,
+        String(proposedDiscount),
+        lineId,
+        counterNote.trim(),
+      );
       setQuote(updated);
-      setLastOutcome(updated.counter_offers[updated.counter_offers.length - 1]?.outcome ?? null);
+      // Counter-offers come back newest first, so the proposal just made is
+      // at the head of the list.
+      setLastOutcome(updated.counter_offers[0]?.outcome ?? null);
       setCounterNote("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not submit that proposal.");
@@ -100,6 +198,7 @@ export default function CustomerQuotationPortalPage({
       setConfirmModalOpen(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not confirm this quotation.");
+      setConfirmModalOpen(false);
     } finally {
       setBusy(false);
     }
@@ -124,7 +223,17 @@ export default function CustomerQuotationPortalPage({
     );
   }
 
-  const confirmed = quote.status === "CONFIRMED";
+  // Negotiation is closed once the deal is confirmed, and paused while our
+  // team is reviewing terms the customer themselves proposed.
+  const negotiationOpen = !confirmed && !awaitingReview;
+
+  const confirmBlockedReason = confirmed
+    ? null
+    : quote.can_confirm
+      ? null
+      : awaitingReview
+        ? "Your latest request is with our team. You will be able to confirm as soon as it is finalized."
+        : "This quotation is not open for confirmation right now.";
 
   return (
     <div className="space-y-6">
@@ -135,7 +244,7 @@ export default function CustomerQuotationPortalPage({
               <span className="text-[12px] font-semibold text-mist bg-ink/5 px-2 py-0.5 rounded">
                 Ref: {quote.reference}
               </span>
-              <StatusBadge status={quote.status} size="md" />
+              <PortalStatusBadge status={quote.status} size="md" />
             </div>
             <h1 className="font-serif mt-2 text-[28px] font-semibold tracking-tight text-ink sm:text-[34px]">
               Quotation for {quote.customer_name}
@@ -155,8 +264,8 @@ export default function CustomerQuotationPortalPage({
             </p>
             {parseFloat(quote.totals.recurring_total_per_period) > 0 ? (
               <p className="text-[11.5px] text-mist">
-                One-time {inr(quote.totals.one_time_total)} + {inr(quote.totals.recurring_total_per_period)}/period
-                recurring
+                One-time {inr(quote.totals.one_time_total)} +{" "}
+                {inr(quote.totals.recurring_total_per_period)}/period recurring
               </p>
             ) : null}
           </div>
@@ -190,14 +299,14 @@ export default function CustomerQuotationPortalPage({
 
       {error ? <div className="rounded-[18px] tone-bad p-4 text-[13px] text-bad">{error}</div> : null}
 
-      {quote.awaiting_review && !confirmed ? (
+      {awaitingReview && !confirmed ? (
         <div className="rounded-[20px] tone-warn p-5 flex items-start gap-3">
           <Clock className="size-5 text-warn shrink-0 mt-0.5" />
           <div className="text-[13px] text-warn">
             <p className="font-semibold">Your proposal is under review</p>
             <p className="mt-0.5 text-warn/90 leading-relaxed">
               A recent request exceeded standard discretion and has been automatically routed to our
-              sales management for authorization. You will see this update the moment terms are
+              sales management for authorization. This page updates itself the moment terms are
               finalized — no need to follow up by email.
             </p>
           </div>
@@ -220,48 +329,73 @@ export default function CustomerQuotationPortalPage({
       {activeTab === "QUOTE" ? (
         <div className="space-y-6">
           <div className="rounded-[24px] bg-white card-shadow overflow-hidden">
-            <table className="w-full text-left text-[13.5px]">
-              <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
-                <tr>
-                  <th className="px-6 py-3.5">Item Description</th>
-                  <th className="px-6 py-3.5">Type</th>
-                  <th className="px-6 py-3.5">Qty</th>
-                  <th className="px-6 py-3.5">Unit Price</th>
-                  <th className="px-6 py-3.5">Discount</th>
-                  <th className="px-6 py-3.5 text-right">Net Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink/5">
-                {quote.lines.map((line) => (
-                  <tr key={line.id} className="hover:bg-cream/20">
-                    <td className="px-6 py-4">
-                      <p className="font-semibold text-ink">{line.product_name}</p>
-                      {line.plan_name ? (
-                        <p className="text-[11px] text-mist">
-                          {line.plan_name} &middot; {line.plan_period}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-6 py-4 text-[12px] text-mist">
-                      {line.line_type === "RECURRING" ? "Recurring" : "One-time"}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-ink">{line.qty}</td>
-                    <td className="px-6 py-4 tabular-nums text-mist">{inr(line.unit_price)}</td>
-                    <td className="px-6 py-4 tabular-nums text-ok font-semibold">
-                      {parseFloat(line.discount_pct) > 0 ? `${line.discount_pct}%` : "—"}
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold tabular-nums text-ink">
-                      {inr(line.net_amount)}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13.5px]">
+                <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
+                  <tr>
+                    <th className="px-6 py-3.5">Item Description</th>
+                    <th className="px-6 py-3.5">Type</th>
+                    <th className="px-6 py-3.5">Qty</th>
+                    <th className="px-6 py-3.5">Unit Price</th>
+                    <th className="px-6 py-3.5">Discount</th>
+                    <th className="px-6 py-3.5 text-right">Net Amount</th>
+                    <th className="px-6 py-3.5" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-ink/5">
+                  {quote.lines.map((line) => {
+                    const comments = messagesByLine.get(line.id) ?? 0;
+                    return (
+                      <tr key={line.id} className="group hover:bg-cream/20">
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-ink">{line.product_name}</p>
+                          {line.plan_name ? (
+                            <p className="text-[11px] text-mist">
+                              {line.plan_name} &middot; {line.plan_period}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-6 py-4 text-[12px] text-mist">
+                          {line.line_type === "RECURRING" ? "Recurring" : "One-time"}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-ink">{line.qty}</td>
+                        <td className="px-6 py-4 tabular-nums text-mist">{inr(line.unit_price)}</td>
+                        <td className="px-6 py-4 tabular-nums text-ok font-semibold">
+                          {parseFloat(line.discount_pct) > 0 ? `${line.discount_pct}%` : "—"}
+                        </td>
+                        <td className="px-6 py-4 text-right font-semibold tabular-nums text-ink">
+                          {inr(line.net_amount)}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {negotiationOpen ? (
+                            <button
+                              type="button"
+                              onClick={() => discussLine(line.id)}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-ink/12 px-3 py-1 text-[11.5px] font-semibold text-mist transition-colors hover:border-ink/25 hover:text-ink whitespace-nowrap"
+                            >
+                              <MessageSquare className="size-3" />
+                              {comments > 0 ? `Discuss (${comments})` : "Discuss"}
+                            </button>
+                          ) : comments > 0 ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-mist whitespace-nowrap">
+                              <MessageSquare className="size-3" />
+                              {comments}
+                            </span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
             <div className="p-6 bg-ink/[0.01] border-t border-ink/6 flex flex-col items-end text-[13px] space-y-2">
               <div className="flex justify-between w-64 text-mist">
                 <span>Subtotal (excl. tax):</span>
-                <span className="tabular-nums font-medium text-ink">{inr(quote.totals.net_subtotal)}</span>
+                <span className="tabular-nums font-medium text-ink">
+                  {inr(quote.totals.net_subtotal)}
+                </span>
               </div>
               <div className="flex justify-between w-64 text-mist">
                 <span>Tax:</span>
@@ -274,25 +408,36 @@ export default function CustomerQuotationPortalPage({
             </div>
           </div>
 
-          {!confirmed ? (
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-[20px] bg-white card-shadow">
-              <button
-                type="button"
-                onClick={() => setActiveTab("MESSAGES")}
-                className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-5 py-2.5 text-[13px] font-semibold text-ink hover:bg-cream transition-colors"
-              >
-                <Sliders className="size-4" /> Request commercial revisions
-              </button>
+          <NegotiationTable offers={quote.counter_offers} lines={quote.lines} />
 
-              <button
-                type="button"
-                disabled={!quote.can_confirm}
-                onClick={() => setConfirmModalOpen(true)}
-                title={!quote.can_confirm ? "This quotation isn't ready to confirm yet." : undefined}
-                className="inline-flex items-center gap-2 rounded-full fill-ok px-6 py-2.5 text-[13.5px] font-semibold text-white shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <CheckCircle className="size-4" /> Accept terms &amp; confirm quotation
-              </button>
+          {!confirmed ? (
+            <div className="rounded-[20px] bg-white card-shadow p-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("MESSAGES")}
+                  disabled={!negotiationOpen}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-5 py-2.5 text-[13px] font-semibold text-ink hover:bg-cream transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Sliders className="size-4" /> Request commercial revisions
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!quote.can_confirm || busy}
+                  onClick={() => setConfirmModalOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-full fill-ok px-6 py-2.5 text-[13.5px] font-semibold text-white shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle className="size-4" /> Accept terms &amp; confirm quotation
+                </button>
+              </div>
+
+              {confirmBlockedReason ? (
+                <p className="mt-3 flex items-start gap-1.5 border-t border-ink/6 pt-3 text-[12px] text-mist">
+                  <Info className="size-3.5 shrink-0 mt-0.5" />
+                  {confirmBlockedReason}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -312,15 +457,24 @@ export default function CustomerQuotationPortalPage({
 
               <div className="mt-5 space-y-4">
                 <div>
-                  <label className="text-[12px] font-semibold text-ink block mb-1">Target</label>
-                  <select
-                    value={targetLineId}
-                    onChange={(e) =>
-                      setTargetLineId(e.target.value === "ORDER" ? "ORDER" : Number(e.target.value))
-                    }
-                    className="w-full rounded-xl border border-ink/15 p-2.5 text-[13px] font-medium bg-cream/30 focus:outline-hidden"
+                  <label
+                    htmlFor="counter-target"
+                    className="text-[12px] font-semibold text-ink block mb-1"
                   >
-                    <option value="ORDER">Whole order</option>
+                    Target
+                  </label>
+                  <select
+                    id="counter-target"
+                    value={counterTarget}
+                    onChange={(e) =>
+                      setCounterTarget(e.target.value === "ORDER" ? "ORDER" : Number(e.target.value))
+                    }
+                    disabled={!negotiationOpen}
+                    className="w-full rounded-xl border border-ink/15 p-2.5 text-[13px] font-medium bg-cream/30 focus:outline-hidden disabled:opacity-50"
+                  >
+                    <option value="ORDER">
+                      Whole order (current: {quote.order_discount_pct}%)
+                    </option>
                     {quote.lines.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.product_name} (current: {l.discount_pct}%)
@@ -332,7 +486,10 @@ export default function CustomerQuotationPortalPage({
                 <div>
                   <div className="flex items-center justify-between text-[12.5px] font-medium mb-1.5">
                     <span className="text-ink">Proposed discount:</span>
-                    <span className="text-[14px] font-bold text-lilac">{proposedDiscount}%</span>
+                    <span className="tabular-nums text-mist">
+                      {currentDiscountOf(counterTarget)}% &rarr;{" "}
+                      <span className="text-[14px] font-bold text-lilac">{proposedDiscount}%</span>
+                    </span>
                   </div>
                   <input
                     type="range"
@@ -340,21 +497,27 @@ export default function CustomerQuotationPortalPage({
                     max="40"
                     step="1"
                     value={proposedDiscount}
+                    disabled={!negotiationOpen}
                     onChange={(e) => setProposedDiscount(parseInt(e.target.value))}
-                    className="w-full accent-ink cursor-pointer"
+                    className="w-full accent-ink cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[12px] font-semibold text-ink block mb-1">
+                  <label
+                    htmlFor="counter-note"
+                    className="text-[12px] font-semibold text-ink block mb-1"
+                  >
                     Business justification
                   </label>
                   <textarea
+                    id="counter-note"
                     value={counterNote}
                     onChange={(e) => setCounterNote(e.target.value)}
                     placeholder="Tell us why this discount makes sense..."
                     rows={3}
-                    className="w-full rounded-xl border border-ink/15 p-3 text-[13px] bg-cream/30 focus:outline-hidden"
+                    disabled={!negotiationOpen}
+                    className="w-full rounded-xl border border-ink/15 p-3 text-[13px] bg-cream/30 focus:outline-hidden disabled:opacity-50"
                   />
                 </div>
 
@@ -374,11 +537,18 @@ export default function CustomerQuotationPortalPage({
               <button
                 type="button"
                 onClick={submitCounterOffer}
-                disabled={busy || confirmed}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-ink py-2.5 text-[13px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
+                disabled={busy || !negotiationOpen}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-ink py-2.5 text-[13px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Send className="size-3.5" /> Submit counter-offer
+                <Send className="size-3.5" /> Submit request
               </button>
+              {!negotiationOpen ? (
+                <p className="mt-2 text-center text-[11.5px] text-mist">
+                  {confirmed
+                    ? "This quotation is confirmed, so terms are now fixed."
+                    : "Paused while our team reviews your last request."}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -393,46 +563,78 @@ export default function CustomerQuotationPortalPage({
                 {quote.messages.length === 0 ? (
                   <p className="py-6 text-center text-[12.5px] text-mist">No messages yet.</p>
                 ) : (
-                  quote.messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`rounded-[16px] p-3.5 text-[13px] ${
-                        msg.author_type === "CUSTOMER"
-                          ? "tone-lilac text-lilac ml-6"
-                          : "bg-cream/50 text-ink mr-6 border border-ink/8"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[11px] font-medium text-mist mb-1">
-                        <span className="font-semibold text-ink">{msg.author_label}</span>
-                        <span>{new Date(msg.created_at).toLocaleString()}</span>
+                  quote.messages.map((msg) => {
+                    const about = lineName(msg.line_id);
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`rounded-[16px] p-3.5 text-[13px] ${
+                          msg.author_type === "CUSTOMER"
+                            ? "tone-lilac text-lilac ml-6"
+                            : "bg-cream/50 text-ink mr-6 border border-ink/8"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[11px] font-medium text-mist mb-1">
+                          <span className="font-semibold text-ink">{msg.author_label}</span>
+                          <span>{new Date(msg.created_at).toLocaleString()}</span>
+                        </div>
+                        {about ? (
+                          <p className="mb-1 inline-flex items-center rounded-full bg-ink/5 px-2 py-0.5 text-[10.5px] font-semibold text-mist">
+                            {about}
+                          </p>
+                        ) : null}
+                        <p className="leading-relaxed">{msg.body}</p>
                       </div>
-                      <p className="leading-relaxed">{msg.body}</p>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-ink/6 flex items-center gap-2">
-              <input
-                type="text"
-                value={messageDraft}
-                onChange={(e) => setMessageDraft(e.target.value)}
-                placeholder="Type a message to your sales executive..."
-                disabled={busy || confirmed}
-                className="flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") sendMessage();
-                }}
-              />
-              <button
-                type="button"
-                onClick={sendMessage}
-                disabled={busy || confirmed}
-                className="size-8 rounded-full bg-ink text-bone flex items-center justify-center hover:bg-ink/90 transition-colors disabled:opacity-50"
-              >
-                <Send className="size-3.5" />
-              </button>
+            <div className="mt-4 pt-3 border-t border-ink/6 space-y-2">
+              <div className="flex items-center gap-2 text-[11.5px]">
+                <label htmlFor="message-target" className="font-semibold text-mist">
+                  About:
+                </label>
+                <select
+                  id="message-target"
+                  value={messageTarget}
+                  onChange={(e) =>
+                    setMessageTarget(e.target.value === "ORDER" ? "ORDER" : Number(e.target.value))
+                  }
+                  disabled={!negotiationOpen}
+                  className="flex-1 rounded-full border border-ink/12 bg-cream/30 px-3 py-1 text-[11.5px] font-medium focus:outline-hidden disabled:opacity-50"
+                >
+                  <option value="ORDER">The whole order</option>
+                  {quote.lines.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.product_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={messageDraft}
+                  onChange={(e) => setMessageDraft(e.target.value)}
+                  placeholder="Type a message to your sales executive..."
+                  disabled={busy || !negotiationOpen}
+                  className="flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") sendMessage();
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  disabled={busy || !negotiationOpen || !messageDraft.trim()}
+                  className="size-8 rounded-full bg-ink text-bone flex items-center justify-center hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="size-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -444,21 +646,27 @@ export default function CustomerQuotationPortalPage({
             Account &amp; link details
           </h2>
           <dl className="mt-4 space-y-3 text-[13px]">
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-4">
               <dt className="text-mist">Company</dt>
-              <dd className="font-medium text-ink">{quote.customer_name}</dd>
+              <dd className="font-medium text-ink text-right">{quote.customer_name}</dd>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-4">
+              <dt className="text-mist">Contact email</dt>
+              <dd className="font-medium text-ink text-right break-all">{quote.customer_email}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
               <dt className="text-mist">Quotation reference</dt>
-              <dd className="font-medium text-ink">{quote.reference}</dd>
+              <dd className="font-medium text-ink text-right">{quote.reference}</dd>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-4">
               <dt className="text-mist">Status</dt>
-              <dd className="font-medium text-ink">{quote.status.replace(/_/g, " ")}</dd>
+              <dd className="font-medium text-ink text-right">{portalStatusLabel(quote.status)}</dd>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-4">
               <dt className="text-mist">Link expires</dt>
-              <dd className="font-medium text-ink">{new Date(quote.expires_at).toLocaleString()}</dd>
+              <dd className="font-medium text-ink text-right">
+                {new Date(quote.expires_at).toLocaleString()}
+              </dd>
             </div>
           </dl>
           <p className="mt-5 text-[11.5px] text-mist leading-relaxed">

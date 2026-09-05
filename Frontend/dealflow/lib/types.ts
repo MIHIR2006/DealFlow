@@ -245,7 +245,9 @@ export interface PortalQuotation {
   reference: string;
   status: QuotationStatus;
   customer_name: string;
+  customer_email: string;
   expires_at: string;
+  order_discount_pct: string;
   awaiting_review: boolean;
   can_confirm: boolean;
   lines: PortalLine[];

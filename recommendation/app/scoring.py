@@ -33,12 +33,17 @@ def score_and_rank(
         else:
             existing = deduped[rec_id]
             if num_cart_products > 1:
-                # In multi-product cart, retain candidate with higher confidence
-                if float(c.get("confidence", 0.0)) > float(existing.get("confidence", 0.0)):
+                # In multi-product cart (N >= 2), retain candidate with higher confidence; break ties by co_purchase_count
+                new_conf = float(c.get("confidence", 0.0) or 0.0)
+                ext_conf = float(existing.get("confidence", 0.0) or 0.0)
+                if new_conf > ext_conf:
                     deduped[rec_id] = c
+                elif new_conf == ext_conf:
+                    if int(c.get("co_purchase_count", 0) or 0) > int(existing.get("co_purchase_count", 0) or 0):
+                        deduped[rec_id] = c
             else:
                 # In single-product cart, retain candidate with higher co_purchase_count
-                if int(c.get("co_purchase_count", 0)) > int(existing.get("co_purchase_count", 0)):
+                if int(c.get("co_purchase_count", 0) or 0) > int(existing.get("co_purchase_count", 0) or 0):
                     deduped[rec_id] = c
 
     candidate_list = list(deduped.values())
@@ -46,8 +51,8 @@ def score_and_rank(
     # 2. Hard filter by margin threshold & calculate product margin
     surviving: List[Dict[str, Any]] = []
     for c in candidate_list:
-        unit_price = float(c.get("unit_price", 0.0))
-        cost = float(c.get("cost", 0.0))
+        unit_price = float(c.get("unit_price", 0.0) or 0.0)
+        cost = float(c.get("cost", 0.0) or 0.0)
         margin_pct = compute_margin_pct(unit_price, cost)
 
         if margin_pct >= margin_threshold_pct:
@@ -60,13 +65,14 @@ def score_and_rank(
 
     # 3 & 4. Rank candidates with Promotion boost
     # If single anchor product: sort key is (is_promoted, co_purchase_count, confidence)
-    # If multi anchor products: sort key is (is_promoted, confidence, co_purchase_count)
+    # If multi anchor products (N >= 2): sort key is (is_promoted, confidence, co_purchase_count)
     if num_cart_products <= 1:
         surviving.sort(
             key=lambda item: (
                 1 if item.get("is_promoted") else 0,
-                int(item.get("co_purchase_count", 0)),
-                float(item.get("confidence", 0.0)),
+                int(item.get("co_purchase_count", 0) or 0),
+                round(float(item.get("confidence", 0.0) or 0.0), 6),
+                -int(item.get("recommended_id", 0)),
             ),
             reverse=True,
         )
@@ -74,8 +80,9 @@ def score_and_rank(
         surviving.sort(
             key=lambda item: (
                 1 if item.get("is_promoted") else 0,
-                float(item.get("confidence", 0.0)),
-                int(item.get("co_purchase_count", 0)),
+                round(float(item.get("confidence", 0.0) or 0.0), 6),
+                int(item.get("co_purchase_count", 0) or 0),
+                -int(item.get("recommended_id", 0)),
             ),
             reverse=True,
         )
@@ -85,8 +92,8 @@ def score_and_rank(
     results: List[Suggestion] = []
 
     for c in top_candidates:
-        price = float(c.get("unit_price", 0.0))
-        cost = float(c.get("cost", 0.0))
+        price = float(c.get("unit_price", 0.0) or 0.0)
+        cost = float(c.get("cost", 0.0) or 0.0)
         delta = compute_margin_delta(quotation_lines, price, cost)
 
         results.append(
@@ -96,8 +103,8 @@ def score_and_rank(
                 is_promoted=bool(c.get("is_promoted", False)),
                 margin_pct=float(c["calculated_margin_pct"]),
                 margin_delta=float(delta),
-                confidence=round(float(c.get("confidence", 0.0)), 4),
-                co_purchase_count=int(c.get("co_purchase_count", 0)),
+                confidence=round(float(c.get("confidence", 0.0) or 0.0), 4),
+                co_purchase_count=int(c.get("co_purchase_count", 0) or 0),
             )
         )
 

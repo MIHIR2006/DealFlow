@@ -14,11 +14,13 @@ import (
 )
 
 type portalBody struct {
-	Reference      string `json:"reference"`
-	Status         string `json:"status"`
-	CustomerName   string `json:"customer_name"`
-	AwaitingReview bool   `json:"awaiting_review"`
-	CanConfirm     bool   `json:"can_confirm"`
+	Reference        string `json:"reference"`
+	Status           string `json:"status"`
+	CustomerName     string `json:"customer_name"`
+	CustomerEmail    string `json:"customer_email"`
+	OrderDiscountPct string `json:"order_discount_pct"`
+	AwaitingReview   bool   `json:"awaiting_review"`
+	CanConfirm       bool   `json:"can_confirm"`
 
 	Lines []struct {
 		ID          int64  `json:"id"`
@@ -434,6 +436,36 @@ func TestPortalNeverExposesInternalFacts(t *testing.T) {
 	for _, needle := range []string{"ceiling", "overage", "margin", "blended"} {
 		if bytesContainsFold(w.Body.Bytes(), needle) {
 			t.Errorf("the portal response mentions %q", needle)
+		}
+	}
+}
+
+// The portal screen identifies the account a link belongs to and shows what an
+// order-wide counter-offer would move away from. Both are the customer's own
+// commercial facts. Their tier is not: it is an input to our discount policy,
+// and a customer who knows they are Gold knows which ceiling to push against.
+func TestPortalIdentifiesTheAccountWithoutRevealingItsTier(t *testing.T) {
+	h := newHarness(t)
+	rep := h.login(t, "rep@dealflow360.test")
+
+	_, token := sentQuote(t, h, rep, "8")
+
+	p := portalGet(t, h, token)
+	if p.CustomerEmail == "" {
+		t.Error("the portal document does not identify the account it was issued to")
+	}
+	if p.OrderDiscountPct == "" {
+		t.Error("the portal document omits the order discount a counter-offer would replace")
+	}
+
+	w := h.do(http.MethodGet, "/api/v1/portal/q/"+token, "", nil)
+	var raw map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, leaked := range []string{"customer_tier", "tier"} {
+		if _, present := raw[leaked]; present {
+			t.Errorf("the portal document exposes %q", leaked)
 		}
 	}
 }

@@ -141,15 +141,17 @@ func portalDTO(v service.View) dto.PortalQuotation {
 	h := q.Header
 
 	out := dto.PortalQuotation{
-		Reference:      h.Reference,
-		Status:         h.Status,
-		CustomerName:   h.CustomerName,
-		ExpiresAt:      iso(v.ExpiresAt),
-		AwaitingReview: h.Status == "PENDING_APPROVAL",
-		CanConfirm:     h.Status == "SENT" || h.Status == "UNDER_NEGOTIATION",
-		Lines:          make([]dto.PortalLine, 0, len(q.Lines)),
-		Messages:       make([]dto.PortalMessage, 0, len(v.Messages)),
-		CounterOffers:  make([]dto.PortalCounterOffer, 0, len(v.Offers)),
+		Reference:        h.Reference,
+		Status:           h.Status,
+		CustomerName:     h.CustomerName,
+		CustomerEmail:    v.CustomerEmail,
+		ExpiresAt:        iso(v.ExpiresAt),
+		OrderDiscountPct: h.OrderDiscountPct.String(),
+		AwaitingReview:   h.Status == "PENDING_APPROVAL",
+		CanConfirm:       h.Status == "SENT" || h.Status == "UNDER_NEGOTIATION",
+		Lines:            make([]dto.PortalLine, 0, len(q.Lines)),
+		Messages:         make([]dto.PortalMessage, 0, len(v.Messages)),
+		CounterOffers:    make([]dto.PortalCounterOffer, 0, len(v.Offers)),
 		Totals: dto.PortalTotals{
 			ListSubtotal:   q.Totals.ListSubtotal.String(),
 			DiscountTotal:  q.Totals.DiscountTotal.String(),
