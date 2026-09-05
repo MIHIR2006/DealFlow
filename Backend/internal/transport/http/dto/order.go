@@ -22,6 +22,22 @@ type SalesOrder struct {
 	Backorders  []Backorder  `json:"backorders"`
 }
 
+// OrderSummary is a lightweight sales order view for order ledgers.
+type OrderSummary struct {
+	ID                 int64   `json:"id"`
+	Reference          string  `json:"reference"`
+	QuotationID        int64   `json:"quotation_id"`
+	QuotationReference string  `json:"quotation_reference"`
+	CustomerID         int64   `json:"customer_id"`
+	CustomerName       string  `json:"customer_name"`
+	Status             string  `json:"status"`
+	PromisedDate       *string `json:"promised_date,omitempty"`
+	ConfirmedAt        *string `json:"confirmed_at,omitempty"`
+	CreatedAt          string  `json:"created_at"`
+	ShipmentCount      int64   `json:"shipment_count"`
+	BackorderCount     int64   `json:"backorder_count"`
+}
+
 // Fulfillment is the persisted split decision for an order.
 type Fulfillment struct {
 	ID            int64             `json:"id"`
