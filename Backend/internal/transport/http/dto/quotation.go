@@ -165,3 +165,23 @@ type UpdateLineRequest struct {
 type SetOrderDiscountRequest struct {
 	OrderDiscountPct string `json:"order_discount_pct" binding:"required"`
 }
+
+// Upsell is a product worth offering alongside what is already in the cart.
+//
+// The margin figures let a rep see what adding it does to the deal before
+// they add it, rather than discovering afterwards that a low-margin add-on
+// diluted a healthy order.
+type Upsell struct {
+	ProductID  int64  `json:"product_id"`
+	Name       string `json:"name"`
+	SKU        string `json:"sku"`
+	UnitPrice  string `json:"unit_price"`
+	IsPromoted bool   `json:"is_promoted"`
+	Score      string `json:"score"`
+
+	// MarginDelta is the margin one unit adds.
+	MarginDelta string `json:"margin_delta"`
+
+	// MarginPctDelta is how the order's overall margin percentage moves.
+	MarginPctDelta string `json:"margin_pct_delta"`
+}

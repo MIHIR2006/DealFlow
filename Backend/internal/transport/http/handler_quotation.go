@@ -276,6 +276,34 @@ func (h quotationHandler) submit(c *gin.Context) {
 	OK(c, http.StatusOK, body)
 }
 
+// upsell ranks products worth suggesting for this quotation, with the margin
+// impact of adding each one.
+func (h quotationHandler) upsell(c *gin.Context) {
+	actor, id, err := actorAndID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	suggestions, err := h.svc.Upsells(c.Request.Context(), actor, id, int(pageLimit(c)))
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	out := make([]dto.Upsell, 0, len(suggestions))
+	for _, s := range suggestions {
+		out = append(out, dto.Upsell{
+			ProductID: s.ProductID, Name: s.Name, SKU: s.SKU,
+			UnitPrice: s.UnitPrice.String(), IsPromoted: s.IsPromoted,
+			Score:          s.Score.String(),
+			MarginDelta:    s.MarginDelta.String(),
+			MarginPctDelta: s.MarginPctDelta.String(),
+		})
+	}
+	OK(c, http.StatusOK, Page[dto.Upsell]{Data: out})
+}
+
 // ---------------------------------------------------------------------------
 // Mapping
 // ---------------------------------------------------------------------------
