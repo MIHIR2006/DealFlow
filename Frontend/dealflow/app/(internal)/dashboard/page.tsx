@@ -1,6 +1,5 @@
 import { AnalyticsPanel } from "@/components/dashboard/analytics";
 import { RecentActivity } from "@/components/dashboard/activity";
-import { ChartFan } from "@/components/dashboard/charts";
 
 export default function DashboardPage() {
   return (
@@ -13,10 +12,6 @@ export default function DashboardPage() {
         Central hub. Pending approvals, open quotes, and deals Deal Health
         already flagged.
       </p>
-
-      <div className="mt-8">
-        <ChartFan />
-      </div>
 
       <div className="mt-6">
         <AnalyticsPanel />
