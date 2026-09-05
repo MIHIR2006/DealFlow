@@ -35,23 +35,6 @@ export default function Home() {
     <div id="top" className="bg-cream text-ink">
       <Nav />
 
-      <a
-        href="#engine"
-        className="capsule fixed bottom-6 left-1/2 z-40 hidden -translate-x-1/2 items-center gap-2 py-2 pr-3.5 pl-2 text-[13px] text-ink sm:inline-flex"
-      >
-        <span className="relative size-8 overflow-hidden rounded-md bg-ink">
-          <Image
-            src="/landing/hero.jpg"
-            alt=""
-            fill
-            className="object-cover opacity-80"
-            sizes="32px"
-          />
-          <Play className="absolute inset-0 m-auto size-3 fill-white text-white" />
-        </span>
-        See Q-1042
-      </a>
-
       <Hero />
       <Marquee />
 
@@ -135,7 +118,7 @@ export default function Home() {
         not in spreadsheets.
       </Chapter>
 
-      <section id="how" className="canvas-shell -mt-24 px-6 pb-8 pt-28 sm:-mt-32 sm:px-10 sm:pt-32">
+      <section id="how" className="canvas-shell -mt-24 px-6 pb-24 pt-28 sm:-mt-32 sm:px-10 sm:pt-32 sm:pb-32">
         <div className="relative z-[1] mx-auto max-w-[720px] text-center">
           <h3 className="font-serif text-[32px] tracking-[-0.02em] sm:text-[40px]">
             Work the chain the spec actually wrote
@@ -379,8 +362,8 @@ function Hero() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/20 to-black/55" />
       </div>
 
-      <div className="relative mx-auto flex min-h-[100svh] max-w-[1120px] flex-col items-center px-6 pb-16 pt-28 text-center sm:pt-36">
-        <h1 className="font-serif max-w-[920px] text-[42px] leading-[1.05] tracking-[-0.03em] text-balance sm:text-[64px] lg:text-[76px]">
+      <div className="relative mx-auto flex min-h-[100svh] max-w-[1120px] flex-col items-center justify-center px-6 pt-36 pb-36 text-center sm:pt-48 sm:pb-44 lg:pt-56">
+        <h1 className="font-serif mt-6 sm:mt-0 max-w-[920px] text-[42px] leading-[1.05] tracking-[-0.03em] text-balance sm:text-[64px] lg:text-[76px]">
           The self-governing deal engine for B2B sales
         </h1>
         <p className="mt-6 max-w-[560px] text-[16px] leading-relaxed text-bone/75 sm:text-[18px]">
@@ -403,26 +386,34 @@ function Hero() {
           </a>
         </div>
 
-        <div className="relative mt-14 w-full max-w-[640px]">
-          <div className="float-slow absolute -top-6 -left-2 hidden w-[200px] rounded-2xl bg-white p-3 text-left text-ink card-shadow sm:block lg:-left-24">
-            <p className="text-[11px] text-mist">Line mix</p>
-            <div
-              className="mt-2 size-16 rounded-full"
-              style={{
-                background:
-                  "conic-gradient(#e8a078 0 70%, #c9d4e8 70% 100%)",
-              }}
-            />
-            <p className="mt-2 text-[12px]">
-              Hardware 70%
-              <br />
-              <span className="text-mist">Service 30%</span>
-            </p>
+        <div className="relative mt-12 w-full max-w-[460px]">
+          <div className="float-slow absolute -top-6 hidden w-[210px] rounded-[22px] bg-white p-4 text-left text-ink card-shadow sm:block sm:-left-56 lg:-left-64">
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] font-medium text-mist">Line mix</p>
+              <span className="rounded-full border border-ink/10 px-2 py-0.5 text-[11px] font-medium text-mist">
+                Ratio
+              </span>
+            </div>
+            <div className="mt-3 flex items-center gap-3.5">
+              <div
+                className="size-14 shrink-0 rounded-full"
+                style={{
+                  background:
+                    "conic-gradient(#e8a078 0 70%, #c9d4e8 70% 100%)",
+                }}
+              />
+              <div className="text-[12.5px] leading-tight">
+                <p className="font-semibold text-ink">Hardware 70%</p>
+                <p className="mt-1 font-medium text-mist">Service 30%</p>
+              </div>
+            </div>
           </div>
-          <div className="float-slow absolute -top-4 -right-2 hidden w-[240px] delay-200 lg:block lg:-right-28">
+
+          <div className="float-slow absolute -top-6 hidden w-[275px] delay-200 sm:block sm:-right-[285px] lg:-right-[300px]">
             <RiskCard />
           </div>
-          <div className="rounded-[22px] bg-white p-3 text-left text-ink card-shadow sm:p-4">
+
+          <div className="relative z-10 rounded-[22px] bg-white p-3 text-left text-ink card-shadow sm:p-4">
             <p className="px-2 pt-1 text-[15px] sm:text-[16px]">
               Add Setup Service at 18% for Acme Gold
             </p>
@@ -548,7 +539,7 @@ function Stat({ n, label, sub }: { n: string; label: string; sub: string }) {
 
 function Orbit() {
   return (
-    <div className="relative mx-auto mt-8 h-[420px] max-w-[720px] sm:h-[480px]">
+    <div className="relative mx-auto mt-8 h-[480px] max-w-[720px] sm:h-[560px]">
       <div className="orbit-ring absolute top-1/2 left-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 sm:size-[280px]" />
       <div className="orbit-ring absolute top-1/2 left-1/2 size-[340px] -translate-x-1/2 -translate-y-1/2 sm:size-[420px]" />
       <div className="orbit-ring absolute top-1/2 left-1/2 size-[460px] -translate-x-1/2 -translate-y-1/2 sm:size-[560px]" />
@@ -559,7 +550,7 @@ function Orbit() {
       <Bubble className="top-[22%] right-[14%]" text="Need a margin note." who="Finance" />
       <Bubble className="bottom-[28%] left-[10%]" text="Returned. Edit the service line." who="M. Shah" />
       <Bubble className="right-[12%] bottom-[22%]" text="Counter sent from portal." who="Acme" />
-      <div className="capsule absolute bottom-6 left-1/2 z-[2] max-w-[280px] -translate-x-1/2 px-4 py-3 text-left text-[13px] text-ink">
+      <div className="capsule absolute bottom-8 left-1/2 z-[2] max-w-[280px] -translate-x-1/2 px-4 py-3 text-left text-[13px] text-ink">
         We&rsquo;d like 20% on Setup Service. Can you take another look?
       </div>
     </div>
