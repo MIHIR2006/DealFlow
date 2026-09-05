@@ -18,7 +18,11 @@ export const metadata: Metadata = {
     "Discount routing, warehouse splits, hybrid billing, and customer negotiation — resolved by the system itself, before a manager ever opens the deal.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
