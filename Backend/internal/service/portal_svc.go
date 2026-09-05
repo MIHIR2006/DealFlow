@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -356,17 +357,18 @@ func (s *PortalService) CounterOffer(ctx context.Context, row sqlcgen.GetQuotati
 
 // Confirm accepts the quotation on the customer's behalf.
 func (s *PortalService) Confirm(ctx context.Context, row sqlcgen.GetQuotationByPortalTokenRow) (View, error) {
-	switch row.Status {
-	case "SENT", "UNDER_NEGOTIATION":
-	case "PENDING_APPROVAL":
-		// The customer's own counter-offer put it here. Confirming now would
-		// let them accept terms nobody internally has agreed to.
-		return View{}, apierr.Conflict(
-			"these terms are being reviewed; you will be able to confirm once that is complete")
-	case "CONFIRMED":
-		return View{}, apierr.Conflict("this quotation is already confirmed")
-	default:
-		return View{}, apierr.Conflict("this quotation is no longer open for confirmation")
+	if !CanConfirm(row.Status) {
+		switch row.Status {
+		case "PENDING_APPROVAL":
+			// The customer's own counter-offer put it here. Confirming now
+			// would let them accept terms nobody internally has agreed to.
+			return View{}, apierr.Conflict(
+				"these terms are being reviewed; you will be able to confirm once that is complete")
+		case "CONFIRMED":
+			return View{}, apierr.Conflict("this quotation is already confirmed")
+		default:
+			return View{}, apierr.Conflict("this quotation is no longer open for confirmation")
+		}
 	}
 
 	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -394,10 +396,42 @@ func (s *PortalService) Confirm(ctx context.Context, row sqlcgen.GetQuotationByP
 
 // assertNegotiable refuses portal writes on a quotation that is not open to
 // them.
-func (s *PortalService) assertNegotiable(status string) error {
+// CanNegotiate and CanConfirm are the portal's status rules, stated once.
+//
+// They used to be written out separately in Confirm, assertNegotiable, and the
+// handler that builds the customer's document, and the three drifted: a
+// quotation that cleared approval became APPROVED, which the first two refused
+// and the third reported as not confirmable. A customer whose own counter-offer
+// had just been approved was told the quotation was "no longer open" -- the one
+// state the whole negotiation exists to reach. Anything that gates a portal
+// action asks these.
+
+// CanNegotiate reports whether the customer may post messages or propose terms.
+func CanNegotiate(status string) bool {
 	switch status {
-	case "SENT", "UNDER_NEGOTIATION":
+	case "SENT", "UNDER_NEGOTIATION", "APPROVED":
+		return true
+	}
+	return false
+}
+
+// CanConfirm reports whether the customer may accept the quotation as it
+// stands. APPROVED belongs here: it is what PENDING_APPROVAL becomes once
+// every required approval has been given, and it is precisely the moment the
+// customer is waiting for.
+func CanConfirm(status string) bool {
+	switch status {
+	case "SENT", "UNDER_NEGOTIATION", "APPROVED":
+		return true
+	}
+	return false
+}
+
+func (s *PortalService) assertNegotiable(status string) error {
+	if CanNegotiate(status) {
 		return nil
+	}
+	switch status {
 	case "PENDING_APPROVAL":
 		return apierr.Conflict(
 			"these terms are being reviewed; please wait for that to complete")
@@ -427,4 +461,129 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// ---------------------------------------------------------------------------
+// The staff side of the negotiation
+// ---------------------------------------------------------------------------
+
+// Thread is one negotiation as staff see it: what the customer said, what they
+// proposed, and how each proposal was answered.
+//
+// It is the same conversation the customer's portal renders. Without it the
+// thread was one-directional -- a customer could write, and the message landed
+// in a table nothing internal ever read, while the portal told them their
+// "sales team will be notified".
+type Thread struct {
+	QuotationID int64
+	Reference   string
+	Messages    []sqlcgen.ListNegotiationMessagesForStaffRow
+	Offers      []sqlcgen.ListCounterOffersRow
+
+	// Negotiable reports whether a reply can still be posted, so the caller
+	// can render a composer that matches what the service will accept.
+	Negotiable bool
+	Status     string
+}
+
+// Thread returns the negotiation for a quotation the caller may see.
+//
+// Authorisation is the quotation service's: a rep sees their own deals, a
+// manager their team's. There is no separate rule here to fall out of step.
+func (s *PortalService) Thread(ctx context.Context, actor auth.Principal, quotationID int64) (Thread, error) {
+	quote, err := s.quote.Get(ctx, actor, quotationID)
+	if err != nil {
+		return Thread{}, err
+	}
+	return s.thread(ctx, quote.Header)
+}
+
+func (s *PortalService) thread(ctx context.Context, header sqlcgen.GetQuotationRow) (Thread, error) {
+	messages, err := s.q.ListNegotiationMessagesForStaff(ctx, header.ID)
+	if err != nil {
+		return Thread{}, apierr.Internal(fmt.Errorf("list negotiation messages: %w", err))
+	}
+	offers, err := s.q.ListCounterOffers(ctx, header.ID)
+	if err != nil {
+		return Thread{}, apierr.Internal(fmt.Errorf("list counter offers: %w", err))
+	}
+
+	return Thread{
+		QuotationID: header.ID,
+		Reference:   header.Reference,
+		Messages:    messages,
+		Offers:      offers,
+		Negotiable:  CanNegotiate(header.Status),
+		Status:      header.Status,
+	}, nil
+}
+
+// ReplyToCustomer posts a staff message into the negotiation thread.
+//
+// This is the other half of PostMessage. It writes with author_type STAFF,
+// which the customer's portal already renders on its own side of the thread,
+// and it is bounded by the same negotiable-status rule the customer is: if the
+// customer cannot write, neither can we, so the conversation cannot continue
+// past the point where the terms stopped moving.
+func (s *PortalService) ReplyToCustomer(
+	ctx context.Context,
+	actor auth.Principal,
+	quotationID int64,
+	lineID *int64,
+	body string,
+) (Thread, error) {
+	if strings.TrimSpace(body) == "" {
+		return Thread{}, apierr.Validation("a message cannot be empty")
+	}
+
+	quote, err := s.quote.Get(ctx, actor, quotationID)
+	if err != nil {
+		return Thread{}, err
+	}
+	if err := s.assertNegotiable(quote.Header.Status); err != nil {
+		return Thread{}, err
+	}
+	if lineID != nil {
+		if err := s.assertLineBelongs(ctx, quotationID, *lineID); err != nil {
+			return Thread{}, err
+		}
+	}
+
+	// The customer sees this label. An internal email address is not a name,
+	// so the account's full name is used and the email kept off the portal.
+	label := staffLabel(ctx, s.q, actor)
+
+	if _, err := s.q.CreateNegotiationMessage(ctx, sqlcgen.CreateNegotiationMessageParams{
+		QuotationID:     quotationID,
+		QuotationLineID: lineID,
+		AuthorType:      "STAFF",
+		AuthorLabel:     label,
+		Body:            strings.TrimSpace(body),
+	}); err != nil {
+		return Thread{}, apierr.Internal(fmt.Errorf("create staff message: %w", err))
+	}
+
+	// Answering a customer is activity, so a deal being actively discussed
+	// does not drift onto the stalled list.
+	if err := s.q.TouchQuotation(ctx, quotationID); err != nil {
+		return Thread{}, apierr.Internal(fmt.Errorf("touch quotation: %w", err))
+	}
+
+	s.quote.Audit(ctx, quotationID, "STAFF_MESSAGE", actor, truncate(body, 120),
+		map[string]any{"line_id": lineID})
+
+	header, err := s.quote.Header(ctx, quotationID)
+	if err != nil {
+		return Thread{}, err
+	}
+	return s.thread(ctx, header)
+}
+
+// staffLabel resolves the name the customer will see against a staff reply,
+// falling back to a role-shaped label rather than leaking an email address.
+func staffLabel(ctx context.Context, q *sqlcgen.Queries, actor auth.Principal) string {
+	if user, err := q.GetUserByID(ctx, actor.UserID); err == nil && user.FullName != "" {
+		return user.FullName
+	}
+	return "Sales team"
 }

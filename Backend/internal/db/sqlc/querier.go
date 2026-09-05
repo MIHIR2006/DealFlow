@@ -126,6 +126,9 @@ type Querier interface {
 	ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]ListInvoicesRow, error)
 	ListInvoicesForOrder(ctx context.Context, salesOrderID int64) ([]Invoice, error)
 	ListNegotiationMessages(ctx context.Context, quotationID int64) ([]NegotiationMessage, error)
+	// The negotiation thread as staff see it. Same rows the customer's portal
+	// reads; the staff side needs them to answer, and to see what was proposed.
+	ListNegotiationMessagesForStaff(ctx context.Context, quotationID int64) ([]ListNegotiationMessagesForStaffRow, error)
 	ListOpenBackorders(ctx context.Context, salesOrderID int64) ([]ListOpenBackordersRow, error)
 	ListOpenDealAlerts(ctx context.Context, limit int32) ([]ListOpenDealAlertsRow, error)
 	ListPaymentsForInvoice(ctx context.Context, invoiceID int64) ([]Payment, error)
@@ -181,6 +184,10 @@ type Querier interface {
 	ResolveAlertsForQuotation(ctx context.Context, arg ResolveAlertsForQuotationParams) (int64, error)
 	ResolveBackorder(ctx context.Context, id int64) (Backorder, error)
 	ResolveDealAlert(ctx context.Context, id int64) error
+	// Close out every counter-offer still awaiting a decision on this quotation.
+	// Called when an approval round ends, so the customer's negotiation history
+	// shows the answer rather than sitting on "sent for approval" forever.
+	ResolveRoutedCounterOffers(ctx context.Context, arg ResolveRoutedCounterOffersParams) ([]CounterOffer, error)
 	RevokePortalTokensForQuotation(ctx context.Context, quotationID int64) (int64, error)
 	// Reporting with the four filters the problem statement names: period, rep or
 	// team, approval status, and product category.

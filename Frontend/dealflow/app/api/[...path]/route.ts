@@ -3,6 +3,19 @@ import { NextRequest } from "next/server";
 const BACKEND_URL = process.env.GO_BACKEND_URL;
 
 const HOP_BY_HOP_REQUEST_HEADERS = ["host", "connection", "content-length"];
+
+// Headers that describe the browser's relationship to *this* server and mean
+// nothing to the one behind it.
+//
+// Origin is the important one. This proxy is a server-to-server call, but
+// forwarding the browser's Origin makes the backend evaluate it as a browser
+// cross-origin request against its CORS allowlist -- so a frontend served from
+// any origin the backend does not happen to list has every mutation rejected
+// with a bodyless 403, while GETs and server-side calls keep working. The
+// browser's own same-origin protection still applies to the request that
+// reaches this route, and the backend's allowlist still guards direct browser
+// access to it; neither needs this header relayed.
+const BROWSER_CONTEXT_HEADERS = ["origin", "referer"];
 const HOP_BY_HOP_RESPONSE_HEADERS = ["content-encoding", "content-length", "transfer-encoding", "connection"];
 
 async function proxy(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
@@ -18,6 +31,7 @@ async function proxy(req: NextRequest, { params }: { params: Promise<{ path: str
 
   const headers = new Headers(req.headers);
   for (const name of HOP_BY_HOP_REQUEST_HEADERS) headers.delete(name);
+  for (const name of BROWSER_CONTEXT_HEADERS) headers.delete(name);
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
 

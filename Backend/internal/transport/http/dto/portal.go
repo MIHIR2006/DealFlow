@@ -125,3 +125,41 @@ type SendQuotationResponse struct {
 	PortalURL string `json:"portal_url"`
 	ExpiresAt string `json:"expires_at"`
 }
+
+// ---------------------------------------------------------------------------
+// The staff side of the negotiation
+// ---------------------------------------------------------------------------
+
+// ThreadMessage is one entry of the negotiation as staff see it.
+//
+// It carries the line's product name so the internal thread can say which item
+// a comment was about without the client joining anything.
+type ThreadMessage struct {
+	ID          int64   `json:"id"`
+	LineID      *int64  `json:"line_id,omitempty"`
+	ProductName *string `json:"product_name,omitempty"`
+	AuthorType  string  `json:"author_type"`
+	AuthorLabel string  `json:"author_label"`
+	Body        string  `json:"body"`
+	CreatedAt   string  `json:"created_at"`
+}
+
+// NegotiationThread is the whole conversation for one quotation, staff-side.
+type NegotiationThread struct {
+	QuotationID int64  `json:"quotation_id"`
+	Reference   string `json:"reference"`
+	Status      string `json:"status"`
+
+	// Negotiable reports whether a reply will be accepted, so the composer
+	// can be disabled for the same reasons the service would refuse it.
+	Negotiable bool `json:"negotiable"`
+
+	Messages      []ThreadMessage      `json:"messages"`
+	CounterOffers []PortalCounterOffer `json:"counter_offers"`
+}
+
+// StaffMessageRequest posts a reply to the customer, optionally about one line.
+type StaffMessageRequest struct {
+	LineID *int64 `json:"line_id"`
+	Body   string `json:"body" binding:"required"`
+}
