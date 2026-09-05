@@ -22,6 +22,10 @@
   --color-status-bad: oklch(0.58 0.2 25);
   --color-status-bad-bg: oklch(0.58 0.2 25 / 0.1);
 
+  --color-chart-terracotta: #d47a4a;
+  --color-chart-rose: #d97b7b;
+  --color-chart-lilac: #8f7ec8;
+
   --brand-radius-xs: 7.04px;
   --brand-radius-sm: 8px;
   --brand-radius-md: 10px;
@@ -97,6 +101,9 @@
   --color-status-ok: var(--color-status-ok);
   --color-status-warn: var(--color-status-warn);
   --color-status-bad: var(--color-status-bad);
+  --color-chart-terracotta: var(--color-chart-terracotta);
+  --color-chart-rose: var(--color-chart-rose);
+  --color-chart-lilac: var(--color-chart-lilac);
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --font-headline: var(--font-headline);

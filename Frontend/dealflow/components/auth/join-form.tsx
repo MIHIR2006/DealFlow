@@ -38,7 +38,7 @@ export function JoinForm({ role }: { role: RoleId }) {
       });
       const token = res.token ?? res.data?.token;
       if (token) saveToken(token);
-      router.push("/quotations");
+      router.push("/dashboard");
     } catch (err) {
       setError(
         err instanceof ApiError
