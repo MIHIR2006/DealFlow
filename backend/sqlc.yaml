@@ -1,0 +1,29 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: internal/db/migrations
+    queries: internal/db/queries
+    gen:
+      go:
+        package: sqlcgen
+        out: internal/db/sqlc
+        sql_package: pgx/v5
+
+        emit_pointers_for_null_types: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_json_tags: false
+
+        # Money never becomes a float. NUMERIC maps to shopspring/decimal
+        # via the codec registered in internal/platform/db.
+        overrides:
+          - db_type: "pg_catalog.numeric"
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "Decimal"
+          - db_type: "pg_catalog.numeric"
+            nullable: true
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
