@@ -327,13 +327,13 @@ export default function Home() {
       <Faq />
 
       <footer className="px-3 pb-3 sm:px-5 sm:pb-5">
-        <div className="art-frame relative mx-auto min-h-[420px] max-w-[1280px] overflow-hidden rounded-[28px] sm:min-h-[520px]">
+        <div className="art-frame relative mx-auto min-h-[520px] max-w-[1280px] overflow-hidden rounded-[28px] sm:min-h-[640px] lg:min-h-[720px]">
           <Image
-            src="/landing/footer.jpg"
+            src="/landing/DFooter.png"
             alt=""
             fill
             sizes="100vw"
-            className="object-cover"
+            className="object-cover object-top"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/25 to-transparent" />
           <div className="relative z-[1] grid gap-12 p-8 text-bone sm:p-12 lg:grid-cols-[1.2fr_1fr]">
@@ -382,81 +382,48 @@ export default function Home() {
 
 function Hero() {
   return (
-    <section className="relative min-h-[100svh] overflow-hidden bg-canvas text-bone">
+    <section className="relative min-h-[100svh] overflow-hidden bg-canvas text-bone flex flex-col justify-start">
       <div className="art-frame absolute inset-0">
         <Image
-          src="/landing/hero.jpg"
-          alt=""
+          src="/landing/newc.png"
+          alt="DealFlow360"
           fill
           priority
           sizes="100vw"
           className="object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/20 to-black/55" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
       </div>
 
-      <div className="relative mx-auto flex min-h-[100svh] max-w-[1120px] flex-col items-center justify-center px-6 pt-36 pb-36 text-center sm:pt-48 sm:pb-44 lg:pt-56">
-        <h1 className="font-serif mt-6 sm:mt-0 max-w-[920px] text-[42px] leading-[1.05] tracking-[-0.03em] text-balance sm:text-[64px] lg:text-[76px]">
-          The self-governing deal engine for B2B sales
-        </h1>
-        <p className="mt-6 max-w-[560px] text-[16px] leading-relaxed text-bone/75 sm:text-[18px]">
-          Discount limits, stock splits, and customer counter-offers get
-          resolved by the system itself — before a manager ever opens the deal.
-        </p>
-        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-          <a
-            href="/signin"
-            className="inline-flex items-center rounded-full bg-white px-6 py-3 text-[15px] font-medium text-ink hover:bg-bone"
-          >
-            Open the workspace
-          </a>
-          <a
-            href="#engine"
-            className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 py-3 text-[15px] text-bone backdrop-blur-sm hover:bg-white/16"
-          >
-            See how it decides
-            <ArrowRight className="size-4" />
-          </a>
-        </div>
+      <div className="relative mx-auto flex w-full max-w-[1240px] flex-col items-center justify-start px-6 pt-28 pb-8 text-center sm:pt-36">
+        <div className="flex w-full flex-col items-center">
+          <h1 className="font-serif mt-4 sm:mt-6 max-w-[860px] text-[38px] leading-[1.06] tracking-[-0.03em] text-balance sm:text-[54px] lg:text-[64px]">
+            The self-governing deal engine for B2B sales
+          </h1>
+          {/* <p className="mt-4 max-w-[640px] text-[15px] leading-relaxed text-bone/85 sm:text-[17.5px]">
+            Discount limits, stock splits, and customer counter-offers get
+            resolved by the system itself — before a manager ever opens the deal.
+          </p> */}
 
-        <div className="relative mt-12 w-full max-w-[460px]">
-          <div className="float-slow absolute -top-6 hidden w-[210px] rounded-[22px] bg-white p-4 text-left text-ink card-shadow sm:block sm:-left-56 lg:-left-64">
-            <div className="flex items-center justify-between">
-              <p className="text-[12px] font-medium text-mist">Line mix</p>
-              <span className="rounded-full border border-ink/10 px-2 py-0.5 text-[11px] font-medium text-mist">
-                Ratio
-              </span>
-            </div>
-            <div className="mt-3 flex items-center gap-3.5">
-              <div
-                className="size-14 shrink-0 rounded-full"
-                style={{
-                  background:
-                    "conic-gradient(#e8a078 0 70%, #c9d4e8 70% 100%)",
-                }}
-              />
-              <div className="text-[12.5px] leading-tight">
-                <p className="font-semibold text-ink">Hardware 70%</p>
-                <p className="mt-1 font-medium text-mist">Service 30%</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="float-slow absolute -top-6 hidden w-[275px] delay-200 sm:block sm:-right-[285px] lg:-right-[300px]">
-            <RiskCard />
-          </div>
-
-          <div className="relative z-10 rounded-[22px] bg-white p-3 text-left text-ink card-shadow sm:p-4">
-            <p className="px-2 pt-1 text-[15px] sm:text-[16px]">
-              Add Setup Service at 18% for Acme Gold
-            </p>
-            <div className="mt-3 flex items-center justify-between gap-2">
-              <span className="rounded-full border border-ink/10 px-2.5 py-1 text-[12px] text-mist">
-                @ Q-1042
-              </span>
-              <span className="flex size-9 items-center justify-center rounded-full bg-ink text-bone">
-                <ArrowUp className="size-4" />
-              </span>
+          <div className="mt-6 sm:mt-8 flex w-full max-w-[500px] flex-col items-center gap-2 sm:flex-row sm:rounded-full sm:border sm:border-white/25 sm:bg-white/15 sm:p-1 sm:backdrop-blur-xl sm:shadow-2xl">
+            <input
+              type="email"
+              placeholder="Enter your work email"
+              className="w-full rounded-full border border-white/20 bg-white/15 px-4 py-2 text-[13.5px] text-white placeholder-white/60 backdrop-blur-md focus:outline-none sm:border-none sm:bg-transparent sm:py-2 sm:backdrop-blur-none"
+            />
+            <div className="flex w-full shrink-0 flex-col gap-1.5 sm:w-auto sm:flex-row sm:items-center">
+              <a
+                href="/register"
+                className="inline-flex items-center justify-center rounded-full bg-bone px-4 py-2 text-[13.5px] font-medium text-ink shadow-lg transition-all hover:bg-white whitespace-nowrap"
+              >
+                Open workspace
+              </a>
+              <a
+                href="#engine"
+                className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/10 px-4 py-2 text-[13.5px] font-medium text-white backdrop-blur-md transition-all hover:bg-white/20 whitespace-nowrap"
+              >
+                Launch demo
+              </a>
             </div>
           </div>
         </div>
