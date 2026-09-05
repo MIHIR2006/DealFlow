@@ -38,7 +38,10 @@ type harness struct {
 	cache  *cache.Config
 }
 
-func newHarness(t *testing.T) *harness {
+// newHarness builds a router over a seeded test database. Options mutate the
+// config before anything reads it, which is how a suite turns on a feature the
+// default harness leaves off -- the recommendation engine, for instance.
+func newHarness(t *testing.T, opts ...func(*config.Config)) *harness {
 	t.Helper()
 
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -63,6 +66,10 @@ func newHarness(t *testing.T) *harness {
 		AnomalyMultiplier: decimal.RequireFromString("1.5"),
 		AnomalyMinSample:  3,
 		ExposeDBStats:     true,
+	}
+
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
 	pool, err := db.Open(context.Background(), cfg)

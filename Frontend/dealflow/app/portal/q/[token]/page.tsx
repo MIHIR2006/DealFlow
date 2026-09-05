@@ -15,6 +15,7 @@ import { inr } from "@/lib/hooks";
 import type { PortalQuotation } from "@/lib/types";
 import { PortalStatusBadge, portalStatusLabel } from "./portal-status";
 import { NegotiationTable } from "./negotiation-table";
+import { AssistantDock } from "./assistant-dock";
 
 type Tab = "QUOTE" | "MESSAGES" | "PROFILE";
 
@@ -75,6 +76,17 @@ export default function CustomerQuotationPortalPage({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Re-read after the assistant has acted. Quiet on purpose: the customer is
+  // looking at the chat panel, and blanking the document behind it for a
+  // spinner would be worse than a moment of stale figures.
+  const refresh = useCallback(async () => {
+    try {
+      setQuote(await PortalApi.get(token));
+    } catch {
+      // The next poll or interaction picks it up.
+    }
+  }, [token]);
 
   const confirmed = quote?.status === "CONFIRMED";
   const awaitingReview = !!quote?.awaiting_review;
@@ -737,6 +749,13 @@ export default function CustomerQuotationPortalPage({
           </div>
         </div>
       ) : null}
+
+      <AssistantDock
+        token={token}
+        reference={quote.reference}
+        negotiationOpen={negotiationOpen}
+        onQuotationChanged={refresh}
+      />
     </div>
   );
 }

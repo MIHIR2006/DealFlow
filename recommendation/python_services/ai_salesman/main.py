@@ -1,11 +1,12 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, status
-import httpx
 from pydantic import BaseModel, Field
 
-from ai_salesman.agent.salesman import run_salesman
-from ai_salesman.backend_client import DealFlowBackendClient
+from shared.config import settings
+from ai_salesman.agent.salesman import AssistantUnavailable, run_salesman
+from ai_salesman.backend_client import DealFlowBackendClient, PortalAccessError
+from ai_salesman.agent.tools import STATUS_MESSAGES
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,11 +14,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger("dealflow360.ai_salesman.main")
 
+# Every route here is reached with a customer portal token and nothing else.
+# The token is passed straight through to the backend, which resolves exactly
+# one quotation from it; this service holds no session of its own beyond the
+# conversation history keyed by that same token.
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan manager for AI Salesman service."""
     logger.info("Starting DealFlow360 AI Salesman Service...")
+    if not settings.llm_configured:
+        logger.warning(
+            "LLM_API_KEY is not configured: the assistant will report itself "
+            "unavailable and the portal will hide it."
+        )
     yield
     logger.info("Shutting down DealFlow360 AI Salesman Service...")
 
@@ -31,11 +42,37 @@ app = FastAPI(
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., description="Customer input message")
+    message: str = Field(..., max_length=2000, description="Customer input message")
 
 
 class ChatResponse(BaseModel):
     reply: str = Field(..., description="AI Salesman response message")
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str = "dealflow360-ai-salesman"
+    configured: bool
+
+
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["health"],
+    summary="Health and configuration status",
+)
+async def health_check() -> HealthResponse:
+    """Report whether the assistant has what it needs to answer.
+
+    The portal reads `configured` to decide whether to offer the assistant at
+    all, so an unconfigured deployment shows no broken control.
+    """
+    configured = settings.llm_configured
+    return HealthResponse(
+        status="healthy" if configured else "degraded",
+        configured=configured,
+    )
 
 
 @app.post(
@@ -46,15 +83,27 @@ class ChatResponse(BaseModel):
 )
 async def chat_with_salesman(portal_token: str, request: ChatRequest) -> ChatResponse:
     """Handle conversational turn with the AI Salesman for a portal quotation session."""
-    if not request.message or not request.message.strip():
+    message = (request.message or "").strip()
+    if not message:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Message cannot be empty",
         )
 
     try:
-        reply = await run_salesman(portal_token, request.message.strip())
-        return ChatResponse(reply=reply)
+        return ChatResponse(reply=await run_salesman(portal_token, message))
+    except PortalAccessError:
+        # Same answer the backend gives for an unknown, revoked, or expired
+        # token, so this endpoint does not reveal which tokens exist either.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This link is invalid or has expired",
+        )
+    except AssistantUnavailable:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant is not available right now",
+        )
     except Exception as exc:
         logger.error(f"Unexpected chat error: {exc}", exc_info=True)
         raise HTTPException(
@@ -72,40 +121,31 @@ async def get_portal_status(portal_token: str):
     """Retrieve formatted status and reference for customer portal header."""
     client = DealFlowBackendClient(portal_token)
     try:
-        data = await client.get_quotation()
-        quote = data.get("quotation", data)
-        header = quote.get("header", {})
-        raw_status = header.get("status", "UNKNOWN")
-        reference = header.get("reference", "N/A")
-
-        status_labels = {
-            "SENT": "Awaiting your review",
-            "UNDER_NEGOTIATION": "Under negotiation",
-            "PENDING_APPROVAL": "Your request is under review",
-            "APPROVED": "Ready to confirm",
-            "CONFIRMED": "Confirmed — order in progress",
-            "REJECTED": "Not approved",
-        }
-        label = status_labels.get(raw_status, raw_status)
-
+        quote = await client.get_quotation()
+        raw_status = quote.get("status", "UNKNOWN")
         return {
             "status": raw_status,
-            "label": label,
-            "reference": reference,
+            "label": STATUS_MESSAGES.get(raw_status, raw_status),
+            "reference": quote.get("reference", "N/A"),
         }
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403, 404):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Quotation not found",
-            )
+    except PortalAccessError:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Error communicating with backend service",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quotation not found",
         )
     except Exception as exc:
         logger.error(f"Error fetching portal status: {exc}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Error communicating with backend service",
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "ai_salesman.main:app",
+        host=settings.AI_SALESMAN_HOST,
+        port=settings.AI_SALESMAN_PORT,
+    )

@@ -76,6 +76,8 @@ export function clearToken() {
 
 import type {
   ApprovalInboxRow,
+  AssistantAvailability,
+  AssistantReply,
   ApprovalPolicy,
   ApprovalStep,
   Category,
@@ -298,6 +300,49 @@ export const PortalApi = {
       body: JSON.stringify({ proposed_discount_pct: proposedDiscountPct, line_id: lineId ?? null, note }),
     }),
   confirm: (token: string) => api<PortalQuotation>(`/v1/portal/q/${token}/confirm`, { method: "POST" }),
+};
+
+// --- Portal assistant (token-scoped, proxied server-side) --------------------
+//
+// These do not go through `api()`: the assistant is not the Go backend and is
+// reached through its own Next.js route handlers, which keep the service off
+// the public surface. The token in the path is the only credential, exactly as
+// for the portal routes above.
+
+export const AssistantApi = {
+  /** Whether the portal should offer the assistant at all. Never throws. */
+  available: async (): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/assistant/health", { cache: "no-store" });
+      if (!res.ok) return false;
+      const body = (await res.json()) as AssistantAvailability;
+      return body.available === true;
+    } catch {
+      return false;
+    }
+  },
+
+  chat: async (token: string, message: string): Promise<string> => {
+    const res = await fetch(`/api/assistant/q/${token}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+      cache: "no-store",
+    });
+
+    const data = (await res.json().catch(() => null)) as
+      | (AssistantReply & ApiErrorBody)
+      | null;
+
+    if (!res.ok) {
+      throw new ApiError(
+        res.status,
+        data?.error?.code ?? "ASSISTANT_ERROR",
+        data?.error?.message ?? "The assistant could not answer",
+      );
+    }
+    return data?.reply ?? "";
+  },
 };
 
 // --- Analytics ---------------------------------------------------------------

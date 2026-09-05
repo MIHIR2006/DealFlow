@@ -73,20 +73,27 @@ async def check_db_health() -> bool:
 
 
 async def init_schema_tables() -> None:
-    """Create product_recommendations table if not already existing."""
+    """Ensure the product_recommendations table exists.
+
+    The table is owned by the backend's goose migrations
+    (Backend/internal/db/migrations/00005_product_recommendations.sql); this is
+    an idempotent safety net so the service still starts when it is pointed at
+    a database that has not been migrated yet. Column types must match the
+    migration exactly -- products.id is BIGINT.
+    """
     pool = await get_or_init_pool()
     if pool is None:
         return
     ddl = """
     CREATE TABLE IF NOT EXISTS product_recommendations (
-        product_id        INT NOT NULL,
-        recommended_id    INT NOT NULL,
-        co_purchase_count INT NOT NULL,
-        confidence        FLOAT NOT NULL,
-        updated_at        TIMESTAMPTZ DEFAULT now(),
+        product_id        BIGINT NOT NULL,
+        recommended_id    BIGINT NOT NULL,
+        co_purchase_count BIGINT NOT NULL,
+        confidence        DOUBLE PRECISION NOT NULL,
+        updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
         PRIMARY KEY (product_id, recommended_id)
     );
-    CREATE INDEX IF NOT EXISTS idx_product_recommendations_lookup 
+    CREATE INDEX IF NOT EXISTS idx_product_recommendations_lookup
     ON product_recommendations (product_id, co_purchase_count DESC);
     """
     try:

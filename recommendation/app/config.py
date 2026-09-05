@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     TOP_K: int = 10
     MIN_SUPPORT: int = 3
 
+    # Rebuild the co-purchase matrix once at startup. Without it a fresh
+    # deployment serves nothing but the hand-curated upsell_rules fallback
+    # until someone remembers to POST /admin/recalculate.
+    RECALC_ON_STARTUP: bool = True
+
     HOST: str = "0.0.0.0"
     PORT: int = 8001
     ENVIRONMENT: str = "development"

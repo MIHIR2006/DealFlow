@@ -7,6 +7,7 @@ from app.db import check_db_health, close_pool, init_pool, init_schema_tables
 from app.routers.admin import router as admin_router
 from app.routers.recommend import router as recommend_router
 from app.schemas import HealthResponse
+from app.signals.co_purchase import run_co_purchase_recalculation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,6 +22,18 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting DealFlow360 Recommendation Service (env={settings.ENVIRONMENT})...")
     await init_pool()
     await init_schema_tables()
+    if settings.RECALC_ON_STARTUP:
+        # Best effort: an empty or unreachable database must not stop the
+        # service from coming up. /recommend degrades to the upsell_rules
+        # fallback, and /admin/recalculate can be retried at any time.
+        try:
+            rows = await run_co_purchase_recalculation(
+                min_support=settings.MIN_SUPPORT,
+                top_k=settings.TOP_K,
+            )
+            logger.info(f"Startup co-purchase recalculation wrote {rows} rows.")
+        except Exception as exc:
+            logger.warning(f"Startup co-purchase recalculation skipped: {exc}")
     yield
     logger.info("Shutting down Recommendation Service...")
     await close_pool()

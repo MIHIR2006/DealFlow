@@ -5,6 +5,17 @@ from app.db import execute_query, fetch_rows
 
 logger = logging.getLogger("dealflow360.co_purchase")
 
+# The engine reads the DealFlow360 schema directly (see
+# Backend/internal/db/migrations). Column names are the schema's, not
+# convenient aliases: products.unit_cost, quotation_lines.line_discount_pct.
+# Aliases are applied in the SELECT list so the scoring pipeline keeps working
+# in its own vocabulary.
+#
+# CONFIRMED is the terminal state of the quotations table. Everything after it
+# (fulfilment, invoicing, payment) is tracked on sales_orders, so a quotation
+# never carries those statuses and filtering on them would match nothing.
+CONFIRMED_STATUSES = "('CONFIRMED')"
+
 
 async def run_co_purchase_recalculation(
     min_support: int = settings.MIN_SUPPORT,
@@ -19,7 +30,7 @@ async def run_co_purchase_recalculation(
     # Clean previous precomputed recommendations to prevent stale ranks
     await execute_query("TRUNCATE TABLE product_recommendations;")
 
-    batch_sql = """
+    batch_sql = f"""
     WITH pair_counts AS (
         SELECT
             a.product_id,
@@ -30,7 +41,7 @@ async def run_co_purchase_recalculation(
             ON a.quotation_id = b.quotation_id
            AND a.product_id != b.product_id
         JOIN quotations q ON q.id = a.quotation_id
-        WHERE q.status IN ('CONFIRMED','FULFILLED','INVOICED','PAID')
+        WHERE q.status IN {CONFIRMED_STATUSES}
         GROUP BY a.product_id, b.product_id
         HAVING COUNT(*) >= $1
     ),
@@ -38,7 +49,7 @@ async def run_co_purchase_recalculation(
         SELECT a.product_id, COUNT(DISTINCT a.quotation_id) AS total_orders
         FROM quotation_lines a
         JOIN quotations q ON q.id = a.quotation_id
-        WHERE q.status IN ('CONFIRMED','FULFILLED','INVOICED','PAID')
+        WHERE q.status IN {CONFIRMED_STATUSES}
         GROUP BY a.product_id
     ),
     scored AS (
@@ -92,14 +103,14 @@ async def fetch_recommendation_candidates(cart_product_ids: List[int]) -> List[D
         r.recommended_id,
         p.name,
         p.unit_price,
-        p.cost,
+        p.unit_cost AS cost,
         p.is_promoted,
         r.confidence,
         r.co_purchase_count
     FROM product_recommendations r
     JOIN products p ON p.id = r.recommended_id
-    WHERE r.product_id = ANY($1::int[])
-      AND r.recommended_id != ALL($1::int[])
+    WHERE r.product_id = ANY($1::bigint[])
+      AND r.recommended_id != ALL($1::bigint[])
       AND p.is_active = true
     ORDER BY r.co_purchase_count DESC;
     """
@@ -111,25 +122,29 @@ async def fetch_recommendation_candidates(cart_product_ids: List[int]) -> List[D
     missing_anchors = [pid for pid in cart_product_ids if pid not in found_anchors]
 
     if missing_anchors:
+        # upsell_rules is the hand-curated pairing table the core product
+        # already maintains: higher score means a stronger pairing, so the
+        # cold-start ordering follows it descending.
         fallback_query = """
         SELECT
             u.product_id AS anchor_id,
             u.suggested_product_id AS recommended_id,
             p.name,
             p.unit_price,
-            p.cost,
+            p.unit_cost AS cost,
             p.is_promoted,
             0.0 AS confidence,
             0 AS co_purchase_count,
-            u.priority
+            u.score
         FROM upsell_rules u
         JOIN products p ON p.id = u.suggested_product_id
-        WHERE u.product_id = ANY($1::int[])
-          AND u.suggested_product_id != ALL($1::int[])
+        WHERE u.product_id = ANY($1::bigint[])
+          AND u.suggested_product_id != ALL($2::bigint[])
+          AND u.is_active = true
           AND p.is_active = true
-        ORDER BY u.priority ASC;
+        ORDER BY u.score DESC;
         """
-        fallback_records = await fetch_rows(fallback_query, missing_anchors)
+        fallback_records = await fetch_rows(fallback_query, missing_anchors, cart_product_ids)
         for fr in fallback_records:
             candidates.append(dict(fr))
 
@@ -141,7 +156,7 @@ async def fetch_quotation_lines(quotation_id: int) -> List[Dict[str, Any]]:
     if not quotation_id:
         return []
     query = """
-    SELECT product_id, qty, unit_price, cost, discount_pct
+    SELECT product_id, qty, unit_price, unit_cost AS cost, line_discount_pct AS discount_pct
     FROM quotation_lines
     WHERE quotation_id = $1;
     """

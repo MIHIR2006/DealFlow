@@ -13,6 +13,7 @@ import (
 	"dealflow360/backend/internal/platform/auth"
 	"dealflow360/backend/internal/platform/cache"
 	"dealflow360/backend/internal/platform/config"
+	"dealflow360/backend/internal/platform/recommender"
 	"dealflow360/backend/internal/service"
 	"dealflow360/backend/internal/transport/http/middleware"
 )
@@ -177,6 +178,17 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	// document, so the client never recomputes money and cannot disagree
 	// with the server about a total.
 	quoteSvc := service.NewQuoteService(d.Pool, queries, cfgCache)
+
+	// The recommendation engine enriches the upsell panel when it is
+	// configured. It is wired as an option rather than a dependency: with no
+	// URL set, or with the engine unreachable, /quotations/:id/upsell still
+	// answers from the upsell_rules pairings.
+	if d.Config.RecommendationURL != "" {
+		quoteSvc = quoteSvc.WithRecommender(
+			recommender.New(d.Config.RecommendationURL, d.Config.RecommendationTimeout),
+		)
+	}
+
 	qh := quotationHandler{svc: quoteSvc}
 	quotes := rg.Group("/quotations", authed, staff)
 	{
