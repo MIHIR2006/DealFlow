@@ -8,12 +8,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	sqlcgen "dealflow360/backend/internal/db/sqlc"
+	"dealflow360/backend/internal/platform/apierr"
+	"dealflow360/backend/internal/platform/auth"
 	"dealflow360/backend/internal/platform/config"
+	"dealflow360/backend/internal/service"
 	"dealflow360/backend/internal/transport/http/middleware"
 )
 
-// ReadinessFunc reports whether the service can serve traffic. Phase 2 swaps
-// the default in for a real database ping.
+// ReadinessFunc reports whether the service can serve traffic.
 type ReadinessFunc func(ctx context.Context) error
 
 // Deps is everything the router needs. Each phase adds a field here rather
@@ -25,8 +28,8 @@ type Deps struct {
 	Ready  ReadinessFunc
 }
 
-// NewRouter builds the HTTP handler with the global middleware chain and the
-// probe endpoints. Feature routes are registered by later phases.
+// NewRouter builds the HTTP handler: global middleware, probes, and the
+// authenticated and portal route trees.
 func NewRouter(d Deps) *gin.Engine {
 	if d.Config.IsProd() {
 		gin.SetMode(gin.ReleaseMode)
@@ -38,13 +41,14 @@ func NewRouter(d Deps) *gin.Engine {
 	r := gin.New()
 	r.RedirectTrailingSlash = false
 
-	// Order matters: an id exists before anything logs, and Recovery wraps
-	// everything downstream of it.
+	// Order matters: an id exists before anything logs, Recovery wraps
+	// everything downstream, and DBStats must see the whole handler chain.
 	r.Use(
 		middleware.RequestID(),
 		middleware.Logging(d.Log),
 		middleware.Recovery(),
 		middleware.CORS(d.Config.CORSOrigins),
+		middleware.DBStats(d.Config.ExposeDBStats),
 	)
 
 	// Liveness: is the process up? Never touches dependencies, so a database
@@ -65,30 +69,93 @@ func NewRouter(d Deps) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
 
-	api := r.Group("/api/v1")
-	registerRoutes(api, d)
+	registerRoutes(r.Group("/api/v1"), d)
 
-	r.NoRoute(func(c *gin.Context) {
-		Fail(c, apiNotFound())
-	})
+	r.NoRoute(func(c *gin.Context) { Fail(c, apiNotFound()) })
 
 	return r
 }
 
-// registerRoutes is the single seam every later phase plugs into.
+// registerRoutes wires the API. Every later phase adds its group here.
 func registerRoutes(rg *gin.RouterGroup, d Deps) {
-	_ = d
-
 	rg.GET("/ping", func(c *gin.Context) {
 		OK(c, http.StatusOK, gin.H{"pong": true})
 	})
 
-	// Phase 3 → auth routes
+	// Without a pool there is nothing to serve; the probes above still work,
+	// which is what tests of the middleware chain rely on.
+	if d.Pool == nil {
+		return
+	}
+
+	queries := sqlcgen.New(d.Pool)
+	signer := auth.NewSigner(d.Config.JWTSecret, d.Config.JWTTTL)
+
+	authed := middleware.RequireAuth(signer, Fail)
+
+	// Login and signup are rate limited: they are the only unauthenticated
+	// endpoints where guessing repeatedly wins something.
+	ah := authHandler{svc: service.NewAuthService(queries, signer)}
+	authGroup := rg.Group("/auth")
+	authGroup.Use(middleware.RateLimit(30, 10, Fail))
+	{
+		authGroup.POST("/signup", adminSignupGuard(queries, signer), ah.signup)
+		authGroup.POST("/login", ah.login)
+		authGroup.GET("/me", authed, ah.me)
+	}
+
+	// The customer-facing tree. Separate group, separate middleware, and no
+	// handler below it ever accepts a quotation id from the request.
+	portal := rg.Group("/portal/q/:token")
+	portal.Use(
+		middleware.RateLimit(60, 20, Fail),
+		middleware.RequirePortalToken(queries, Fail),
+	)
+	{
+		portal.GET("", portalHandler{}.show)
+	}
+
 	// Phase 4 → config/admin routes
 	// Phase 5 → quotation routes
 	// Phase 6 → approval routes
 	// Phase 7 → fulfillment routes
 	// Phase 8 → billing + invoicing routes
-	// Phase 9 → portal routes (separate group, separate middleware)
+	// Phase 9 → portal negotiation routes
 	// Phase 10 → analytics routes
+}
+
+// adminSignupGuard keeps account creation open while the platform is being
+// set up, then closes it to administrators once the first one exists.
+//
+// Someone must be able to create the first account against an empty database,
+// but an open signup endpoint on a running system would let anyone mint
+// themselves a FINANCE role and approve their own discounts.
+//
+// The authentication is done inline rather than by delegating to RequireAuth:
+// that middleware calls c.Next(), which would run the signup handler before
+// this guard had finished deciding.
+func adminSignupGuard(queries *sqlcgen.Queries, signer *auth.Signer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		admins, err := queries.ListUsersByRole(c.Request.Context(), string(auth.RoleAdmin))
+		if err != nil {
+			Fail(c, err)
+			return
+		}
+		if len(admins) == 0 {
+			// Bootstrap: no administrator exists yet.
+			c.Next()
+			return
+		}
+
+		principal, err := middleware.Authenticate(signer, c)
+		if err != nil {
+			Fail(c, err)
+			return
+		}
+		if principal.Role != auth.RoleAdmin {
+			Fail(c, apierr.Forbidden("only an administrator may create accounts"))
+			return
+		}
+		c.Next()
+	}
 }

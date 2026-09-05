@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -25,8 +25,8 @@ type CreateInvoiceParams struct {
 	SalesOrderID int64
 	Kind         string
 	Status       string
-	IssueDate    pgtype.Date
-	DueDate      pgtype.Date
+	IssueDate    time.Time
+	DueDate      *time.Time
 	Subtotal     decimal.Decimal
 	TaxTotal     decimal.Decimal
 	Total        decimal.Decimal
@@ -113,14 +113,14 @@ type GetInvoiceRow struct {
 	SalesOrderID   int64
 	Kind           string
 	Status         string
-	IssueDate      pgtype.Date
-	DueDate        pgtype.Date
+	IssueDate      time.Time
+	DueDate        *time.Time
 	Subtotal       decimal.Decimal
 	TaxTotal       decimal.Decimal
 	Total          decimal.Decimal
 	AmountPaid     decimal.Decimal
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	OrderReference string
 	CustomerName   string
 }
@@ -153,8 +153,8 @@ type InsertBillingSchedulesParams struct {
 	QuotationLineID int64
 	PlanID          int64
 	Seq             int32
-	PeriodStart     pgtype.Timestamptz
-	PeriodEnd       pgtype.Timestamptz
+	PeriodStart     time.Time
+	PeriodEnd       time.Time
 	Amount          decimal.Decimal
 	ProrationFactor decimal.Decimal
 }
@@ -185,13 +185,13 @@ type ListBillingSchedulesForOrderRow struct {
 	QuotationLineID int64
 	PlanID          int64
 	Seq             int32
-	PeriodStart     pgtype.Timestamptz
-	PeriodEnd       pgtype.Timestamptz
+	PeriodStart     time.Time
+	PeriodEnd       time.Time
 	Amount          decimal.Decimal
 	ProrationFactor decimal.Decimal
 	Status          string
 	InvoiceID       *int64
-	CreatedAt       pgtype.Timestamptz
+	CreatedAt       time.Time
 	PlanName        string
 	ProductName     string
 }
@@ -330,14 +330,14 @@ type ListInvoicesRow struct {
 	SalesOrderID   int64
 	Kind           string
 	Status         string
-	IssueDate      pgtype.Date
-	DueDate        pgtype.Date
+	IssueDate      time.Time
+	DueDate        *time.Time
 	Subtotal       decimal.Decimal
 	TaxTotal       decimal.Decimal
 	Total          decimal.Decimal
 	AmountPaid     decimal.Decimal
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	OrderReference string
 	CustomerName   string
 }

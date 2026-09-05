@@ -5,7 +5,8 @@
 package sqlcgen
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
+
 	"github.com/shopspring/decimal"
 )
 
@@ -17,8 +18,8 @@ type ApprovalPolicy struct {
 	RequiresManager bool
 	RequiresFinance bool
 	IsActive        bool
-	CreatedAt       pgtype.Timestamptz
-	UpdatedAt       pgtype.Timestamptz
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type ApprovalRequest struct {
@@ -29,9 +30,9 @@ type ApprovalRequest struct {
 	Status       string
 	ActorID      *int64
 	Reason       string
-	DecidedAt    pgtype.Timestamptz
+	DecidedAt    *time.Time
 	Round        int32
-	CreatedAt    pgtype.Timestamptz
+	CreatedAt    time.Time
 }
 
 type AuditLog struct {
@@ -43,7 +44,7 @@ type AuditLog struct {
 	ActorLabel string
 	Note       string
 	Payload    []byte
-	CreatedAt  pgtype.Timestamptz
+	CreatedAt  time.Time
 }
 
 type Backorder struct {
@@ -52,8 +53,8 @@ type Backorder struct {
 	ProductID    int64
 	Qty          int64
 	Status       string
-	ResolvedAt   pgtype.Timestamptz
-	CreatedAt    pgtype.Timestamptz
+	ResolvedAt   *time.Time
+	CreatedAt    time.Time
 }
 
 type BillingSchedule struct {
@@ -62,26 +63,26 @@ type BillingSchedule struct {
 	QuotationLineID int64
 	PlanID          int64
 	Seq             int32
-	PeriodStart     pgtype.Timestamptz
-	PeriodEnd       pgtype.Timestamptz
+	PeriodStart     time.Time
+	PeriodEnd       time.Time
 	Amount          decimal.Decimal
 	ProrationFactor decimal.Decimal
 	Status          string
 	InvoiceID       *int64
-	CreatedAt       pgtype.Timestamptz
+	CreatedAt       time.Time
 }
 
 type Category struct {
 	ID        int64
 	Name      string
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }
 
 type CategoryCeiling struct {
 	ID             int64
 	CategoryID     int64
 	MaxDiscountPct decimal.Decimal
-	UpdatedAt      pgtype.Timestamptz
+	UpdatedAt      time.Time
 }
 
 type CounterOffer struct {
@@ -92,7 +93,7 @@ type CounterOffer struct {
 	ProposedDiscountPct decimal.Decimal
 	Outcome             string
 	Note                string
-	CreatedAt           pgtype.Timestamptz
+	CreatedAt           time.Time
 }
 
 type Customer struct {
@@ -101,8 +102,8 @@ type Customer struct {
 	Email     string
 	Tier      string
 	IsActive  bool
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type DealAlert struct {
@@ -112,15 +113,15 @@ type DealAlert struct {
 	Severity    string
 	Detail      string
 	Metric      decimal.Decimal
-	ResolvedAt  pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
+	ResolvedAt  *time.Time
+	CreatedAt   time.Time
 }
 
 type DiscountTier struct {
 	ID             int64
 	Tier           string
 	MaxDiscountPct decimal.Decimal
-	UpdatedAt      pgtype.Timestamptz
+	UpdatedAt      time.Time
 }
 
 type Fulfillment struct {
@@ -130,7 +131,7 @@ type Fulfillment struct {
 	ShipmentCount    int32
 	EstimatedCost    decimal.Decimal
 	IsManualOverride bool
-	CreatedAt        pgtype.Timestamptz
+	CreatedAt        time.Time
 }
 
 type FulfillmentLine struct {
@@ -140,7 +141,7 @@ type FulfillmentLine struct {
 	ProductID     int64
 	Qty           int64
 	ShipmentGroup int32
-	CreatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
 }
 
 type IdempotencyKey struct {
@@ -150,7 +151,7 @@ type IdempotencyKey struct {
 	RequestHash    string
 	ResponseStatus int32
 	ResponseBody   []byte
-	CreatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
 }
 
 type Invoice struct {
@@ -159,14 +160,14 @@ type Invoice struct {
 	SalesOrderID int64
 	Kind         string
 	Status       string
-	IssueDate    pgtype.Date
-	DueDate      pgtype.Date
+	IssueDate    time.Time
+	DueDate      *time.Time
 	Subtotal     decimal.Decimal
 	TaxTotal     decimal.Decimal
 	Total        decimal.Decimal
 	AmountPaid   decimal.Decimal
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type InvoiceLine struct {
@@ -178,7 +179,7 @@ type InvoiceLine struct {
 	UnitPrice   decimal.Decimal
 	NetAmount   decimal.Decimal
 	TaxAmount   decimal.Decimal
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 }
 
 type NegotiationMessage struct {
@@ -189,7 +190,7 @@ type NegotiationMessage struct {
 	AuthorID        *int64
 	AuthorLabel     string
 	Body            string
-	CreatedAt       pgtype.Timestamptz
+	CreatedAt       time.Time
 }
 
 type Payment struct {
@@ -199,8 +200,8 @@ type Payment struct {
 	Method     string
 	Reference  string
 	RecordedBy *int64
-	ReceivedAt pgtype.Timestamptz
-	CreatedAt  pgtype.Timestamptz
+	ReceivedAt time.Time
+	CreatedAt  time.Time
 }
 
 type PortalToken struct {
@@ -208,10 +209,10 @@ type PortalToken struct {
 	Token       string
 	QuotationID int64
 	CustomerID  int64
-	ExpiresAt   pgtype.Timestamptz
-	UsedAt      pgtype.Timestamptz
-	RevokedAt   pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   time.Time
+	UsedAt      *time.Time
+	RevokedAt   *time.Time
+	CreatedAt   time.Time
 }
 
 type Product struct {
@@ -227,8 +228,8 @@ type Product struct {
 	IsPromoted     bool
 	IsSubscription bool
 	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type Quotation struct {
@@ -252,9 +253,9 @@ type Quotation struct {
 	MatchedPolicyID  *int64
 	RiskRationale    string
 	Version          int32
-	LastActivityAt   pgtype.Timestamptz
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	LastActivityAt   time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type QuotationLine struct {
@@ -280,8 +281,8 @@ type QuotationLine struct {
 	OveragePts           decimal.Decimal
 	LineType             string
 	PlanID               *int64
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type SalesOrder struct {
@@ -290,10 +291,10 @@ type SalesOrder struct {
 	QuotationID  int64
 	CustomerID   int64
 	Status       string
-	PromisedDate pgtype.Timestamptz
-	ConfirmedAt  pgtype.Timestamptz
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	PromisedDate *time.Time
+	ConfirmedAt  time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type StockItem struct {
@@ -302,7 +303,7 @@ type StockItem struct {
 	ProductID   int64
 	OnHand      int64
 	Reserved    int64
-	UpdatedAt   pgtype.Timestamptz
+	UpdatedAt   time.Time
 }
 
 type SubscriptionPlan struct {
@@ -311,7 +312,7 @@ type SubscriptionPlan struct {
 	Period    string
 	Cycles    int32
 	IsActive  bool
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }
 
 type UpsellRule struct {
@@ -321,7 +322,7 @@ type UpsellRule struct {
 	Score              decimal.Decimal
 	MinMarginPct       decimal.Decimal
 	IsActive           bool
-	CreatedAt          pgtype.Timestamptz
+	CreatedAt          time.Time
 }
 
 type User struct {
@@ -332,8 +333,8 @@ type User struct {
 	Role         string
 	SalesTeam    string
 	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type Warehouse struct {
@@ -341,5 +342,5 @@ type Warehouse struct {
 	Name               string
 	ShippingCostWeight decimal.Decimal
 	IsActive           bool
-	CreatedAt          pgtype.Timestamptz
+	CreatedAt          time.Time
 }

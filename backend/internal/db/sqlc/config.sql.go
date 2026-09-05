@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -130,7 +130,7 @@ type ListCategoryCeilingsRow struct {
 	ID             int64
 	CategoryID     int64
 	MaxDiscountPct decimal.Decimal
-	UpdatedAt      pgtype.Timestamptz
+	UpdatedAt      time.Time
 	CategoryName   string
 }
 

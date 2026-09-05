@@ -35,6 +35,10 @@ func Open(ctx context.Context, cfg config.Config) (*Pool, error) {
 	poolCfg.MaxConnIdleTime = cfg.DBMaxConnIdle
 	poolCfg.HealthCheckPeriod = time.Minute
 
+	// Counts queries per request so an N+1 regression shows up in a response
+	// header instead of hiding until the demo slows down.
+	poolCfg.ConnConfig.Tracer = Tracer{}
+
 	// A connection that has lived a long time is recycled with jitter so all
 	// replicas do not drop their connections at the same instant.
 	poolCfg.MaxConnLifetimeJitter = cfg.DBMaxConnLife / 10

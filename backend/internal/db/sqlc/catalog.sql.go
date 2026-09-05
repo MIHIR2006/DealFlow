@@ -7,8 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -147,8 +147,8 @@ type GetProductRow struct {
 	IsPromoted     bool
 	IsSubscription bool
 	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	CategoryName   string
 }
 
@@ -195,8 +195,8 @@ type GetProductsByIDsRow struct {
 	IsPromoted     bool
 	IsSubscription bool
 	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	CategoryName   string
 }
 
@@ -270,8 +270,8 @@ type ListProductsRow struct {
 	IsPromoted     bool
 	IsSubscription bool
 	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	CategoryName   string
 }
 

@@ -15,9 +15,10 @@ sql:
         emit_empty_slices: true
         emit_json_tags: false
 
-        # Money never becomes a float. NUMERIC maps to shopspring/decimal
-        # via the codec registered in internal/platform/db.
         overrides:
+          # Money never becomes a float. pgx v5 round-trips NUMERIC through
+          # shopspring/decimal via its sql.Scanner fallback -- no codec needed;
+          # see the round-trip tests in internal/platform/db.
           - db_type: "pg_catalog.numeric"
             go_type:
               import: "github.com/shopspring/decimal"
@@ -27,3 +28,28 @@ sql:
             go_type:
               import: "github.com/shopspring/decimal"
               type: "NullDecimal"
+
+          # Plain time.Time rather than pgtype wrappers. Timestamps cross into
+          # the domain engines and the API contract, and neither should have
+          # to know which driver produced them.
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
+          - db_type: "timestamp"
+            go_type: "time.Time"
+          - db_type: "timestamp"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
+          - db_type: "date"
+            go_type: "time.Time"
+          - db_type: "date"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
