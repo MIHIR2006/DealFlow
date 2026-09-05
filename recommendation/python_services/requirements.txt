@@ -3,8 +3,11 @@ uvicorn[standard]
 asyncpg
 pydantic-settings
 httpx
-langchain>=0.2.0
+langchain>=1.0.0
+# One integration package per supported LLM_PROVIDER. Both are listed so the
+# image can run either without a rebuild; see ai_salesman/agent/llm.py.
 langchain-openai
+langchain-google-genai
 python-dotenv
 pytest
 pytest-asyncio

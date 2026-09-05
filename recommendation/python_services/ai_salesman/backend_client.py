@@ -3,19 +3,59 @@ import httpx
 from shared.config import settings
 
 
+class PortalAccessError(Exception):
+    """The portal token is unknown, revoked, or expired.
+
+    The backend answers 404 for all three so it never confirms which tokens
+    exist. The assistant carries that through unchanged rather than guessing.
+    """
+
+
+class BackendRequestError(Exception):
+    """The backend rejected a request and explained why.
+
+    The message is the backend's own, already written for a customer, so tools
+    can hand it straight back to the conversation.
+    """
+
+
+def _detail(exc: httpx.HTTPStatusError) -> str:
+    """Pull the customer-facing message out of the backend's error envelope."""
+    try:
+        body = exc.response.json()
+    except Exception:
+        return exc.response.text or str(exc)
+
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+        for key in ("message", "detail"):
+            if body.get(key):
+                return str(body[key])
+    return exc.response.text or str(exc)
+
+
 class DealFlowBackendClient:
-    """Async HTTP client wrapping the core DealFlow360 backend portal and governance routes."""
+    """Async HTTP client wrapping the core DealFlow360 backend portal and governance routes.
+
+    Every call is scoped to one portal token. The backend resolves the
+    quotation from that token and never accepts a quotation id, so this client
+    structurally cannot reach another customer's deal.
+    """
 
     def __init__(self, portal_token: str):
         self.portal_token = portal_token
         self.base_url = settings.BACKEND_BASE_URL.rstrip("/")
-        self.timeout = 10.0
+        self.timeout = settings.BACKEND_TIMEOUT_SECONDS
 
     async def get_quotation(self) -> Dict[str, Any]:
         """Fetch quotation state for the customer portal token."""
         url = f"{self.base_url}/portal/q/{self.portal_token}"
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.get(url)
+            if resp.status_code in (401, 403, 404):
+                raise PortalAccessError("this link is invalid or has expired")
             resp.raise_for_status()
             return resp.json()
 
@@ -34,7 +74,12 @@ class DealFlowBackendClient:
         proposed_discount_pct: float,
         note: str,
     ) -> Dict[str, Any]:
-        """Submit a discount proposal to trigger the autonomous re-governance engine."""
+        """Submit a discount proposal to trigger the autonomous re-governance engine.
+
+        Returns the refreshed quotation. The outcome of this proposal is the
+        head of its counter_offers list, which the backend returns newest
+        first.
+        """
         url = f"{self.base_url}/portal/q/{self.portal_token}/counter-offer"
         payload: Dict[str, Any] = {
             "proposed_discount_pct": str(proposed_discount_pct),
@@ -45,7 +90,14 @@ class DealFlowBackendClient:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(url, json=payload)
-            resp.raise_for_status()
+            if resp.status_code in (401, 403, 404):
+                raise PortalAccessError("this link is invalid or has expired")
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if 400 <= exc.response.status_code < 500:
+                    raise BackendRequestError(_detail(exc)) from exc
+                raise
             return resp.json()
 
     async def send_message(self, body: str, line_id: Optional[int] = None) -> Dict[str, Any]:
@@ -57,23 +109,27 @@ class DealFlowBackendClient:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(url, json=payload)
-            resp.raise_for_status()
+            if resp.status_code in (401, 403, 404):
+                raise PortalAccessError("this link is invalid or has expired")
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if 400 <= exc.response.status_code < 500:
+                    raise BackendRequestError(_detail(exc)) from exc
+                raise
             return resp.json()
 
     async def confirm_quotation(self) -> Dict[str, Any]:
         """Confirm the quotation terms on customer's behalf."""
         url = f"{self.base_url}/portal/q/{self.portal_token}/confirm"
         async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(url)
+            if resp.status_code in (401, 403, 404):
+                raise PortalAccessError("this link is invalid or has expired")
             try:
-                resp = await client.post(url)
                 resp.raise_for_status()
-                return resp.json()
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code in (400, 409):
-                    try:
-                        err_data = exc.response.json()
-                        detail = err_data.get("message") or err_data.get("detail") or str(exc)
-                    except Exception:
-                        detail = exc.response.text or str(exc)
-                    raise ValueError(detail) from exc
+                if 400 <= exc.response.status_code < 500:
+                    raise BackendRequestError(_detail(exc)) from exc
                 raise
+            return resp.json()

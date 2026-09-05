@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from ai_salesman.agent.prompt import build_system_prompt
-from ai_salesman.agent.tools import STATUS_MESSAGES, build_tools, format_quotation
+from ai_salesman.agent.tools import STATUS_MESSAGES, build_tools, format_quotation, inr
 from ai_salesman.backend_client import (
     BackendRequestError,
     DealFlowBackendClient,
@@ -80,12 +80,42 @@ def test_format_quotation_reads_the_flat_portal_document():
     assert "Q-2026-0042" in out
     assert "UNDER_NEGOTIATION" in out
     assert "Acme Corporation" in out
-    assert "79200.00" in out
 
     # Line detail, including the id the discount tool needs to target a line.
     assert "Enterprise Laptop" in out
     assert "line_id=11" in out
     assert "discount=12%" in out
+
+
+def test_format_quotation_states_amounts_the_way_the_page_shows_them():
+    """The customer is reading the portal while they chat.
+
+    An assistant that says "79200" beside a page saying "Rs 79,200" reads as a
+    different number, so amounts are formatted the way lib/hooks.ts inr() does.
+    """
+    out = format_quotation(PORTAL_QUOTATION)
+
+    assert "\u20b979,200" in out       # line net
+    assert "\u20b945,000" in out       # unit price, trailing .00 dropped
+    assert "\u20b979,200" in out       # grand total
+    assert "79200.00" not in out    # never the raw API string
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("184221.6", "\u20b91,84,221.6"),   # lakh grouping, not thousands
+        ("45000.00", "\u20b945,000"),       # trailing zeros dropped
+        ("1500000.5", "\u20b915,00,000.5"),
+        ("8000", "\u20b98,000"),
+        ("0", "\u20b90"),
+        ("", "\u20b90"),                    # a missing amount is not a crash
+        (None, "\u20b90"),
+        ("not-a-number", "\u20b90"),
+    ],
+)
+def test_currency_formatting_matches_the_frontend(raw, expected):
+    assert inr(raw) == expected
 
 
 def test_format_quotation_never_invents_internal_figures():

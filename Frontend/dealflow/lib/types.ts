@@ -262,6 +262,18 @@ export interface SendQuotationResponse {
   expires_at: string;
 }
 
+// --- Portal assistant ------------------------------------------------------
+
+/** Whether the AI negotiation assistant is configured and reachable. */
+export interface AssistantAvailability {
+  available: boolean;
+}
+
+/** One turn from the assistant. It answers; it never returns quotation data. */
+export interface AssistantReply {
+  reply: string;
+}
+
 // ---------------------------------------------------------------------------
 // Config / catalogue / governance
 // ---------------------------------------------------------------------------

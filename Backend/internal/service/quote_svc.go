@@ -30,6 +30,10 @@ type QuoteService struct {
 	pool  *pgxpool.Pool
 	q     *sqlcgen.Queries
 	cache *cache.Config
+
+	// rec is the optional recommendation engine behind the upsell panel.
+	// Nil is a supported configuration: see Upsells in upsell_svc.go.
+	rec Recommender
 }
 
 // NewQuoteService builds the service.

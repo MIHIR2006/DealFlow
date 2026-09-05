@@ -63,6 +63,13 @@ type Config struct {
 	// Safe to leave on for the demo; gate it off in a real production deploy.
 	ExposeDBStats bool
 
+	// RecommendationURL points at the recommendation engine. Empty disables
+	// it, and the upsell endpoint serves the rules-based ranking on its own.
+	// It is deliberately optional: the engine is an enrichment, and the
+	// quotation builder must work with it absent, down, or slow.
+	RecommendationURL     string
+	RecommendationTimeout time.Duration
+
 	// PprofAddr, when set, starts the profiling endpoints on a second
 	// listener. It is deliberately separate from the API port so profiles
 	// are never reachable from the internet by accident, and refuses to
@@ -103,6 +110,9 @@ func Load() (Config, error) {
 		ShutdownTimeout:   dur("HTTP_SHUTDOWN_TIMEOUT", 15*time.Second),
 		ExposeDBStats:     boolean("EXPOSE_DB_STATS", true),
 		PprofAddr:         str("PPROF_ADDR", ""),
+
+		RecommendationURL:     strings.TrimRight(str("RECOMMENDATION_URL", ""), "/"),
+		RecommendationTimeout: dur("RECOMMENDATION_TIMEOUT", 1500*time.Millisecond),
 	}
 
 	var problems []string
@@ -154,6 +164,19 @@ func Load() (Config, error) {
 	if c.PprofAddr != "" && !isLoopback(c.PprofAddr) {
 		problems = append(problems,
 			`PPROF_ADDR must bind to loopback, for example "127.0.0.1:6060"`)
+	}
+
+	if c.RecommendationURL != "" {
+		if !strings.HasPrefix(c.RecommendationURL, "http://") &&
+			!strings.HasPrefix(c.RecommendationURL, "https://") {
+			problems = append(problems,
+				"RECOMMENDATION_URL must be an absolute http(s) URL, for example http://recommendation:8001")
+		}
+		// http.Client reads a zero timeout as "wait forever", which would let
+		// a stalled engine hold a rep's request open indefinitely.
+		if c.RecommendationTimeout <= 0 {
+			problems = append(problems, "RECOMMENDATION_TIMEOUT must be greater than zero")
+		}
 	}
 
 	switch strings.ToLower(c.LogLevel) {

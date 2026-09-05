@@ -246,6 +246,14 @@ type Product struct {
 	UpdatedAt      time.Time
 }
 
+type ProductRecommendation struct {
+	ProductID       int64
+	RecommendedID   int64
+	CoPurchaseCount int64
+	Confidence      float64
+	UpdatedAt       time.Time
+}
+
 type Quotation struct {
 	ID               int64
 	Reference        string
