@@ -9,4 +9,6 @@ ORDER BY id
 LIMIT sqlc.arg('page_size');
 
 -- name: CreateCustomer :one
-INSERT INTO customers (name, email, tier) VALUES ($1, $2, $3) RETURNING *;
+INSERT INTO customers (name, email, tier, city, latitude, longitude)
+VALUES ($1, $2, $3, sqlc.narg('city'), sqlc.narg('latitude'), sqlc.narg('longitude'))
+RETURNING *;

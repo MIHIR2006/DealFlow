@@ -173,7 +173,9 @@ func (q *Queries) GetFulfillmentForOrder(ctx context.Context, salesOrderID int64
 }
 
 const getSalesOrder = `-- name: GetSalesOrder :one
-SELECT so.id, so.reference, so.quotation_id, so.customer_id, so.status, so.promised_date, so.confirmed_at, so.created_at, so.updated_at, q.reference AS quotation_reference, c.name AS customer_name
+SELECT so.id, so.reference, so.quotation_id, so.customer_id, so.status, so.promised_date, so.confirmed_at, so.created_at, so.updated_at, q.reference AS quotation_reference, c.name AS customer_name,
+       c.city AS customer_city, c.latitude AS customer_latitude,
+       c.longitude AS customer_longitude
 FROM sales_orders so
 JOIN quotations q ON q.id = so.quotation_id
 JOIN customers  c ON c.id = so.customer_id
@@ -192,6 +194,9 @@ type GetSalesOrderRow struct {
 	UpdatedAt          time.Time
 	QuotationReference string
 	CustomerName       string
+	CustomerCity       *string
+	CustomerLatitude   decimal.NullDecimal
+	CustomerLongitude  decimal.NullDecimal
 }
 
 func (q *Queries) GetSalesOrder(ctx context.Context, id int64) (GetSalesOrderRow, error) {
@@ -209,6 +214,9 @@ func (q *Queries) GetSalesOrder(ctx context.Context, id int64) (GetSalesOrderRow
 		&i.UpdatedAt,
 		&i.QuotationReference,
 		&i.CustomerName,
+		&i.CustomerCity,
+		&i.CustomerLatitude,
+		&i.CustomerLongitude,
 	)
 	return i, err
 }
@@ -346,7 +354,10 @@ func (q *Queries) ListFulfillableLines(ctx context.Context, id int64) ([]ListFul
 }
 
 const listFulfillmentLines = `-- name: ListFulfillmentLines :many
-SELECT fl.id, fl.fulfillment_id, fl.warehouse_id, fl.product_id, fl.qty, fl.shipment_group, fl.created_at, w.name AS warehouse_name, p.name AS product_name
+SELECT fl.id, fl.fulfillment_id, fl.warehouse_id, fl.product_id, fl.qty, fl.shipment_group, fl.created_at, w.name AS warehouse_name,
+       w.city AS warehouse_city, w.latitude AS warehouse_latitude,
+       w.longitude AS warehouse_longitude,
+       p.name AS product_name
 FROM fulfillment_lines fl
 JOIN warehouses w ON w.id = fl.warehouse_id
 JOIN products   p ON p.id = fl.product_id
@@ -355,15 +366,18 @@ ORDER BY fl.shipment_group, fl.id
 `
 
 type ListFulfillmentLinesRow struct {
-	ID            int64
-	FulfillmentID int64
-	WarehouseID   int64
-	ProductID     int64
-	Qty           int64
-	ShipmentGroup int32
-	CreatedAt     time.Time
-	WarehouseName string
-	ProductName   string
+	ID                 int64
+	FulfillmentID      int64
+	WarehouseID        int64
+	ProductID          int64
+	Qty                int64
+	ShipmentGroup      int32
+	CreatedAt          time.Time
+	WarehouseName      string
+	WarehouseCity      *string
+	WarehouseLatitude  decimal.NullDecimal
+	WarehouseLongitude decimal.NullDecimal
+	ProductName        string
 }
 
 func (q *Queries) ListFulfillmentLines(ctx context.Context, fulfillmentID int64) ([]ListFulfillmentLinesRow, error) {
@@ -384,6 +398,9 @@ func (q *Queries) ListFulfillmentLines(ctx context.Context, fulfillmentID int64)
 			&i.ShipmentGroup,
 			&i.CreatedAt,
 			&i.WarehouseName,
+			&i.WarehouseCity,
+			&i.WarehouseLatitude,
+			&i.WarehouseLongitude,
 			&i.ProductName,
 		); err != nil {
 			return nil, err

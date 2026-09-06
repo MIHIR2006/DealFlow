@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 
 	sqlcgen "dealflow360/backend/internal/db/sqlc"
 	"dealflow360/backend/internal/domain/fulfillment"
@@ -82,17 +83,9 @@ func (s *FulfillmentService) Confirm(ctx context.Context, actor auth.Principal, 
 			}
 		}
 
-		ref, err := qtx.NextSalesOrderReference(ctx)
+		created, _, err := ensureSalesOrder(ctx, qtx, quotationID, quote.Header.CustomerID, promisedDate)
 		if err != nil {
-			return fmt.Errorf("next sales order reference: %w", err)
-		}
-
-		created, err := qtx.CreateSalesOrder(ctx, sqlcgen.CreateSalesOrderParams{
-			Reference: ref, QuotationID: quotationID, CustomerID: quote.Header.CustomerID,
-			PromisedDate: promisedDate,
-		})
-		if err != nil {
-			return fmt.Errorf("create sales order: %w", err)
+			return err
 		}
 		order = created
 		return nil
@@ -211,20 +204,44 @@ func (s *FulfillmentService) List(ctx context.Context, actor auth.Principal, lim
 // split engine. Called both by Suggest, which never writes, and by Accept,
 // which re-runs it against locked rows so the reservation matches exactly
 // what was shown.
-func (s *FulfillmentService) buildPlan(ctx context.Context, q *sqlcgen.Queries, orderID int64, locked bool) (fulfillment.Plan, error) {
+// planInputs is everything the split engines read: what the order needs, what
+// the warehouses hold, and what shipping from each costs.
+//
+// Planning, overriding, and previewing all load exactly this. Keeping one
+// loader means a reviewer proposing a manual split is looking at the same
+// numbers the engine used, rather than a second query that could disagree.
+type planInputs struct {
+	demands    []fulfillment.Demand
+	stock      []fulfillment.Stock
+	warehouses []fulfillment.Warehouse
+
+	// warehouseRows lets callers label and locate a stock row without a
+	// second lookup. Keyed by warehouse id.
+	warehouseRows map[int64]sqlcgen.Warehouse
+}
+
+// loadPlanInputs reads demand, warehouses, and stock for an order.
+//
+// locked decides which stock read is used. Planning and reserving must see the
+// same numbers, so the accept path locks; a preview must not hold rows while a
+// human decides, so it does not.
+func (s *FulfillmentService) loadPlanInputs(
+	ctx context.Context, q *sqlcgen.Queries, orderID int64, locked bool,
+) (planInputs, error) {
 	lines, err := q.ListFulfillableLines(ctx, orderID)
 	if err != nil {
-		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list fulfillable lines: %w", err))
+		return planInputs{}, apierr.Internal(fmt.Errorf("list fulfillable lines: %w", err))
 	}
+
+	in := planInputs{warehouseRows: map[int64]sqlcgen.Warehouse{}}
 	if len(lines) == 0 {
-		return fulfillment.Split(nil, nil, nil), nil
+		return in, nil
 	}
 
 	productIDs := make([]int64, 0, len(lines))
-	demands := make([]fulfillment.Demand, 0, len(lines))
 	for _, l := range lines {
 		productIDs = append(productIDs, l.ProductID)
-		demands = append(demands, fulfillment.Demand{
+		in.demands = append(in.demands, fulfillment.Demand{
 			ProductID: l.ProductID, ProductName: l.ProductName,
 			Qty: l.Qty.IntPart(), UnitValue: l.UnitPrice,
 		})
@@ -232,56 +249,137 @@ func (s *FulfillmentService) buildPlan(ctx context.Context, q *sqlcgen.Queries, 
 
 	warehouseRows, err := q.ListWarehouses(ctx)
 	if err != nil {
-		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list warehouses: %w", err))
+		return planInputs{}, apierr.Internal(fmt.Errorf("list warehouses: %w", err))
 	}
-	warehouses := make([]fulfillment.Warehouse, 0, len(warehouseRows))
 	for _, w := range warehouseRows {
-		warehouses = append(warehouses, fulfillment.Warehouse{
+		in.warehouses = append(in.warehouses, fulfillment.Warehouse{
 			ID: w.ID, Name: w.Name, ShippingCostWeight: w.ShippingCostWeight,
 		})
+		in.warehouseRows[w.ID] = w
 	}
 
-	stock := make([]fulfillment.Stock, 0)
 	if locked {
 		rows, err := q.LockStockForProducts(ctx, productIDs)
 		if err != nil {
-			return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("lock stock for products: %w", err))
+			return planInputs{}, apierr.Internal(fmt.Errorf("lock stock for products: %w", err))
 		}
 		for _, r := range rows {
-			stock = append(stock, fulfillment.Stock{
+			in.stock = append(in.stock, fulfillment.Stock{
 				WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
 			})
 		}
-	} else {
-		rows, err := q.GetStockForProducts(ctx, productIDs)
-		if err != nil {
-			return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("get stock for products: %w", err))
-		}
-		for _, r := range rows {
-			stock = append(stock, fulfillment.Stock{
-				WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
-			})
-		}
+		return in, nil
 	}
 
-	return fulfillment.Split(demands, stock, warehouses), nil
+	rows, err := q.GetStockForProducts(ctx, productIDs)
+	if err != nil {
+		return planInputs{}, apierr.Internal(fmt.Errorf("get stock for products: %w", err))
+	}
+	for _, r := range rows {
+		in.stock = append(in.stock, fulfillment.Stock{
+			WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
+		})
+	}
+	return in, nil
+}
+
+// buildPlan runs the greedy split for an order.
+func (s *FulfillmentService) buildPlan(ctx context.Context, q *sqlcgen.Queries, orderID int64, locked bool) (fulfillment.Plan, error) {
+	in, err := s.loadPlanInputs(ctx, q, orderID, locked)
+	if err != nil {
+		return fulfillment.Plan{}, err
+	}
+	if len(in.demands) == 0 {
+		return fulfillment.Split(nil, nil, nil), nil
+	}
+	return fulfillment.Split(in.demands, in.stock, in.warehouses), nil
+}
+
+// ProductDemand is one product this order still needs, and how much of it.
+type ProductDemand struct {
+	ProductID   int64
+	ProductName string
+	Qty         int64
+}
+
+// StockAvailability is what one warehouse can currently contribute towards one
+// product, already net of other orders' reservations.
+//
+// It carries the warehouse's location as well, so a split can be drawn from
+// where it would actually ship without a second lookup. Location is optional
+// and never influences the split.
+type StockAvailability struct {
+	WarehouseID   int64
+	WarehouseName string
+	ProductID     int64
+	Available     int64
+
+	City      *string
+	Latitude  decimal.NullDecimal
+	Longitude decimal.NullDecimal
+}
+
+// FulfillmentPreview is the engine's proposal together with the facts a
+// reviewer needs to propose a different one.
+//
+// The plan alone is not enough to override it. Choosing a different warehouse
+// means knowing what the order needs and what each warehouse actually holds --
+// without those, a manual split is guesswork that the server rejects on submit.
+// They come from the same read the engine planned against, so the two cannot
+// disagree.
+type FulfillmentPreview struct {
+	Plan         fulfillment.Plan
+	Demands      []ProductDemand
+	Availability []StockAvailability
+
+	// Header carries the delivery end of the shipment, so a split can be
+	// plotted origin-to-destination before it is accepted.
+	Header sqlcgen.GetSalesOrderRow
 }
 
 // Suggest previews the fulfilment plan for an order without persisting
-// anything.
-func (s *FulfillmentService) Suggest(ctx context.Context, actor auth.Principal, orderID int64) (fulfillment.Plan, error) {
+// anything, and without holding stock rows while a human looks at it.
+func (s *FulfillmentService) Suggest(ctx context.Context, actor auth.Principal, orderID int64) (FulfillmentPreview, error) {
 	header, err := s.q.GetSalesOrder(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return fulfillment.Plan{}, apierr.NotFound("order not found")
+			return FulfillmentPreview{}, apierr.NotFound("order not found")
 		}
-		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("get sales order: %w", err))
+		return FulfillmentPreview{}, apierr.Internal(fmt.Errorf("get sales order: %w", err))
 	}
 	if _, err := s.quote.Get(ctx, actor, header.QuotationID); err != nil {
-		return fulfillment.Plan{}, err
+		return FulfillmentPreview{}, err
 	}
 
-	return s.buildPlan(ctx, s.q, orderID, false)
+	in, err := s.loadPlanInputs(ctx, s.q, orderID, false)
+	if err != nil {
+		return FulfillmentPreview{}, err
+	}
+
+	out := FulfillmentPreview{
+		Plan:         fulfillment.Split(in.demands, in.stock, in.warehouses),
+		Demands:      make([]ProductDemand, 0, len(in.demands)),
+		Availability: make([]StockAvailability, 0, len(in.stock)),
+		Header:       header,
+	}
+	for _, d := range in.demands {
+		out.Demands = append(out.Demands, ProductDemand{
+			ProductID: d.ProductID, ProductName: d.ProductName, Qty: d.Qty,
+		})
+	}
+	for _, st := range in.stock {
+		// A warehouse with nothing to give is not an option worth showing.
+		if st.Available <= 0 {
+			continue
+		}
+		w := in.warehouseRows[st.WarehouseID]
+		out.Availability = append(out.Availability, StockAvailability{
+			WarehouseID: st.WarehouseID, WarehouseName: w.Name,
+			ProductID: st.ProductID, Available: st.Available,
+			City: w.City, Latitude: w.Latitude, Longitude: w.Longitude,
+		})
+	}
+	return out, nil
 }
 
 // buildOverridePlan loads the same demand/warehouse/locked-stock inputs as
@@ -293,47 +391,15 @@ func (s *FulfillmentService) Suggest(ctx context.Context, actor auth.Principal, 
 func (s *FulfillmentService) buildOverridePlan(
 	ctx context.Context, q *sqlcgen.Queries, orderID int64, overrides []fulfillment.OverrideLine,
 ) (fulfillment.Plan, error) {
-	lines, err := q.ListFulfillableLines(ctx, orderID)
+	in, err := s.loadPlanInputs(ctx, q, orderID, true)
 	if err != nil {
-		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list fulfillable lines: %w", err))
+		return fulfillment.Plan{}, err
 	}
-	if len(lines) == 0 {
+	if len(in.demands) == 0 {
 		return fulfillment.Plan{}, apierr.Validation("this order has no lines to fulfil")
 	}
 
-	productIDs := make([]int64, 0, len(lines))
-	demands := make([]fulfillment.Demand, 0, len(lines))
-	for _, l := range lines {
-		productIDs = append(productIDs, l.ProductID)
-		demands = append(demands, fulfillment.Demand{
-			ProductID: l.ProductID, ProductName: l.ProductName,
-			Qty: l.Qty.IntPart(), UnitValue: l.UnitPrice,
-		})
-	}
-
-	warehouseRows, err := q.ListWarehouses(ctx)
-	if err != nil {
-		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("list warehouses: %w", err))
-	}
-	warehouses := make([]fulfillment.Warehouse, 0, len(warehouseRows))
-	for _, w := range warehouseRows {
-		warehouses = append(warehouses, fulfillment.Warehouse{
-			ID: w.ID, Name: w.Name, ShippingCostWeight: w.ShippingCostWeight,
-		})
-	}
-
-	rows, err := q.LockStockForProducts(ctx, productIDs)
-	if err != nil {
-		return fulfillment.Plan{}, apierr.Internal(fmt.Errorf("lock stock for products: %w", err))
-	}
-	stock := make([]fulfillment.Stock, 0, len(rows))
-	for _, r := range rows {
-		stock = append(stock, fulfillment.Stock{
-			WarehouseID: r.WarehouseID, ProductID: r.ProductID, Available: r.Available,
-		})
-	}
-
-	result := fulfillment.Override(demands, stock, warehouses, overrides)
+	result := fulfillment.Override(in.demands, in.stock, in.warehouses, overrides)
 	if len(result.ExceedsDemand) > 0 {
 		return fulfillment.Plan{}, apierr.Validation(
 			"the override allocates more of a product than this order needs")
@@ -577,4 +643,42 @@ func (s *FulfillmentService) Consolidate(ctx context.Context, actor auth.Princip
 	}
 
 	return s.Get(ctx, actor, orderID)
+}
+
+// ensureSalesOrder creates the order for a confirmed quotation, or returns the
+// one that already exists.
+//
+// Two paths reach this: a staff member closing the deal from the workspace, and
+// a customer accepting terms in the portal. The problem statement has the order
+// move to fulfilment "once confirmed" without saying who did the confirming, so
+// both must produce the same order rather than one of them leaving the deal
+// stranded between a confirmed quotation and an order that does not exist.
+//
+// It creates the order only. Stock is reserved when a split is accepted, which
+// is a separate, deliberate decision by whoever runs fulfilment.
+func ensureSalesOrder(
+	ctx context.Context,
+	qtx *sqlcgen.Queries,
+	quotationID, customerID int64,
+	promisedDate *time.Time,
+) (sqlcgen.SalesOrder, bool, error) {
+	if existing, err := qtx.GetSalesOrderByQuotation(ctx, quotationID); err == nil {
+		return existing, false, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return sqlcgen.SalesOrder{}, false, fmt.Errorf("get sales order by quotation: %w", err)
+	}
+
+	ref, err := qtx.NextSalesOrderReference(ctx)
+	if err != nil {
+		return sqlcgen.SalesOrder{}, false, fmt.Errorf("next sales order reference: %w", err)
+	}
+
+	created, err := qtx.CreateSalesOrder(ctx, sqlcgen.CreateSalesOrderParams{
+		Reference: ref, QuotationID: quotationID, CustomerID: customerID,
+		PromisedDate: promisedDate,
+	})
+	if err != nil {
+		return sqlcgen.SalesOrder{}, false, fmt.Errorf("create sales order: %w", err)
+	}
+	return created, true, nil
 }

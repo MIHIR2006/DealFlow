@@ -416,16 +416,51 @@ func (s *ConfigService) ListWarehouses(ctx context.Context) ([]sqlcgen.Warehouse
 }
 
 // CreateWarehouse adds a shipping origin.
-func (s *ConfigService) CreateWarehouse(ctx context.Context, name string, weight decimal.Decimal) (sqlcgen.Warehouse, error) {
+// WarehouseLocation is where a warehouse ships from. Every field is optional;
+// latitude and longitude are only accepted together.
+type WarehouseLocation struct {
+	City      string
+	Latitude  decimal.NullDecimal
+	Longitude decimal.NullDecimal
+}
+
+func (l WarehouseLocation) validate() error {
+	if l.Latitude.Valid != l.Longitude.Valid {
+		return apierr.Validation("latitude and longitude must be given together")
+	}
+	if !l.Latitude.Valid {
+		return nil
+	}
+	if l.Latitude.Decimal.LessThan(decimal.NewFromInt(-90)) ||
+		l.Latitude.Decimal.GreaterThan(decimal.NewFromInt(90)) {
+		return apierr.Validation("latitude must be between -90 and 90")
+	}
+	if l.Longitude.Decimal.LessThan(decimal.NewFromInt(-180)) ||
+		l.Longitude.Decimal.GreaterThan(decimal.NewFromInt(180)) {
+		return apierr.Validation("longitude must be between -180 and 180")
+	}
+	return nil
+}
+
+func (s *ConfigService) CreateWarehouse(ctx context.Context, name string, weight decimal.Decimal, loc WarehouseLocation) (sqlcgen.Warehouse, error) {
 	if name == "" {
 		return sqlcgen.Warehouse{}, apierr.Validation("name is required")
 	}
 	if weight.IsNegative() {
 		return sqlcgen.Warehouse{}, apierr.Validation("shipping_cost_weight cannot be negative")
 	}
+	if err := loc.validate(); err != nil {
+		return sqlcgen.Warehouse{}, err
+	}
+
+	var city *string
+	if loc.City != "" {
+		city = &loc.City
+	}
 
 	row, err := s.q.CreateWarehouse(ctx, sqlcgen.CreateWarehouseParams{
 		Name: name, ShippingCostWeight: weight,
+		City: city, Latitude: loc.Latitude, Longitude: loc.Longitude,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {

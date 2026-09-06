@@ -114,12 +114,24 @@ type Warehouse struct {
 	Name               string `json:"name"`
 	ShippingCostWeight string `json:"shipping_cost_weight"`
 	IsActive           bool   `json:"is_active"`
+
+	// Where this warehouse ships from. Optional: a warehouse with no
+	// coordinates simply does not appear on the shipment map, and the split
+	// engine — which chooses on coverage and cost weight — never reads these.
+	City      *string `json:"city,omitempty"`
+	Latitude  *string `json:"latitude,omitempty"`
+	Longitude *string `json:"longitude,omitempty"`
 }
 
 // CreateWarehouseRequest adds a shipping origin.
 type CreateWarehouseRequest struct {
 	Name               string `json:"name" binding:"required"`
 	ShippingCostWeight string `json:"shipping_cost_weight"`
+
+	// Optional location. Latitude and longitude are only meaningful together.
+	City      string `json:"city"`
+	Latitude  string `json:"latitude"`
+	Longitude string `json:"longitude"`
 }
 
 // StockItem is availability of a product at a warehouse.

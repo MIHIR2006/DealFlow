@@ -2,8 +2,18 @@
 SELECT * FROM warehouses WHERE is_active ORDER BY shipping_cost_weight, id;
 
 -- name: CreateWarehouse :one
-INSERT INTO warehouses (name, shipping_cost_weight)
-VALUES ($1, $2)
+INSERT INTO warehouses (name, shipping_cost_weight, city, latitude, longitude)
+VALUES ($1, $2, sqlc.narg('city'), sqlc.narg('latitude'), sqlc.narg('longitude'))
+RETURNING *;
+
+-- Sets a warehouse's shipping origin. Coordinates are optional metadata; the
+-- split engine never reads them.
+-- name: SetWarehouseLocation :one
+UPDATE warehouses
+SET city = sqlc.narg('city'),
+    latitude = sqlc.narg('latitude'),
+    longitude = sqlc.narg('longitude')
+WHERE id = $1
 RETURNING *;
 
 -- Availability for a set of products across every warehouse, in one query.
