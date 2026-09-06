@@ -8,6 +8,7 @@ langchain>=1.0.0
 # image can run either without a rebuild; see ai_salesman/agent/llm.py.
 langchain-openai
 langchain-google-genai
+langchain-groq
 python-dotenv
 pytest
 pytest-asyncio

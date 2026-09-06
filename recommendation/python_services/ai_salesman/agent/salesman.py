@@ -35,8 +35,8 @@ class AssistantUnavailable(Exception):
 # theirs. It never explains the failure: they cannot act on it, and the portal's
 # own counter-offer form is still there.
 FALLBACK_REPLY = (
-    "I'm sorry, I encountered an issue processing your request. "
-    "Please try again or contact your sales representative."
+    "Sorry, I could not process that just now. Please try again, or use the "
+    "counter-offer form on this page to reach your sales representative."
 )
 
 
@@ -97,7 +97,11 @@ async def run_salesman(portal_token: str, customer_message: str) -> str:
 
         # Tier is deliberately absent from the customer portal document: it is
         # an input to our own discount policy, not the customer's own detail.
-        system_prompt = build_system_prompt(customer_name, None, governance)
+        #
+        # The quotation itself goes in, though. It is already loaded above, and
+        # putting it in context is what stops the assistant answering "I'm not
+        # aware of that" about the document on the customer's own screen.
+        system_prompt = build_system_prompt(customer_name, None, governance, quotation)
         tools = build_tools(client)
 
         llm = build_chat_model()

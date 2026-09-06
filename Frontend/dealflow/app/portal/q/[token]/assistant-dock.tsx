@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send, Sparkles, X } from "lucide-react";
+import { Mic, MicOff, Send, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { AssistantApi, ApiError } from "@/lib/api";
+import { useVoice } from "./use-voice";
 
 type Turn = { role: "CUSTOMER" | "ASSISTANT"; body: string };
 
@@ -52,34 +53,57 @@ export function AssistantDock({
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [turns, busy]);
 
-  const send = useCallback(async () => {
-    const message = draft.trim();
-    if (!message || busy) return;
+  // Held in a ref so the voice controller, bound once, always speaks through
+  // the current preference rather than the one captured at mount.
+  const speakRef = useRef<(text: string) => void>(() => {});
 
-    setTurns((prev) => [...prev, { role: "CUSTOMER", body: message }]);
-    setDraft("");
-    setBusy(true);
-    setError(null);
+  const send = useCallback(
+    async (override?: string) => {
+      const message = (override ?? draft).trim();
+      if (!message || busy) return;
 
-    try {
-      const reply = await AssistantApi.chat(token, message);
-      setTurns((prev) => [...prev, { role: "ASSISTANT", body: reply }]);
-      // A turn may have submitted a counter-offer or logged a message, so the
-      // quotation on screen could now be stale.
-      onQuotationChanged();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 503) {
-        setAvailable(false);
-        setOpen(false);
-        return;
+      setTurns((prev) => [...prev, { role: "CUSTOMER", body: message }]);
+      setDraft("");
+      setBusy(true);
+      setError(null);
+
+      try {
+        const reply = await AssistantApi.chat(token, message);
+        setTurns((prev) => [...prev, { role: "ASSISTANT", body: reply }]);
+        speakRef.current(reply);
+        // A turn may have submitted a counter-offer or logged a message, so the
+        // quotation on screen could now be stale.
+        onQuotationChanged();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 503) {
+          setAvailable(false);
+          setOpen(false);
+          return;
+        }
+        setError(
+          err instanceof ApiError ? err.message : "The assistant could not answer just now.",
+        );
+      } finally {
+        setBusy(false);
       }
-      setError(
-        err instanceof ApiError ? err.message : "The assistant could not answer just now.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [draft, busy, token, onQuotationChanged]);
+    },
+    [draft, busy, token, onQuotationChanged],
+  );
+
+  // A finished utterance is a submitted question: the customer has already
+  // said it out loud, so making them press send as well would be a second ask.
+  const voice = useVoice(
+    useCallback(
+      (transcript: string) => {
+        void send(transcript);
+      },
+      [send],
+    ),
+  );
+
+  useEffect(() => {
+    speakRef.current = voice.voiceReplies ? voice.speak : () => {};
+  }, [voice.voiceReplies, voice.speak]);
 
   if (!available) return null;
 
@@ -91,7 +115,7 @@ export function AssistantDock({
         className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-[13px] font-semibold text-bone shadow-lg transition-colors hover:bg-ink/90 sm:bottom-6 sm:right-6"
       >
         <Sparkles className="size-4" />
-        Ask about this quotation
+        Ask or speak to us
       </button>
     );
   }
@@ -108,14 +132,29 @@ export function AssistantDock({
             Answers about {reference} only
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="p-1 text-mist transition-colors hover:text-ink"
-          title="Close"
-        >
-          <X className="size-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {voice.ttsSupported ? (
+            <button
+              type="button"
+              onClick={() => voice.setVoiceReplies(!voice.voiceReplies)}
+              className={`flex size-8 items-center justify-center rounded-full transition-colors ${
+                voice.voiceReplies ? "tone-lilac text-lilac" : "text-mist hover:text-ink"
+              }`}
+              aria-pressed={voice.voiceReplies}
+              title={voice.voiceReplies ? "Turn off spoken replies" : "Read replies aloud"}
+            >
+              {voice.voiceReplies ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex size-8 items-center justify-center rounded-full p-1 text-mist transition-colors hover:text-ink"
+            title="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
       </div>
 
       <div ref={threadRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
@@ -127,6 +166,12 @@ export function AssistantDock({
               request stands. Discount requests go through the same approval process as the
               form on this page.
             </p>
+            {voice.sttSupported ? (
+              <p className="mt-2 flex items-center gap-1.5 text-[12px] text-ink/70">
+                <Mic className="size-3.5 shrink-0" />
+                Or press the microphone and just ask.
+              </p>
+            ) : null}
           </div>
         ) : (
           turns.map((turn, i) => (
@@ -142,6 +187,16 @@ export function AssistantDock({
             </div>
           ))
         )}
+
+        {voice.listening ? (
+          <div className="ml-4 rounded-[16px] tone-lilac p-3.5 text-[12.5px] leading-relaxed text-lilac sm:ml-6">
+            <span className="flex items-center gap-1.5 font-semibold">
+              <span className="size-1.5 animate-pulse rounded-full bg-current" />
+              Listening&hellip;
+            </span>
+            {voice.interim ? <p className="mt-1 italic">{voice.interim}</p> : null}
+          </div>
+        ) : null}
 
         {busy ? (
           <p className="mr-4 rounded-[16px] border border-ink/8 bg-cream/50 p-3.5 text-[12.5px] text-mist sm:mr-6">
@@ -161,27 +216,51 @@ export function AssistantDock({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
-              negotiationOpen ? "Ask a question or request a discount…" : "Ask a question…"
+              voice.listening
+                ? "Listening…"
+                : negotiationOpen
+                  ? "Ask a question or request a discount…"
+                  : "Ask a question…"
             }
-            disabled={busy}
+            disabled={busy || voice.listening}
             maxLength={2000}
             className="min-w-0 flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
             onKeyDown={(e) => {
-              if (e.key === "Enter") send();
+              if (e.key === "Enter") void send();
             }}
           />
+          {voice.sttSupported ? (
+            <button
+              type="button"
+              onClick={voice.listening ? voice.stopListening : voice.startListening}
+              disabled={busy}
+              aria-pressed={voice.listening}
+              title={voice.listening ? "Stop listening" : "Ask by voice"}
+              className={`flex size-9 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:size-8 ${
+                voice.listening
+                  ? "animate-pulse border-transparent fill-lilac text-white"
+                  : "border-ink/15 bg-white text-ink hover:bg-cream"
+              }`}
+            >
+              {voice.listening ? <MicOff className="size-3.5" /> : <Mic className="size-3.5" />}
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={send}
+            onClick={() => send()}
             disabled={busy || !draft.trim()}
             className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-bone transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50 sm:size-8"
           >
             <Send className="size-3.5" />
           </button>
         </div>
+        {voice.error ? (
+          <p className="text-[11px] font-medium text-bad">{voice.error}</p>
+        ) : null}
         <p className="text-[10.5px] leading-relaxed text-mist">
           An AI assistant. It can submit requests on your behalf, but it does not approve
           them — your sales team does.
+          {voice.sttSupported ? " Voice is processed by your browser." : ""}
         </p>
       </div>
     </div>

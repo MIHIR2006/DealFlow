@@ -6,6 +6,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 DEFAULT_MODELS = {
     "openai": "gpt-4o",
     "google": "gemini-2.5-flash",
+    # Groq serves Llama with strict, fast tool calling. The assistant's job is
+    # to pick the right portal route and report what came back, which this
+    # model does more reliably -- and far quicker -- than a larger one.
+    "groq": "openai/gpt-oss-120b",
 }
 
 
@@ -30,8 +34,8 @@ class Settings(BaseSettings):
     BACKEND_BASE_URL: str = "http://localhost:8080/api/v1"
     BACKEND_TIMEOUT_SECONDS: float = 10.0
 
-    # Which chat model backs the assistant: "openai" or "google" (Gemini).
-    LLM_PROVIDER: str = "openai"
+    # Which chat model backs the assistant: "groq", "openai" or "google".
+    LLM_PROVIDER: str = "groq"
 
     # Left empty, each provider gets a sensible tool-calling default. Set it
     # explicitly to pin a model.
@@ -73,9 +77,11 @@ class Settings(BaseSettings):
     @property
     def llm_provider(self) -> str:
         """The configured provider, normalised. Aliases fold into "google"."""
-        provider = (self.LLM_PROVIDER or "openai").strip().lower()
+        provider = (self.LLM_PROVIDER or "groq").strip().lower()
         if provider in ("google", "gemini", "google-genai", "google_genai"):
             return "google"
+        if provider in ("groq", "llama", "groq-llama"):
+            return "groq"
         return provider
 
     @property

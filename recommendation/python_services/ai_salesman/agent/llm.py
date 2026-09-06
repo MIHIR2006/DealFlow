@@ -27,6 +27,24 @@ def build_chat_model() -> Any:
     provider = settings.llm_provider
     model = settings.llm_model
 
+    if provider == "groq":
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError as exc:
+            raise LLMConfigurationError(
+                "LLM_PROVIDER=groq needs the langchain-groq package"
+            ) from exc
+
+        return ChatGroq(
+            model=model,
+            api_key=settings.LLM_API_KEY,
+            # The assistant reports facts from the quotation and from tool
+            # results. Sampling adds nothing but the chance of a wrong number.
+            temperature=0,
+            max_retries=2,
+            timeout=25,
+        )
+
     if provider == "google":
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
@@ -56,7 +74,7 @@ def build_chat_model() -> Any:
         )
 
     raise LLMConfigurationError(
-        f"unknown LLM_PROVIDER {provider!r}; supported providers are openai and google"
+        f"unknown LLM_PROVIDER {provider!r}; supported providers are groq, openai and google"
     )
 
 
