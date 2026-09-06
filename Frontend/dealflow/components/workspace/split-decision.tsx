@@ -33,7 +33,8 @@ export function SplitDecision({
   className?: string;
 }) {
   const rows = useMemo(() => {
-    const totalDemand = plan.demands.reduce((sum, d) => sum + d.qty, 0);
+    const demands = plan.demands ?? [];
+    const totalDemand = demands.reduce((sum, d) => sum + d.qty, 0);
 
     // What each warehouse could have covered, capped at what the order needs:
     // stock beyond demand is not coverage, it is just stock.
@@ -42,8 +43,8 @@ export function SplitDecision({
       { id: number; name: string; city: string | null; couldCover: number; allocated: number }
     >();
 
-    for (const a of plan.availability) {
-      const need = plan.demands.find((d) => d.product_id === a.product_id)?.qty ?? 0;
+    for (const a of plan.availability ?? []) {
+      const need = demands.find((d) => d.product_id === a.product_id)?.qty ?? 0;
       const row = byWarehouse.get(a.warehouse_id) ?? {
         id: a.warehouse_id,
         name: a.warehouse_name,
@@ -73,7 +74,7 @@ export function SplitDecision({
   const usedCount = rows.list.filter((r) => r.allocated > 0).length;
 
   return (
-    <div className={`rounded-[20px] bg-white p-5 card-shadow ${className}`}>
+    <div className={`rounded-[20px] bg-white p-4 card-shadow sm:p-5 ${className}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink/6 pb-3">
         <h3 className="text-[14px] font-semibold text-ink">How this split was chosen</h3>
         <span className="rounded-full bg-cream px-2 py-0.5 text-[11px] text-mist">
@@ -99,7 +100,7 @@ export function SplitDecision({
       </p>
 
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-left text-[12.5px]">
+        <table className="w-full min-w-[380px] text-left text-[12.5px]">
           <thead className="border-b border-ink/6 text-[11px] font-semibold text-mist">
             <tr>
               <th className="py-2 pr-3">Candidate warehouse</th>
@@ -138,10 +139,10 @@ export function SplitDecision({
         </table>
       </div>
 
-      {plan.backorders.length > 0 ? (
+      {(plan.backorders ?? []).length > 0 ? (
         <p className="mt-3 border-t border-ink/6 pt-3 text-[12px] text-warn">
           No warehouse could cover{" "}
-          {plan.backorders.map((b) => `${b.qty} × ${b.product_name}`).join(", ")} — that becomes a
+          {(plan.backorders ?? []).map((b) => `${b.qty} × ${b.product_name}`).join(", ")} — that becomes a
           backorder rather than a shipment.
         </p>
       ) : null}

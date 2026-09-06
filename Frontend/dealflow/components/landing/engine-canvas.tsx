@@ -53,7 +53,7 @@ function Line({
 }) {
   return (
     <div
-      className={`grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 text-[13px] ${over ? "flag-row" : ""}`}
+      className={`grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 text-[12px] sm:gap-x-3 sm:text-[13px] ${over ? "flag-row" : ""}`}
     >
       <span>{name}</span>
       <span className="text-right text-mist">{given}</span>
@@ -76,13 +76,13 @@ export function EngineCanvas() {
 
   return (
     <div className="relative mx-auto max-w-[720px]">
-      <div className="flex justify-center gap-6 sm:gap-10">
+      <div className="scroll-x flex justify-start gap-5 sm:justify-center sm:gap-10">
         {scenes.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setScene(tab.id)}
-            className={`relative pb-2 text-[15px] transition-colors ${
+            className={`relative shrink-0 pb-2 text-[14px] whitespace-nowrap transition-colors sm:text-[15px] ${
               scene === tab.id
                 ? "font-semibold text-ink"
                 : "text-mist hover:text-ink"
@@ -98,7 +98,7 @@ export function EngineCanvas() {
         ))}
       </div>
 
-      <div className="mx-auto mt-8 flex max-w-[560px] items-center gap-2 rounded-full bg-white py-2 pr-2 pl-5 card-shadow">
+      <div className="mx-auto mt-8 flex max-w-[560px] items-center gap-2 rounded-full bg-white py-2 pr-2 pl-4 card-shadow sm:pl-5">
         <p className="min-w-0 flex-1 truncate text-[14px] text-ink">{s.prompt}</p>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-bone">
           <ArrowUp className="size-4" />
@@ -109,7 +109,7 @@ export function EngineCanvas() {
         {s.note}
       </p>
 
-      <div className="mx-auto mt-4 max-w-[560px] rounded-[18px] bg-white p-5 card-shadow">
+      <div className="mx-auto mt-4 max-w-[560px] rounded-[18px] bg-white p-4 card-shadow sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="size-9 shrink-0 overflow-hidden rounded-full border border-ink/10 bg-paper shadow-xs">
@@ -149,7 +149,7 @@ export function EngineCanvas() {
         </span>
 
         <div className="mt-5 border-t border-ink/8 pt-4">
-          <div className="mb-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-3 text-[11px] text-mist">
+          <div className="mb-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-2 text-[11px] text-mist sm:gap-x-3">
             <span>Line</span>
             <span className="text-right">Given</span>
             <span className="text-right">Allowed</span>

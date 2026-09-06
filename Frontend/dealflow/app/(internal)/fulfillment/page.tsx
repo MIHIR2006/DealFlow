@@ -32,7 +32,7 @@ export default function FulfillmentPage() {
 
       {/* Orders Table */}
       <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
-        <table className="w-full text-left text-[13.5px]">
+        <table className="stack-table w-full text-left text-[13.5px]">
           <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
             <tr>
               <th className="px-6 py-3.5">Order #</th>
@@ -58,24 +58,24 @@ export default function FulfillmentPage() {
                   key={ord.id}
                   className="hover:bg-cream/40 transition-colors group cursor-pointer"
                 >
-                  <td className="px-6 py-4 font-medium text-ink">
+                  <td data-stack="primary" className="px-6 py-4 font-medium text-ink">
                     <Link href={`/fulfillment/${ord.id}`} className="hover:underline">
                       {ord.reference}
                     </Link>
                   </td>
-                  <td className="px-6 py-4 text-mist text-[12.5px]">
+                  <td data-label="Quote ref" className="px-6 py-4 text-mist text-[12.5px]">
                     {ord.quotation_reference}
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Customer" className="px-6 py-4">
                     <p className="font-medium text-ink">{ord.customer_name}</p>
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Fulfillment" className="px-6 py-4">
                     <StatusBadge status={ord.status} size="sm" />
                   </td>
-                  <td className="px-6 py-4 text-[13px] text-ink font-semibold">
+                  <td data-label="Shipments" className="px-6 py-4 text-[13px] text-ink font-semibold">
                     {ord.shipment_count} {ord.shipment_count === 1 ? "depot" : "depots"}
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Backorders" className="px-6 py-4">
                     {ord.backorder_count > 0 ? (
                       <span className="inline-flex items-center rounded-full tone-bad px-2 py-0.5 text-[12px] font-semibold text-bad">
                         {ord.backorder_count} line{ord.backorder_count === 1 ? "" : "s"} backordered
@@ -86,10 +86,10 @@ export default function FulfillmentPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-[12.5px] text-mist">
+                  <td data-label="Promised date" className="px-6 py-4 text-[12.5px] text-mist">
                     {ord.promised_date ? new Date(ord.promised_date).toLocaleDateString() : "—"}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td data-stack="action" className="px-6 py-4 text-right">
                     <Link
                       href={`/fulfillment/${ord.id}`}
                       className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors"

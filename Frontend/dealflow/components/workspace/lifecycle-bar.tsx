@@ -34,7 +34,7 @@ export function LifecycleBar({
 
   return (
     <div
-      className={`flex items-center gap-1 overflow-x-auto rounded-full bg-white px-3 py-1.5 text-[12.5px] card-shadow ${className}`}
+      className={`scroll-x flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[12.5px] card-shadow ${className}`}
     >
       <span className="mr-1 shrink-0 text-mist">Flow</span>
       {STAGES.map((s, idx) => {
@@ -48,7 +48,7 @@ export function LifecycleBar({
         const cls = `flex shrink-0 items-center rounded-full px-2.5 py-0.5 ${style}`;
 
         return (
-          <span key={s.key} className="flex items-center gap-1">
+          <span key={s.key} className="flex shrink-0 items-center gap-1">
             {s.href ? (
               <Link href={s.href} className={cls}>
                 {s.label}

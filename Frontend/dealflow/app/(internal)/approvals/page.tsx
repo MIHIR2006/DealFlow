@@ -41,7 +41,7 @@ export default function ApprovalsInboxPage() {
           </p>
         </div>
 
-        <div className="flex items-center rounded-full bg-white p-1 card-shadow">
+        <div className="scroll-x flex max-w-full items-center rounded-full bg-white p-1 card-shadow">
           {[
             { id: "ALL" as const, label: `All pending (${counts.all})` },
             { id: "MANAGER" as const, label: `Sales Manager (${counts.manager})` },
@@ -51,7 +51,7 @@ export default function ApprovalsInboxPage() {
               key={rf.id}
               type="button"
               onClick={() => setRoleFilter(rf.id)}
-              className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium whitespace-nowrap transition-colors ${
                 roleFilter === rf.id ? "bg-ink text-bone" : "text-mist hover:text-ink"
               }`}
             >
@@ -78,7 +78,7 @@ export default function ApprovalsInboxPage() {
       ) : null}
 
       <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
-        <table className="w-full text-left text-[13.5px]">
+        <table className="stack-table w-full text-left text-[13.5px]">
           <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
             <tr>
               <th className="px-6 py-3.5">Quote Ref</th>
@@ -100,12 +100,12 @@ export default function ApprovalsInboxPage() {
             ) : (
               filtered.map((r) => (
                 <tr key={r.id} className="hover:bg-cream/40 transition-colors group cursor-pointer">
-                  <td className="px-6 py-4 font-medium text-ink">
+                  <td data-stack="primary" className="px-6 py-4 font-medium text-ink">
                     <Link href={`/approvals/${r.quotation_id}`} className="hover:underline">
                       {r.reference}
                     </Link>
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Customer" className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-ink">{r.customer_name}</span>
                       <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded tone-warn text-warn">
@@ -113,15 +113,19 @@ export default function ApprovalsInboxPage() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Required step" className="px-6 py-4">
                     <StatusBadge status={`PENDING_${r.required_role}`} size="sm" />
                   </td>
-                  <td className="px-6 py-4 font-semibold tabular-nums text-ink">{inr(r.grand_total)}</td>
-                  <td className="px-6 py-4">
+                  <td data-label="Order amount" className="px-6 py-4 font-semibold tabular-nums text-ink">
+                    {inr(r.grand_total)}
+                  </td>
+                  <td data-label="Blended risk" className="px-6 py-4">
                     <RiskBadge score={r.blended_risk_score} requiredLevel={r.required_level} size="sm" />
                   </td>
-                  <td className="px-6 py-4 text-[12.5px] text-mist">{r.rep_name}</td>
-                  <td className="px-6 py-4 text-right">
+                  <td data-label="Rep" className="px-6 py-4 text-[12.5px] text-mist">
+                    {r.rep_name}
+                  </td>
+                  <td data-stack="action" className="px-6 py-4 text-right">
                     <Link
                       href={`/approvals/${r.quotation_id}`}
                       className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors"

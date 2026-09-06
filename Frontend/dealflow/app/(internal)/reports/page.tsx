@@ -144,12 +144,12 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-2.5">
           <button
             type="button"
             onClick={handleExportCSV}
             disabled={!report}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink whitespace-nowrap hover:bg-cream transition-colors disabled:opacity-50"
           >
             <FileSpreadsheet className="size-3.5 text-ok" /> Export CSV / XLS
           </button>
@@ -158,7 +158,7 @@ export default function ReportsPage() {
             type="button"
             onClick={handleExportPDF}
             disabled={!report}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone whitespace-nowrap hover:bg-ink/90 transition-colors disabled:opacity-50"
           >
             <Printer className="size-3.5" />
             Export Executive PDF
@@ -168,7 +168,7 @@ export default function ReportsPage() {
 
       {/* 4 MANDATORY FILTERS (Spec A7) */}
       <div className="rounded-[20px] bg-white p-4 card-shadow space-y-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {/* Filter 1: Period */}
           <div>
             <label className="text-[11.5px] font-semibold text-mist block mb-1">
@@ -194,7 +194,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Filter 2: Sales Team / Rep */}
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <label className="text-[11.5px] font-semibold text-mist block mb-1">
               Sales Team / Rep
             </label>
@@ -208,7 +208,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Filter 3: Approval Status */}
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <label className="text-[11.5px] font-semibold text-mist block mb-1">
               Approval / Quotation Status
             </label>
@@ -276,7 +276,7 @@ export default function ReportsPage() {
       </div>
 
       {error && (
-        <div className="rounded-[18px] tone-bad p-4 border border-transparent flex items-center justify-between gap-3">
+        <div className="rounded-[18px] tone-bad p-4 border border-transparent flex flex-wrap items-center justify-between gap-3">
           <p className="text-[13px] text-bad font-medium">
             Failed to load report: {error.message}
           </p>
@@ -300,27 +300,27 @@ export default function ReportsPage() {
         <>
           {/* Summary KPIs */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Quotations</p>
-              <p className="mt-2 text-[26px] font-serif tracking-tight text-ink tabular-nums">
+              <p className="mt-2 text-[22px] font-serif tracking-tight text-ink tabular-nums sm:text-[26px]">
                 {report.summary.total_quotations}
               </p>
             </div>
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Pipeline Value</p>
-              <p className="mt-2 text-[26px] font-serif tracking-tight text-ink tabular-nums">
+              <p className="mt-2 text-[22px] font-serif tracking-tight text-ink tabular-nums sm:text-[26px]">
                 {inr(report.summary.pipeline_value)}
               </p>
             </div>
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Won Value</p>
-              <p className="mt-2 text-[26px] font-serif tracking-tight text-ok tabular-nums">
+              <p className="mt-2 text-[22px] font-serif tracking-tight text-ok tabular-nums sm:text-[26px]">
                 {inr(report.summary.won_value)}
               </p>
             </div>
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Avg Margin</p>
-              <p className="mt-2 text-[26px] font-serif tracking-tight text-ok tabular-nums">
+              <p className="mt-2 text-[22px] font-serif tracking-tight text-ok tabular-nums sm:text-[26px]">
                 {report.summary.avg_margin_pct}%
               </p>
             </div>
@@ -338,8 +338,8 @@ export default function ReportsPage() {
               </p>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[13px]">
+            <div className="md:overflow-x-auto">
+              <table className="stack-table w-full text-left text-[13px]">
                 <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
                   <tr>
                     <th className="px-6 py-3">Rep</th>
@@ -354,17 +354,28 @@ export default function ReportsPage() {
                 <tbody className="divide-y divide-ink/5">
                   {report.rows.map((r, idx) => (
                     <tr key={idx} className="hover:bg-cream/40 transition-colors">
-                      <td className="px-6 py-3.5 font-medium text-ink">{r.rep_name}</td>
-                      <td className="px-6 py-3.5 text-mist">{r.sales_team}</td>
-                      <td className="px-6 py-3.5 text-mist">{r.category_name}</td>
-                      <td className="px-6 py-3.5 text-right tabular-nums text-ink">
+                      <td data-stack="primary" className="px-6 py-3.5 font-medium text-ink">
+                        {r.rep_name}
+                      </td>
+                      <td data-label="Sales team" className="px-6 py-3.5 text-mist">
+                        {r.sales_team}
+                      </td>
+                      <td data-label="Category" className="px-6 py-3.5 text-mist">
+                        {r.category_name}
+                      </td>
+                      <td data-label="Quotations" className="px-6 py-3.5 text-right tabular-nums text-ink">
                         {r.quotation_count}
                       </td>
-                      <td className="px-6 py-3.5 text-right tabular-nums font-semibold text-ink">
+                      <td
+                        data-label="Net revenue"
+                        className="px-6 py-3.5 text-right tabular-nums font-semibold text-ink"
+                      >
                         {inr(r.net_revenue)}
                       </td>
-                      <td className="px-6 py-3.5 text-right tabular-nums text-ok">{r.margin}%</td>
-                      <td className="px-6 py-3.5 text-right tabular-nums text-warn">
+                      <td data-label="Margin" className="px-6 py-3.5 text-right tabular-nums text-ok">
+                        {r.margin}%
+                      </td>
+                      <td data-label="Discount given" className="px-6 py-3.5 text-right tabular-nums text-warn">
                         {r.discount_given}%
                       </td>
                     </tr>

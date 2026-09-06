@@ -37,7 +37,7 @@ export function Preloader() {
       }`}
     >
       {/* Top Bar */}
-      <div className="flex items-center justify-between text-[13px] font-medium text-mist">
+      <div className="flex items-center justify-between gap-3 text-[12px] font-medium text-mist sm:text-[13px]">
         <span className="font-semibold text-ink">DealFlow360</span>
         <span>Self-Governing Engine</span>
       </div>
@@ -46,7 +46,7 @@ export function Preloader() {
       <div className="my-auto flex flex-col items-center justify-center py-12 text-center select-none">
         <div className="relative">
           <h1
-            className="font-serif text-[68px] leading-none tracking-[-0.04em] sm:text-[130px] lg:text-[170px]"
+            className="font-serif text-[13vw] leading-none tracking-[-0.04em] sm:text-[130px] lg:text-[170px]"
             style={{
               backgroundImage: `linear-gradient(to top, #1c1b18 ${progress}%, oklch(0.23 0.002 85 / 0.15) ${progress}%)`,
               WebkitBackgroundClip: "text",
@@ -67,7 +67,7 @@ export function Preloader() {
       </div>
 
       {/* Bottom Footer */}
-      <div className="flex items-center justify-between text-[13px] text-mist">
+      <div className="flex items-center justify-between gap-3 text-[12px] text-mist sm:text-[13px]">
         <div className="flex items-center gap-3">
           <span className="size-2 rounded-full bg-ink animate-pulse" />
           <span>Evaluating risk rules</span>

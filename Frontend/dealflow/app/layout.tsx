@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Newsreader } from "next/font/google";
 import { cn } from "@/lib/utils";
 import "@fontsource-variable/stack-sans-text";
@@ -11,6 +11,13 @@ const newsreader = Newsreader({
   display: "swap",
   axes: ["opsz"],
 });
+
+// Stated rather than inherited: the whole workspace is laid out against the
+// device width, and a zoom lock would trap anyone who needs to magnify.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: "DealFlow360 — The self-governing deal engine",

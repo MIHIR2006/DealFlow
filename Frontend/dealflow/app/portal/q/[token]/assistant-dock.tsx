@@ -88,7 +88,7 @@ export function AssistantDock({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-[13px] font-semibold text-bone shadow-lg transition-colors hover:bg-ink/90"
+        className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-[13px] font-semibold text-bone shadow-lg transition-colors hover:bg-ink/90 sm:bottom-6 sm:right-6"
       >
         <Sparkles className="size-4" />
         Ask about this quotation
@@ -97,8 +97,8 @@ export function AssistantDock({
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 flex max-h-[min(560px,calc(100vh-3rem))] w-[min(380px,calc(100vw-3rem))] flex-col rounded-[24px] border border-ink/10 bg-white shadow-2xl">
-      <div className="flex items-start justify-between gap-3 border-b border-ink/8 px-5 py-4">
+    <div className="fixed inset-x-3 bottom-3 z-40 flex max-h-[min(560px,calc(100svh-1.5rem))] flex-col rounded-[24px] border border-ink/10 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:bottom-6 sm:max-h-[min(560px,calc(100svh-3rem))] sm:w-[380px]">
+      <div className="flex items-start justify-between gap-3 border-b border-ink/8 px-4 py-3.5 sm:px-5 sm:py-4">
         <div>
           <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-ink">
             <Sparkles className="size-3.5 text-mist" />
@@ -118,7 +118,7 @@ export function AssistantDock({
         </button>
       </div>
 
-      <div ref={threadRef} className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+      <div ref={threadRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
         {turns.length === 0 ? (
           <div className="rounded-[16px] bg-cream/50 p-3.5 text-[12.5px] leading-relaxed text-mist">
             <p className="font-semibold text-ink">How can I help?</p>
@@ -134,8 +134,8 @@ export function AssistantDock({
               key={i}
               className={`rounded-[16px] p-3.5 text-[12.5px] leading-relaxed whitespace-pre-wrap ${
                 turn.role === "CUSTOMER"
-                  ? "tone-lilac text-lilac ml-6"
-                  : "border border-ink/8 bg-cream/50 text-ink mr-6"
+                  ? "tone-lilac text-lilac ml-4 sm:ml-6"
+                  : "border border-ink/8 bg-cream/50 text-ink mr-4 sm:mr-6"
               }`}
             >
               {turn.body}
@@ -144,7 +144,7 @@ export function AssistantDock({
         )}
 
         {busy ? (
-          <p className="mr-6 rounded-[16px] border border-ink/8 bg-cream/50 p-3.5 text-[12.5px] text-mist">
+          <p className="mr-4 rounded-[16px] border border-ink/8 bg-cream/50 p-3.5 text-[12.5px] text-mist sm:mr-6">
             Thinking&hellip;
           </p>
         ) : null}
@@ -154,7 +154,7 @@ export function AssistantDock({
         ) : null}
       </div>
 
-      <div className="space-y-2 border-t border-ink/8 px-5 py-4">
+      <div className="space-y-2 border-t border-ink/8 px-4 py-3.5 sm:px-5 sm:py-4">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -165,7 +165,7 @@ export function AssistantDock({
             }
             disabled={busy}
             maxLength={2000}
-            className="flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
+            className="min-w-0 flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
             onKeyDown={(e) => {
               if (e.key === "Enter") send();
             }}
@@ -174,7 +174,7 @@ export function AssistantDock({
             type="button"
             onClick={send}
             disabled={busy || !draft.trim()}
-            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-bone transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-bone transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50 sm:size-8"
           >
             <Send className="size-3.5" />
           </button>

@@ -7,10 +7,10 @@ const cards = [ROLES.rep, ROLES.manager] as const;
 
 export default function RegisterPage() {
   return (
-    <div className="rounded-[28px] bg-white px-6 py-8 sm:px-10 sm:py-10">
+    <div className="rounded-[28px] bg-white px-5 py-7 sm:px-10 sm:py-10">
       <Wave />
       <p className="mt-5 text-[15px] text-ink/80">Welcome to DealFlow360</p>
-      <h1 className="font-serif mt-1 text-[34px] leading-[1.12] tracking-[-0.02em] sm:text-[40px]">
+      <h1 className="font-serif mt-1 text-[30px] leading-[1.12] tracking-[-0.02em] sm:text-[40px]">
         Pick your role to get started
       </h1>
 

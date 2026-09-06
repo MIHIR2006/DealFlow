@@ -116,15 +116,15 @@ export default function ApprovalDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto sm:items-center">
           <Link
             href="/approvals"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
+            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink sm:mt-0"
           >
             <ArrowLeft className="size-4" />
           </Link>
-          <div>
-            <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
+          <div className="min-w-0">
+            <h1 className="font-serif text-[22px] font-medium tracking-tight text-ink sm:text-[30px]">
               Approval Detail: {quote.reference} ({quote.customer_name})
             </h1>
             <p className="text-[12.5px] text-mist">
@@ -134,7 +134,7 @@ export default function ApprovalDetailPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <RiskBadge score={blended} requiredLevel={risk.required_level} size="md" />
           <StatusBadge status={quote.status} size="md" />
         </div>
@@ -147,7 +147,7 @@ export default function ApprovalDetailPage({
       ) : null}
 
       {actionDone ? (
-        <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex items-center justify-between">
+        <div className="rounded-[18px] tone-ok p-4 text-[13px] font-medium flex flex-wrap items-center justify-between gap-3">
           <span>{actionDone}</span>
           {quote.status === "APPROVED" ? (
             <Link
@@ -161,8 +161,8 @@ export default function ApprovalDetailPage({
       ) : null}
 
       {/* "Why This Quote Was Flagged" — the mockup's core artifact */}
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
-        <div className="flex items-center justify-between pb-3 border-b border-ink/6">
+      <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
           <div>
             <h2 className="text-[16px] font-semibold tracking-tight text-ink flex items-center gap-2">
               <ShieldAlert className="size-4 text-warn" />
@@ -177,8 +177,8 @@ export default function ApprovalDetailPage({
           </span>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-[13.5px]">
+        <div className="mt-4 md:overflow-x-auto">
+          <table className="stack-table w-full text-left text-[13.5px]">
             <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-5 py-3">Line</th>
@@ -192,11 +192,19 @@ export default function ApprovalDetailPage({
             <tbody className="divide-y divide-ink/5">
               {risk.breakdown.map((line) => (
                 <tr key={line.line_id} className={line.is_over ? "bg-amber-500/5" : "hover:bg-cream/40"}>
-                  <td className="px-5 py-3.5 font-medium text-ink">{line.product_name}</td>
-                  <td className="px-5 py-3.5 text-mist text-[12.5px]">{line.category_name}</td>
-                  <td className="px-5 py-3.5 font-semibold tabular-nums text-ink">{line.given_pct}%</td>
-                  <td className="px-5 py-3.5 text-mist text-[12.5px]">{line.allowed_pct}%</td>
-                  <td className="px-5 py-3.5">
+                  <td data-stack="primary" className="px-5 py-3.5 font-medium text-ink">
+                    {line.product_name}
+                  </td>
+                  <td data-label="Category" className="px-5 py-3.5 text-mist text-[12.5px]">
+                    {line.category_name}
+                  </td>
+                  <td data-label="Discount given" className="px-5 py-3.5 font-semibold tabular-nums text-ink">
+                    {line.given_pct}%
+                  </td>
+                  <td data-label="Limit allowed" className="px-5 py-3.5 text-mist text-[12.5px]">
+                    {line.allowed_pct}%
+                  </td>
+                  <td data-label="Over by" className="px-5 py-3.5">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold ${
                         line.is_over ? "tone-bad text-bad" : "tone-ok text-ok"
@@ -205,7 +213,9 @@ export default function ApprovalDetailPage({
                       {line.is_over ? `+${line.overage_pts} pt OVER` : "0 pt OK"}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right tabular-nums text-mist">{inr(line.list_value)}</td>
+                  <td data-label="Line value" className="px-5 py-3.5 text-right tabular-nums text-mist">
+                    {inr(line.list_value)}
+                  </td>
                 </tr>
               ))}
               {risk.breakdown.length === 0 ? (
@@ -230,12 +240,12 @@ export default function ApprovalDetailPage({
         </div>
       </div>
 
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
+      <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
         <h2 className="text-[15px] font-semibold text-ink mb-2">Approval chain progression</h2>
         <ApprovalStepper steps={quote.approvals ?? []} currentStatus={quote.status} />
       </div>
 
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
+      <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
         <div className="flex items-center justify-between pb-3 border-b border-ink/6">
           <h2 className="text-[15px] font-semibold text-ink flex items-center gap-2">
             <History className="size-4 text-mist" />
@@ -244,8 +254,8 @@ export default function ApprovalDetailPage({
           <span className="text-[11.5px] text-mist">{quote.audit?.length ?? 0} events</span>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+        <div className="mt-4 md:overflow-x-auto">
+          <table className="stack-table w-full text-left text-[13px]">
             <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-4 py-2.5">User</th>
@@ -257,8 +267,10 @@ export default function ApprovalDetailPage({
             <tbody className="divide-y divide-ink/5">
               {(quote.audit ?? []).map((entry) => (
                 <tr key={entry.id} className="hover:bg-cream/30">
-                  <td className="px-4 py-3 font-medium text-ink">{entry.actor_label}</td>
-                  <td className="px-4 py-3">
+                  <td data-stack="primary" className="px-4 py-3 font-medium text-ink">
+                    {entry.actor_label}
+                  </td>
+                  <td data-label="Action" className="px-4 py-3">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
                         entry.action.includes("APPROVED")
@@ -275,10 +287,12 @@ export default function ApprovalDetailPage({
                       {entry.action.replace(/_/g, " ")}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-mist text-[12px] whitespace-nowrap">
+                  <td data-label="Date" className="px-4 py-3 text-mist text-[12px] md:whitespace-nowrap">
                     {new Date(entry.created_at).toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-ink/80 text-[12.5px] max-w-[420px]">{entry.note}</td>
+                  <td data-label="Note" className="px-4 py-3 text-ink/80 text-[12.5px] md:max-w-[420px]">
+                    {entry.note}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -287,7 +301,7 @@ export default function ApprovalDetailPage({
       </div>
 
       {pendingStep ? (
-        <div className="rounded-[24px] bg-white p-6 card-shadow">
+        <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
           <h2 className="text-[15px] font-semibold text-ink">
             Reviewer decision &middot; {pendingStep.required_role} step
           </h2>
@@ -305,12 +319,12 @@ export default function ApprovalDetailPage({
             className="mt-3 w-full rounded-[16px] border border-ink/12 bg-cream/30 p-3.5 text-[13px] placeholder:text-mist focus:outline-hidden focus:border-ink/30"
           />
 
-          <div className="mt-4 flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-ink/6">
+          <div className="mt-4 grid grid-cols-1 gap-2.5 pt-3 border-t border-ink/6 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
             <button
               type="button"
               onClick={() => decide("return")}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-full tone-warn px-4 py-2 text-[13px] font-medium text-warn transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full tone-warn px-4 py-2.5 text-[13px] font-medium text-warn transition-colors disabled:opacity-50 sm:py-2"
             >
               <RotateCcw className="size-3.5" />
               Return for Revision
@@ -319,7 +333,7 @@ export default function ApprovalDetailPage({
               type="button"
               onClick={() => decide("reject")}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-full tone-bad px-4 py-2 text-[13px] font-medium text-bad transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full tone-bad px-4 py-2.5 text-[13px] font-medium text-bad transition-colors disabled:opacity-50 sm:py-2"
             >
               <X className="size-3.5" />
               Reject
@@ -328,7 +342,7 @@ export default function ApprovalDetailPage({
               type="button"
               onClick={() => decide("approve")}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-medium text-white transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full fill-ok px-5 py-2.5 text-[13px] font-medium text-white transition-colors disabled:opacity-50 sm:py-2"
             >
               <Check className="size-3.5 stroke-[2.5]" />
               Approve
@@ -336,7 +350,7 @@ export default function ApprovalDetailPage({
           </div>
         </div>
       ) : (
-        <div className="rounded-[24px] bg-white p-6 card-shadow text-[13px] text-mist">
+        <div className="rounded-[24px] bg-white p-5 card-shadow text-[13px] text-mist sm:p-6">
           No step is currently awaiting a decision on this quotation.
         </div>
       )}

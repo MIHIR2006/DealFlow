@@ -62,13 +62,13 @@ export default function ProductsCatalogPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {/* Tab Switcher */}
-          <div className="flex items-center gap-1 rounded-full bg-white p-1 card-shadow">
+          <div className="scroll-x flex max-w-full items-center gap-1 rounded-full bg-white p-1 card-shadow">
             <button
               type="button"
               onClick={() => setActiveTab("PRODUCTS")}
-              className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
                 activeTab === "PRODUCTS" ? "bg-ink text-bone" : "text-mist hover:text-ink"
               }`}
             >
@@ -77,7 +77,7 @@ export default function ProductsCatalogPage() {
             <button
               type="button"
               onClick={() => setActiveTab("WAREHOUSES")}
-              className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
                 activeTab === "WAREHOUSES" ? "bg-ink text-bone" : "text-mist hover:text-ink"
               }`}
             >
@@ -89,7 +89,7 @@ export default function ProductsCatalogPage() {
             <button
               type="button"
               onClick={() => setShowAddProduct(true)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone whitespace-nowrap hover:bg-ink/90 transition-colors shadow-sm"
             >
               <Plus className="size-3.5" /> Add Product
             </button>
@@ -113,13 +113,13 @@ export default function ProductsCatalogPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or SKU..."
-              className="w-64 rounded-full bg-white px-4 py-2 text-[12.5px] border border-ink/10 focus:outline-hidden"
+              className="w-full rounded-full bg-white px-4 py-2 text-[12.5px] border border-ink/10 focus:outline-hidden sm:w-64"
             />
-            <div className="flex items-center gap-1 overflow-x-auto">
+            <div className="scroll-x flex max-w-full items-center gap-1">
               <button
                 type="button"
                 onClick={() => setCategoryTab("ALL")}
-                className={`rounded-full px-3 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors ${
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors ${
                   categoryTab === "ALL" ? "bg-ink text-bone" : "bg-white text-mist hover:text-ink border border-ink/10"
                 }`}
               >
@@ -130,7 +130,7 @@ export default function ProductsCatalogPage() {
                   key={c.id}
                   type="button"
                   onClick={() => setCategoryTab(c.id)}
-                  className={`rounded-full px-3 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors ${
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors ${
                     categoryTab === c.id ? "bg-ink text-bone" : "bg-white text-mist hover:text-ink border border-ink/10"
                   }`}
                 >
@@ -141,7 +141,7 @@ export default function ProductsCatalogPage() {
           </div>
 
           <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
-            <table className="w-full text-left text-[13.5px]">
+            <table className="stack-table w-full text-left text-[13.5px]">
               <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
                 <tr>
                   <th className="px-6 py-3.5">SKU &amp; Product</th>
@@ -156,31 +156,42 @@ export default function ProductsCatalogPage() {
               <tbody className="divide-y divide-ink/5">
                 {filteredProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-cream/40 transition-colors">
-                    <td className="px-6 py-4">
+                    <td data-stack="primary" className="px-6 py-4">
                       <Link href={`/products/${p.id}`} className="font-semibold text-ink hover:underline">
                         {p.name}
                       </Link>
                       <p className="text-[11px] text-mist">{p.sku}</p>
                     </td>
-                    <td className="px-6 py-4">
+                    <td data-label="Category" className="px-6 py-4">
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-ink/5 text-mist">
                         {p.category_name ?? p.category_id}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-semibold tabular-nums text-ink">{inr(p.unit_price)}</td>
-                    <td className="px-6 py-4 tabular-nums text-mist">{inr(p.unit_cost)}</td>
-                    <td className="px-6 py-4 tabular-nums text-mist">{p.tax_rate_pct}%</td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {p.is_promoted && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded tone-warn">Promoted</span>
-                        )}
-                        {p.is_subscription && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-ink/5 text-mist">Subscription</span>
-                        )}
-                      </div>
+                    <td data-label="List price" className="px-6 py-4 font-semibold tabular-nums text-ink">
+                      {inr(p.unit_price)}
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td data-label="Base cost" className="px-6 py-4 tabular-nums text-mist">
+                      {inr(p.unit_cost)}
+                    </td>
+                    <td data-label="Tax rate" className="px-6 py-4 tabular-nums text-mist">
+                      {p.tax_rate_pct}%
+                    </td>
+                    {/* Left genuinely empty when there is no flag, so the
+                        stacked card drops the line rather than showing a
+                        label with nothing beside it. */}
+                    <td data-label="Flags" className="px-6 py-4">
+                      {p.is_promoted || p.is_subscription ? (
+                        <div className="flex flex-wrap justify-end gap-1 md:justify-start">
+                          {p.is_promoted && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded tone-warn">Promoted</span>
+                          )}
+                          {p.is_subscription && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-ink/5 text-mist">Subscription</span>
+                          )}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td data-label="Status" className="px-6 py-4 text-right">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                           p.is_active ? "tone-ok text-ok" : "tone-bad text-bad"
@@ -278,8 +289,8 @@ function AddProductModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-      <div className="w-full max-w-[560px] max-h-[90vh] overflow-y-auto rounded-[24px] bg-white p-6 card-shadow">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-ink/40 p-3 sm:items-center sm:p-4">
+      <div className="max-h-[calc(100svh-1.5rem)] w-full max-w-[560px] overflow-y-auto rounded-[24px] bg-white p-5 card-shadow sm:max-h-[calc(100svh-2rem)] sm:p-6">
         <div className="flex items-center justify-between pb-3 border-b border-ink/6">
           <h2 className="text-[16px] font-semibold text-ink">Add Product</h2>
           <button type="button" onClick={onClose} className="text-mist hover:text-ink">
@@ -343,7 +354,7 @@ function AddProductModal({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="text-[11.5px] font-medium text-mist">SKU</label>
               <input
@@ -386,7 +397,7 @@ function AddProductModal({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <label className="text-[11.5px] font-medium text-mist">Unit Price (&#8377;)</label>
               <input
@@ -421,7 +432,7 @@ function AddProductModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-4 pt-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
             <label className="flex items-center gap-1.5 text-[12.5px] text-ink">
               <input
                 type="checkbox"
@@ -533,7 +544,7 @@ function WarehousesPanel({
       {isAdmin && (
         <form
           onSubmit={handleCreate}
-          className="flex flex-wrap items-end gap-3 rounded-[20px] bg-white p-4 card-shadow"
+          className="grid grid-cols-1 items-end gap-3 rounded-[20px] bg-white p-4 card-shadow sm:flex sm:flex-wrap"
         >
           <div>
             <label htmlFor="wh-name" className="text-[11.5px] font-medium text-mist">
@@ -548,7 +559,7 @@ function WarehousesPanel({
                 if (error) setError(null);
               }}
               placeholder="e.g. South Central Hub"
-              className={`mt-1 w-56 rounded-lg border bg-white px-3 py-2 text-[13px] ${
+              className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-[13px] sm:w-56 ${
                 error && !name.trim() ? "border-bad" : "border-ink/15"
               }`}
             />
@@ -563,7 +574,7 @@ function WarehousesPanel({
               inputMode="decimal"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              className="mt-1 w-28 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums sm:w-28"
             />
           </div>
           <div>
@@ -576,7 +587,7 @@ function WarehousesPanel({
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="Bengaluru"
-              className="mt-1 w-36 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px]"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] sm:w-36"
             />
           </div>
           <div>
@@ -590,7 +601,7 @@ function WarehousesPanel({
               value={lat}
               onChange={(e) => setLat(e.target.value)}
               placeholder="12.9716"
-              className="mt-1 w-28 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums sm:w-28"
             />
           </div>
           <div>
@@ -604,13 +615,13 @@ function WarehousesPanel({
               value={lng}
               onChange={(e) => setLng(e.target.value)}
               placeholder="77.5946"
-              className="mt-1 w-28 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[13px] tabular-nums sm:w-28"
             />
           </div>
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-bone hover:bg-ink/90 disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-ink px-4 py-2.5 text-[12.5px] font-semibold text-bone hover:bg-ink/90 disabled:opacity-50 sm:w-auto sm:py-2"
           >
             <Plus className="size-3.5" /> {saving ? "Adding..." : "Add Warehouse"}
           </button>
@@ -623,9 +634,9 @@ function WarehousesPanel({
         </form>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">
         {warehouses.map((wh) => (
-          <div key={wh.id} className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
+          <div key={wh.id} className="rounded-[24px] bg-white p-5 card-shadow flex flex-col justify-between sm:p-6">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-ink/6">
                 <span className="text-[12px] font-bold text-ink">#{wh.id}</span>

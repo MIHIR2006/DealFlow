@@ -249,16 +249,16 @@ export default function CustomerQuotationPortalPage({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[24px] bg-white p-6 card-shadow">
+      <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
               <span className="text-[12px] font-semibold text-mist bg-ink/5 px-2 py-0.5 rounded">
                 Ref: {quote.reference}
               </span>
               <PortalStatusBadge status={quote.status} size="md" />
             </div>
-            <h1 className="font-serif mt-2 text-[28px] font-semibold tracking-tight text-ink sm:text-[34px]">
+            <h1 className="font-serif mt-2 text-[24px] font-semibold tracking-tight text-ink sm:text-[34px]">
               Quotation for {quote.customer_name}
             </h1>
             <p className="text-[13px] text-mist mt-1">
@@ -267,11 +267,11 @@ export default function CustomerQuotationPortalPage({
             </p>
           </div>
 
-          <div className="text-right">
+          <div className="w-full sm:w-auto sm:text-right">
             <span className="text-[11.5px] uppercase font-semibold text-mist">
               Grand total (incl. taxes)
             </span>
-            <p className="font-serif text-[28px] font-semibold text-ink tabular-nums mt-0.5">
+            <p className="font-serif text-[26px] font-semibold text-ink tabular-nums mt-0.5 sm:text-[28px]">
               {inr(quote.totals.grand_total)}
             </p>
             {parseFloat(quote.totals.recurring_total_per_period) > 0 ? (
@@ -283,7 +283,7 @@ export default function CustomerQuotationPortalPage({
           </div>
         </div>
 
-        <div className="mt-6 flex items-center gap-2 border-b border-ink/6 pb-2 overflow-x-auto">
+        <div className="scroll-x mt-6 flex items-center gap-2 border-b border-ink/6 pb-2">
           {([
             { id: "QUOTE", label: "My Quotation", icon: null },
             { id: "MESSAGES", label: "Messages", icon: MessageSquare },
@@ -293,7 +293,7 @@ export default function CustomerQuotationPortalPage({
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors whitespace-nowrap ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors whitespace-nowrap ${
                 activeTab === t.id ? "bg-ink text-bone" : "text-mist hover:text-ink"
               }`}
             >
@@ -341,8 +341,8 @@ export default function CustomerQuotationPortalPage({
       {activeTab === "QUOTE" ? (
         <div className="space-y-6">
           <div className="rounded-[24px] bg-white card-shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[13.5px]">
+            <div className="md:overflow-x-auto">
+              <table className="stack-table w-full text-left text-[13.5px]">
                 <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
                   <tr>
                     <th className="px-6 py-3.5">Item Description</th>
@@ -359,7 +359,7 @@ export default function CustomerQuotationPortalPage({
                     const comments = messagesByLine.get(line.id) ?? 0;
                     return (
                       <tr key={line.id} className="group hover:bg-cream/20">
-                        <td className="px-6 py-4">
+                        <td data-stack="primary" className="px-6 py-4">
                           <p className="font-semibold text-ink">{line.product_name}</p>
                           {line.plan_name ? (
                             <p className="text-[11px] text-mist">
@@ -367,18 +367,22 @@ export default function CustomerQuotationPortalPage({
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-6 py-4 text-[12px] text-mist">
+                        <td data-label="Type" className="px-6 py-4 text-[12px] text-mist">
                           {line.line_type === "RECURRING" ? "Recurring" : "One-time"}
                         </td>
-                        <td className="px-6 py-4 font-medium text-ink">{line.qty}</td>
-                        <td className="px-6 py-4 tabular-nums text-mist">{inr(line.unit_price)}</td>
-                        <td className="px-6 py-4 tabular-nums text-ok font-semibold">
+                        <td data-label="Qty" className="px-6 py-4 font-medium text-ink">
+                          {line.qty}
+                        </td>
+                        <td data-label="Unit price" className="px-6 py-4 tabular-nums text-mist">
+                          {inr(line.unit_price)}
+                        </td>
+                        <td data-label="Discount" className="px-6 py-4 tabular-nums text-ok font-semibold">
                           {parseFloat(line.discount_pct) > 0 ? `${line.discount_pct}%` : "—"}
                         </td>
-                        <td className="px-6 py-4 text-right font-semibold tabular-nums text-ink">
+                        <td data-label="Net amount" className="px-6 py-4 text-right font-semibold tabular-nums text-ink">
                           {inr(line.net_amount)}
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td data-stack="action" className="px-6 py-4 text-right">
                           {negotiationOpen ? (
                             <button
                               type="button"
@@ -402,18 +406,18 @@ export default function CustomerQuotationPortalPage({
               </table>
             </div>
 
-            <div className="p-6 bg-ink/[0.01] border-t border-ink/6 flex flex-col items-end text-[13px] space-y-2">
-              <div className="flex justify-between w-64 text-mist">
+            <div className="flex flex-col items-stretch space-y-2 border-t border-ink/6 bg-ink/[0.01] p-5 text-[13px] sm:items-end sm:p-6">
+              <div className="flex w-full justify-between text-mist sm:w-64">
                 <span>Subtotal (excl. tax):</span>
                 <span className="tabular-nums font-medium text-ink">
                   {inr(quote.totals.net_subtotal)}
                 </span>
               </div>
-              <div className="flex justify-between w-64 text-mist">
+              <div className="flex w-full justify-between text-mist sm:w-64">
                 <span>Tax:</span>
                 <span className="tabular-nums font-medium text-ink">{inr(quote.totals.tax_total)}</span>
               </div>
-              <div className="pt-2 border-t border-ink/8 flex justify-between w-64 text-[16px] font-semibold text-ink">
+              <div className="flex w-full justify-between border-t border-ink/8 pt-2 text-[16px] font-semibold text-ink sm:w-64">
                 <span>Total amount:</span>
                 <span className="tabular-nums">{inr(quote.totals.grand_total)}</span>
               </div>
@@ -424,12 +428,12 @@ export default function CustomerQuotationPortalPage({
 
           {!confirmed ? (
             <div className="rounded-[20px] bg-white card-shadow p-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
                 <button
                   type="button"
                   onClick={() => setActiveTab("MESSAGES")}
                   disabled={!negotiationOpen}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-5 py-2.5 text-[13px] font-semibold text-ink hover:bg-cream transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-full border border-ink/15 px-5 py-2.5 text-[13px] font-semibold text-ink hover:bg-cream transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Sliders className="size-4" /> Request commercial revisions
                 </button>
@@ -438,7 +442,7 @@ export default function CustomerQuotationPortalPage({
                   type="button"
                   disabled={!quote.can_confirm || busy}
                   onClick={() => setConfirmModalOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-full fill-ok px-6 py-2.5 text-[13.5px] font-semibold text-white shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 rounded-full fill-ok px-6 py-2.5 text-[13.5px] font-semibold text-white shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="size-4" /> Accept terms &amp; confirm quotation
                 </button>
@@ -457,7 +461,7 @@ export default function CustomerQuotationPortalPage({
 
       {activeTab === "MESSAGES" ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-          <div className="rounded-[24px] bg-white p-6 card-shadow md:col-span-6 flex flex-col justify-between">
+          <div className="rounded-[24px] bg-white p-5 card-shadow md:col-span-6 flex flex-col justify-between sm:p-6">
             <div>
               <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
                 Propose a counter-discount
@@ -511,7 +515,7 @@ export default function CustomerQuotationPortalPage({
                     value={proposedDiscount}
                     disabled={!negotiationOpen}
                     onChange={(e) => setProposedDiscount(parseInt(e.target.value))}
-                    className="w-full accent-ink cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-6 w-full touch-pan-y accent-ink cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed sm:h-auto"
                   />
                 </div>
 
@@ -564,7 +568,7 @@ export default function CustomerQuotationPortalPage({
             </div>
           </div>
 
-          <div className="rounded-[24px] bg-white p-6 card-shadow md:col-span-6 flex flex-col justify-between">
+          <div className="rounded-[24px] bg-white p-5 card-shadow md:col-span-6 flex flex-col justify-between sm:p-6">
             <div>
               <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6 flex items-center gap-2">
                 <MessageSquare className="size-4 text-mist" />
@@ -582,11 +586,11 @@ export default function CustomerQuotationPortalPage({
                         key={msg.id}
                         className={`rounded-[16px] p-3.5 text-[13px] ${
                           msg.author_type === "CUSTOMER"
-                            ? "tone-lilac text-lilac ml-6"
-                            : "bg-cream/50 text-ink mr-6 border border-ink/8"
+                            ? "tone-lilac text-lilac ml-4 sm:ml-6"
+                            : "bg-cream/50 text-ink mr-4 border border-ink/8 sm:mr-6"
                         }`}
                       >
-                        <div className="flex items-center justify-between text-[11px] font-medium text-mist mb-1">
+                        <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2 text-[11px] font-medium text-mist">
                           <span className="font-semibold text-ink">{msg.author_label}</span>
                           <span>{new Date(msg.created_at).toLocaleString()}</span>
                         </div>
@@ -615,7 +619,7 @@ export default function CustomerQuotationPortalPage({
                     setMessageTarget(e.target.value === "ORDER" ? "ORDER" : Number(e.target.value))
                   }
                   disabled={!negotiationOpen}
-                  className="flex-1 rounded-full border border-ink/12 bg-cream/30 px-3 py-1 text-[11.5px] font-medium focus:outline-hidden disabled:opacity-50"
+                  className="min-w-0 flex-1 rounded-full border border-ink/12 bg-cream/30 px-3 py-1.5 text-[11.5px] font-medium focus:outline-hidden disabled:opacity-50 sm:py-1"
                 >
                   <option value="ORDER">The whole order</option>
                   {quote.lines.map((l) => (
@@ -633,7 +637,7 @@ export default function CustomerQuotationPortalPage({
                   onChange={(e) => setMessageDraft(e.target.value)}
                   placeholder="Type a message to your sales executive..."
                   disabled={busy || !negotiationOpen}
-                  className="flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
+                  className="min-w-0 flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") sendMessage();
                   }}
@@ -642,7 +646,7 @@ export default function CustomerQuotationPortalPage({
                   type="button"
                   onClick={sendMessage}
                   disabled={busy || !negotiationOpen || !messageDraft.trim()}
-                  className="size-8 rounded-full bg-ink text-bone flex items-center justify-center hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-bone hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:size-8"
                 >
                   <Send className="size-3.5" />
                 </button>
@@ -653,7 +657,7 @@ export default function CustomerQuotationPortalPage({
       ) : null}
 
       {activeTab === "PROFILE" ? (
-        <div className="rounded-[24px] bg-white p-6 card-shadow max-w-[520px]">
+        <div className="rounded-[24px] bg-white p-5 card-shadow max-w-[520px] sm:p-6">
           <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
             Account &amp; link details
           </h2>
@@ -689,8 +693,8 @@ export default function CustomerQuotationPortalPage({
       ) : null}
 
       {confirmModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl border border-ink/10">
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 backdrop-blur-xs p-3 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100svh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl border border-ink/10 sm:p-6">
             <h3 className="text-[18px] font-semibold text-ink">Confirm &amp; accept quotation terms</h3>
             <p className="text-[13px] text-mist mt-1">
               You are agreeing to enter into contract based on the following commercial terms:
@@ -729,11 +733,11 @@ export default function CustomerQuotationPortalPage({
               </label>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-ink/8">
+            <div className="mt-6 flex flex-col gap-2.5 pt-3 border-t border-ink/8 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(false)}
-                className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink"
+                className="rounded-full px-4 py-2.5 text-[13px] font-medium text-mist hover:text-ink sm:py-2"
               >
                 Back
               </button>
@@ -741,7 +745,7 @@ export default function CustomerQuotationPortalPage({
                 type="button"
                 disabled={!agreeTerms || busy}
                 onClick={confirmQuotation}
-                className="rounded-full fill-ok text-white px-5 py-2 text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="rounded-full fill-ok text-white px-5 py-2.5 text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors sm:py-2"
               >
                 Confirm quotation &rarr;
               </button>

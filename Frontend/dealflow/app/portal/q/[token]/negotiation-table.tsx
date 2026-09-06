@@ -61,7 +61,7 @@ export function NegotiationTable({
 
   return (
     <div className="rounded-[24px] bg-white card-shadow overflow-hidden">
-      <div className="flex items-center gap-2 px-6 pt-5 pb-3">
+      <div className="flex flex-wrap items-center gap-2 px-5 pt-5 pb-3 sm:px-6">
         <History className="size-4 text-mist" />
         <h2 className="text-[16px] font-semibold text-ink">Negotiation history</h2>
         {offers.length > 0 ? (
@@ -72,14 +72,14 @@ export function NegotiationTable({
       </div>
 
       {offers.length === 0 ? (
-        <p className="px-6 pb-6 text-[12.5px] text-mist leading-relaxed">
+        <p className="px-5 pb-6 text-[12.5px] text-mist leading-relaxed sm:px-6">
           No change requests yet. If the commercial terms need to move, propose a discount from the{" "}
           <strong className="font-semibold text-ink">Messages</strong> tab — it is reviewed against
           our standard terms straight away.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+        <div className="md:overflow-x-auto">
+          <table className="stack-table w-full text-left text-[13px]">
             <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-y border-ink/6">
               <tr>
                 <th className="px-6 py-3">Date</th>
@@ -92,27 +92,27 @@ export function NegotiationTable({
             <tbody className="divide-y divide-ink/5">
               {offers.map((offer) => (
                 <tr key={offer.id} className="align-top hover:bg-cream/20">
-                  <td className="px-6 py-4 text-mist whitespace-nowrap">
+                  <td data-label="Date" className="px-6 py-4 text-mist md:whitespace-nowrap">
                     {new Date(offer.created_at).toLocaleDateString(undefined, {
                       day: "numeric",
                       month: "short",
                     })}
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-stack="primary" className="px-6 py-4">
                     <p className="font-medium text-ink">{lineName(offer.line_id)}</p>
                     {offer.note ? (
-                      <p className="mt-0.5 text-[12px] text-mist leading-relaxed max-w-[320px]">
+                      <p className="mt-0.5 text-[12px] text-mist leading-relaxed md:max-w-[320px]">
                         &ldquo;{offer.note}&rdquo;
                       </p>
                     ) : null}
                   </td>
-                  <td className="px-6 py-4 text-right tabular-nums text-mist">
+                  <td data-label="Previous" className="px-6 py-4 text-right tabular-nums text-mist">
                     {offer.previous_discount_pct}%
                   </td>
-                  <td className="px-6 py-4 text-right tabular-nums font-semibold text-ink">
+                  <td data-label="Requested" className="px-6 py-4 text-right tabular-nums font-semibold text-ink">
                     {offer.proposed_discount_pct}%
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Outcome" className="px-6 py-4">
                     <OutcomeBadge outcome={offer.outcome} />
                   </td>
                 </tr>

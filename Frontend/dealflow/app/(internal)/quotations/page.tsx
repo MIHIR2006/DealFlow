@@ -54,7 +54,7 @@ export default function QuotationsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
           <div className="flex items-center rounded-full border border-ink/10 bg-white/80 p-1">
             <button
               type="button"
@@ -80,7 +80,7 @@ export default function QuotationsPage() {
 
           <Link
             href="/quotations/new"
-            className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bone shadow-sm hover:bg-ink/90 transition-all"
+            className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bone whitespace-nowrap shadow-sm hover:bg-ink/90 transition-all"
           >
             <Plus className="size-4" />
             New Quotation
@@ -89,7 +89,7 @@ export default function QuotationsPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] bg-white p-3 card-shadow">
-        <div className="flex flex-1 items-center gap-2 min-w-[260px] max-w-md rounded-full bg-ink/[0.03] px-3.5 py-1.5 border border-ink/6">
+        <div className="flex w-full flex-1 items-center gap-2 rounded-full border border-ink/6 bg-ink/[0.03] px-3.5 py-1.5 sm:w-auto sm:min-w-[260px] sm:max-w-md">
           <Search className="size-4 text-mist" />
           <input
             type="text"
@@ -100,15 +100,15 @@ export default function QuotationsPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-full bg-ink/[0.03] p-1 border border-ink/6">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="scroll-x flex max-w-full items-center rounded-full bg-ink/[0.03] p-1 border border-ink/6">
             {[{ id: "ALL", label: `All (${quotes.length})` }, ...KANBAN_COLUMNS.map((c) => ({ id: c.id, label: c.title }))].map(
               (st) => (
                 <button
                   key={st.id}
                   type="button"
                   onClick={() => setStageFilter(st.id)}
-                  className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                  className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-medium transition-colors whitespace-nowrap ${
                     stageFilter === st.id ? "bg-white text-ink" : "text-mist hover:text-ink"
                   }`}
                 >
@@ -140,7 +140,7 @@ export default function QuotationsPage() {
         </div>
       ) : viewMode === "table" ? (
         <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
-          <table className="w-full text-left text-[13.5px]">
+          <table className="stack-table w-full text-left text-[13.5px]">
             <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-6 py-3.5">Quote Ref</th>
@@ -156,12 +156,12 @@ export default function QuotationsPage() {
             <tbody className="divide-y divide-ink/5">
               {filteredQuotes.map((q) => (
                 <tr key={q.id} className="hover:bg-cream/40 transition-colors group cursor-pointer">
-                  <td className="px-6 py-4 font-medium text-ink">
+                  <td data-stack="primary" className="px-6 py-4 font-medium text-ink">
                     <Link href={`/quotations/${q.id}`} className="hover:underline">
                       {q.reference}
                     </Link>
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Customer" className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-ink">{q.customer_name}</span>
                       <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded tone-warn text-warn">
@@ -169,16 +169,22 @@ export default function QuotationsPage() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Status" className="px-6 py-4">
                     <StatusBadge status={q.status} size="sm" />
                   </td>
-                  <td className="px-6 py-4 font-semibold tabular-nums text-ink">{inr(q.grand_total)}</td>
-                  <td className="px-6 py-4">
+                  <td data-label="Amount" className="px-6 py-4 font-semibold tabular-nums text-ink">
+                    {inr(q.grand_total)}
+                  </td>
+                  <td data-label="Blended risk" className="px-6 py-4">
                     <RiskBadge score={q.blended_risk_score} requiredLevel={q.required_level} size="sm" />
                   </td>
-                  <td className="px-6 py-4 text-mist">{q.rep_name}</td>
-                  <td className="px-6 py-4 text-mist text-[12.5px]">{timeAgo(q.last_activity_at)}</td>
-                  <td className="px-6 py-4 text-right">
+                  <td data-label="Owner" className="px-6 py-4 text-mist">
+                    {q.rep_name}
+                  </td>
+                  <td data-label="Updated" className="px-6 py-4 text-mist text-[12.5px]">
+                    {timeAgo(q.last_activity_at)}
+                  </td>
+                  <td data-stack="action" className="px-6 py-4 text-right">
                     <Link
                       href={`/quotations/${q.id}`}
                       className="inline-flex items-center rounded-full border border-ink/10 px-3 py-1 text-[12px] font-medium text-ink/80 hover:bg-ink hover:text-bone transition-colors"
@@ -205,7 +211,7 @@ export default function QuotationsPage() {
             return (
               <div
                 key={col.id}
-                className={`flex flex-col rounded-[20px] p-4 border border-ink/8 ${col.bg} min-h-[460px]`}
+                className={`flex flex-col rounded-[20px] p-4 border border-ink/8 ${col.bg} sm:min-h-[460px]`}
               >
                 <div className="flex items-center justify-between pb-3 border-b border-ink/6">
                   <h3 className="text-[13.5px] font-semibold text-ink">{col.title}</h3>

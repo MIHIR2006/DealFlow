@@ -158,11 +158,11 @@ export function NegotiationPanel({
               key={m.id}
               className={`rounded-[14px] p-3 text-[12.5px] leading-relaxed ${
                 m.author_type === "CUSTOMER"
-                  ? "mr-5 border border-ink/8 bg-cream/50 text-ink"
-                  : "ml-5 tone-lilac text-lilac"
+                  ? "mr-3 border border-ink/8 bg-cream/50 text-ink sm:mr-5"
+                  : "ml-3 tone-lilac text-lilac sm:ml-5"
               }`}
             >
-              <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-mist">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2 text-[11px] text-mist">
                 <span className="font-semibold text-ink">{m.author_label}</span>
                 <span>{new Date(m.created_at).toLocaleString()}</span>
               </div>
@@ -190,7 +190,7 @@ export function NegotiationPanel({
                 setTarget(e.target.value === "ORDER" ? "ORDER" : Number(e.target.value))
               }
               disabled={!thread.negotiable}
-              className="flex-1 rounded-full border border-ink/12 bg-cream/30 px-3 py-1 text-[11.5px] font-medium focus:outline-hidden disabled:opacity-50"
+              className="min-w-0 flex-1 rounded-full border border-ink/12 bg-cream/30 px-3 py-1.5 text-[11.5px] font-medium focus:outline-hidden disabled:opacity-50 sm:py-1"
             >
               <option value="ORDER">The whole order</option>
               {lines.map((l) => (
@@ -208,7 +208,7 @@ export function NegotiationPanel({
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Reply to the customer…"
               disabled={busy || !thread.negotiable}
-              className="flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
+              className="min-w-0 flex-1 rounded-full border border-ink/15 bg-cream/30 px-4 py-2 text-[12.5px] focus:outline-hidden disabled:opacity-50"
               onKeyDown={(e) => {
                 if (e.key === "Enter") send();
               }}
@@ -217,7 +217,7 @@ export function NegotiationPanel({
               type="button"
               onClick={send}
               disabled={busy || !thread.negotiable || !draft.trim()}
-              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-bone transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-bone transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50 sm:size-8"
             >
               <Send className="size-3.5" />
             </button>

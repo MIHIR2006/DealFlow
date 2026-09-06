@@ -43,7 +43,7 @@ export default function Home() {
       <Hero />
       <Marquee />
 
-      <section className="px-6 py-24 sm:px-10 sm:py-32">
+      <section className="px-6 py-20 sm:px-10 sm:py-32">
         <div className="mx-auto max-w-[860px] text-center">
           <p className="text-[13px] font-medium text-mist">From the approval trail</p>
           <QuoteReveal
@@ -116,10 +116,10 @@ export default function Home() {
           title="Hybrid billing on one order"
           body="One-time hardware and a recurring plan live on the same quotation. They post separately: an invoice now, a schedule next. Proration is day-count."
         >
-          <div className="relative h-[280px]">
-            <BillCard className="absolute top-2 right-4 rotate-[-6deg]" title="Invoice INV-204" amount="₹4,82,000" sub="Laptop · one-time" />
-            <BillCard className="absolute top-16 left-2 rotate-[4deg]" title="Schedule" amount="₹18,000 / mo" sub="Care plan · 12 periods" />
-            <BillCard className="absolute bottom-2 right-8 rotate-[-2deg]" title="Payment" amount="PAID" sub="Bank · recorded" />
+          <div className="flex flex-col gap-3 sm:relative sm:h-[280px] sm:block">
+            <BillCard className="sm:absolute sm:top-2 sm:right-4 sm:rotate-[-6deg]" title="Invoice INV-204" amount="₹4,82,000" sub="Laptop · one-time" />
+            <BillCard className="sm:absolute sm:top-16 sm:left-2 sm:rotate-[4deg]" title="Schedule" amount="₹18,000 / mo" sub="Care plan · 12 periods" />
+            <BillCard className="sm:absolute sm:bottom-2 sm:right-8 sm:rotate-[-2deg]" title="Payment" amount="PAID" sub="Bank · recorded" />
           </div>
         </Split>
       </section>
@@ -140,7 +140,7 @@ export default function Home() {
             or a max-line spike brings Finance in. Return for revision is a
             real state, not a reject.
           </p>
-          <div className="mt-12 flex justify-center gap-16 sm:gap-24">
+          <div className="mt-12 flex justify-center gap-10 sm:gap-24">
             <Stat n="0" label="Clicks to request approval" sub="vs. a manual chain" />
             <Stat n="2" label="Levels when risk trips" sub="Manager, then Finance" />
           </div>
@@ -186,10 +186,10 @@ export default function Home() {
         >
           <SplitCard>
             <p className="text-[13px] text-mist">Approval Detail · Q-1042</p>
-            <div className="mt-5 flex items-center gap-0">
+            <div className="scroll-x mt-5 flex items-center gap-0">
               {steps.map((step, i) => (
                 <div key={step} className="flex flex-1 items-center last:flex-none">
-                  <div className="flex flex-col items-center gap-2">
+                  <div className="flex shrink-0 flex-col items-center gap-2">
                     <span
                       className={`size-2.5 rounded-full border ${
                         i === 0 ? "border-ink bg-ink" : "border-ink/30 bg-transparent"
@@ -198,7 +198,7 @@ export default function Home() {
                     <span className="whitespace-nowrap text-[11px] text-mist">{step}</span>
                   </div>
                   {i < steps.length - 1 ? (
-                    <span className="mx-2 h-px flex-1 bg-ink/15" />
+                    <span className="mx-2 h-px min-w-3 flex-1 bg-ink/15" />
                   ) : null}
                 </div>
               ))}
@@ -249,10 +249,10 @@ export default function Home() {
       </section>
 
       <section className="overflow-hidden px-6 py-24 sm:px-10">
-        <h2 className="font-serif mx-auto max-w-[920px] text-center text-[40px] leading-[1.08] tracking-[-0.02em] sm:text-[56px]">
+        <h2 className="font-serif mx-auto max-w-[920px] text-center text-[32px] leading-[1.08] tracking-[-0.02em] sm:text-[56px]">
           The trail the mockup asked for
         </h2>
-        <div className="mx-auto mt-14 flex max-w-[1200px] gap-4 overflow-x-auto pb-2">
+        <div className="scroll-x -mx-6 mt-14 flex max-w-[1200px] gap-4 px-6 pb-2 sm:mx-auto sm:px-0">
           <QuoteCard
             tone="lavender"
             quote="Submitted. Initial 12% discount on the laptop — within the Gold hardware ceiling."
@@ -280,7 +280,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="get-started" className="relative overflow-hidden px-6 py-32 sm:px-10">
+      <section id="get-started" className="relative overflow-hidden px-6 py-24 sm:px-10 sm:py-32">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,oklch(0.85_0.04_300/0.35),transparent_60%)]" />
         {pills.map((p) => (
           <span
@@ -300,7 +300,7 @@ export default function Home() {
           </span>
         ))}
         <div className="relative mx-auto max-w-[780px] text-center">
-          <h2 className="font-serif text-[40px] leading-[1.08] tracking-[-0.02em] sm:text-[56px]">
+          <h2 className="font-serif text-[32px] leading-[1.08] tracking-[-0.02em] sm:text-[56px]">
             Most sales tools stop at quote to invoice.
             <br />
             DealFlow360 decides what happens next.
@@ -339,7 +339,7 @@ export default function Home() {
             className="object-cover object-top"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/25 to-transparent" />
-          <div className="relative z-[1] grid gap-12 p-8 text-bone sm:p-12 lg:grid-cols-[1.2fr_1fr]">
+          <div className="relative z-[1] grid gap-10 p-6 text-bone sm:gap-12 sm:p-12 lg:grid-cols-[1.2fr_1fr]">
             <div>
               <p className="font-headline text-[28px] font-semibold tracking-tight">
                 DealFlow360
@@ -460,7 +460,7 @@ function Split({
   children: React.ReactNode;
 }) {
   return (
-    <div className="px-6 py-16 sm:px-12 sm:py-20">
+    <div className="min-w-0 px-6 py-14 sm:px-12 sm:py-20">
       <h3 className="font-serif max-w-[460px] text-[32px] leading-[1.12] tracking-[-0.02em] sm:text-[36px]">
         {title}
       </h3>
@@ -515,7 +515,7 @@ function BillCard({
   className?: string;
 }) {
   return (
-    <div className={`w-[240px] rounded-[18px] bg-white p-4 card-shadow ${className ?? ""}`}>
+    <div className={`w-full rounded-[18px] bg-white p-4 card-shadow sm:w-[240px] ${className ?? ""}`}>
       <p className="text-[12px] text-mist">{title}</p>
       <p className="mt-1 text-[18px] font-semibold">{amount}</p>
       <p className="mt-1 text-[12px] text-mist">{sub}</p>
@@ -526,7 +526,7 @@ function BillCard({
 function Stat({ n, label, sub }: { n: string; label: string; sub: string }) {
   return (
     <div>
-      <p className="font-serif text-[56px] leading-none tracking-[-0.04em] sm:text-[72px]">
+      <p className="font-serif text-[46px] leading-none tracking-[-0.04em] sm:text-[72px]">
         {n}
       </p>
       <p className="mt-3 text-[14px] font-medium">{label}</p>
@@ -537,18 +537,18 @@ function Stat({ n, label, sub }: { n: string; label: string; sub: string }) {
 
 function Orbit() {
   return (
-    <div className="relative mx-auto mt-8 h-[480px] max-w-[720px] sm:h-[560px]">
-      <div className="orbit-ring absolute top-1/2 left-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 sm:size-[280px]" />
-      <div className="orbit-ring absolute top-1/2 left-1/2 size-[340px] -translate-x-1/2 -translate-y-1/2 sm:size-[420px]" />
-      <div className="orbit-ring absolute top-1/2 left-1/2 size-[460px] -translate-x-1/2 -translate-y-1/2 sm:size-[560px]" />
+    <div className="relative mx-auto mt-8 h-[420px] max-w-[720px] overflow-hidden sm:h-[560px] sm:overflow-visible">
+      <div className="orbit-ring absolute top-1/2 left-1/2 size-[170px] -translate-x-1/2 -translate-y-1/2 sm:size-[280px]" />
+      <div className="orbit-ring absolute top-1/2 left-1/2 size-[260px] -translate-x-1/2 -translate-y-1/2 sm:size-[420px]" />
+      <div className="orbit-ring absolute top-1/2 left-1/2 size-[350px] -translate-x-1/2 -translate-y-1/2 sm:size-[560px]" />
       <div className="absolute top-1/2 left-1/2 z-[1] flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-ink text-[11px] font-semibold text-bone">
         Q-1042
       </div>
-      <Bubble className="top-[18%] left-[18%]" text="Love this, I'm in." who="Manager" seed="Manager" bgHex="ffdfbf" />
-      <Bubble className="top-[22%] right-[14%]" text="Need a margin note." who="Finance" seed="Finance" bgHex="c0aedd" />
-      <Bubble className="bottom-[28%] left-[10%]" text="Returned. Edit the service line." who="M. Shah" seed="MShah" bgHex="b6e3f4" />
-      <Bubble className="right-[12%] bottom-[22%]" text="Counter sent from portal." who="Acme" seed="AcmeCorp" bgHex="d1d4f9" />
-      <div className="capsule absolute bottom-8 left-1/2 z-[2] max-w-[280px] -translate-x-1/2 px-4 py-3 text-left text-[13px] text-ink">
+      <Bubble className="top-[6%] left-0 sm:top-[18%] sm:left-[18%]" text="Love this, I'm in." who="Manager" seed="Manager" bgHex="ffdfbf" />
+      <Bubble className="top-[20%] right-0 sm:top-[22%] sm:right-[14%]" text="Need a margin note." who="Finance" seed="Finance" bgHex="c0aedd" />
+      <Bubble className="bottom-[32%] left-0 sm:bottom-[28%] sm:left-[10%]" text="Returned. Edit the service line." who="M. Shah" seed="MShah" bgHex="b6e3f4" />
+      <Bubble className="right-0 bottom-[20%] sm:right-[12%] sm:bottom-[22%]" text="Counter sent from portal." who="Acme" seed="AcmeCorp" bgHex="d1d4f9" />
+      <div className="capsule absolute bottom-2 left-1/2 z-[2] w-[calc(100%-1rem)] max-w-[280px] -translate-x-1/2 px-4 py-3 text-left text-[13px] text-ink sm:bottom-8 sm:w-auto">
         We&rsquo;d like 20% on Setup Service. Can you take another look?
       </div>
     </div>
@@ -569,8 +569,8 @@ function Bubble({
   bgHex?: string;
 }) {
   return (
-    <div className={`absolute z-[1] flex items-center gap-2 ${className}`}>
-      <span className="capsule px-3 py-1.5 text-[12.5px]">{text}</span>
+    <div className={`absolute z-[1] flex max-w-[70%] items-center gap-2 sm:max-w-none ${className}`}>
+      <span className="capsule px-3 py-1.5 text-[12px] sm:text-[12.5px]">{text}</span>
       <div className="hidden size-9.5 overflow-hidden rounded-full border-2 border-white shadow-md sm:block" title={who}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -645,7 +645,7 @@ function QuoteCard({
 
   return (
     <article
-      className="flex min-h-[340px] min-w-[280px] flex-1 flex-col justify-between rounded-[24px] p-6 sm:min-w-[340px]"
+      className="flex min-h-[300px] w-[min(300px,82vw)] flex-col justify-between rounded-[24px] p-6 max-sm:shrink-0 sm:min-h-[340px] sm:w-auto sm:min-w-[340px] sm:flex-1"
       style={{ background: bg }}
     >
       <p className="font-serif text-[22px] leading-snug tracking-[-0.02em]">
