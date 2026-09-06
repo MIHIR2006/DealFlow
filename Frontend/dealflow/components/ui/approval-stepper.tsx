@@ -63,7 +63,7 @@ export function ApprovalStepper({
   }
 
   return (
-    <div className={`flex items-center overflow-x-auto py-3 ${className}`}>
+    <div className={`scroll-x flex items-center py-3 ${className}`}>
       {nodes.map((node, i) => {
         let circle = "border-ink/25 bg-transparent text-mist";
         let icon = <span className="size-2 rounded-full border border-current" />;
@@ -84,7 +84,7 @@ export function ApprovalStepper({
 
         return (
           <div key={node.id} className="flex flex-1 items-center last:flex-none">
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex shrink-0 flex-col items-center gap-2">
               <span
                 className={`flex size-7 items-center justify-center rounded-full border ${circle}`}
               >
@@ -93,7 +93,7 @@ export function ApprovalStepper({
               <span className="whitespace-nowrap text-[12.5px] text-mist">{node.label}</span>
             </div>
             {i < nodes.length - 1 ? (
-              <span className="mx-3 h-px flex-1 bg-ink/15" />
+              <span className="mx-2 h-px min-w-3 flex-1 bg-ink/15 sm:mx-3" />
             ) : null}
           </div>
         );

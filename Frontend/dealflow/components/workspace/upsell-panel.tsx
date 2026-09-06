@@ -66,7 +66,7 @@ export function UpsellPanel({
                   <button
                     type="button"
                     onClick={() => setDismissed((prev) => [...prev, item.product_id])}
-                    className="p-1 text-mist hover:text-ink"
+                    className="-m-1 p-2 text-mist hover:text-ink sm:m-0 sm:p-1"
                     title="Dismiss"
                   >
                     <X className="size-3" />
@@ -91,7 +91,7 @@ export function UpsellPanel({
                     type="button"
                     disabled={isAdded}
                     onClick={() => onAddSuggestion(item)}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium ${
+                    className={`inline-flex items-center gap-1 rounded-full px-3 py-2 text-[12px] font-medium sm:px-2.5 sm:py-1 ${
                       isAdded ? "tone-ok cursor-default" : "bg-ink text-bone hover:bg-ink/90"
                     }`}
                   >

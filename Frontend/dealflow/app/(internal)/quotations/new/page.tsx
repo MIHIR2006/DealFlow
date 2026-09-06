@@ -68,7 +68,7 @@ export default function NewQuotationPage() {
       </div>
 
       <div className="rounded-[24px] bg-white p-5 card-shadow">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[14px] font-semibold text-ink">Who is this quote for?</h2>
           <button
             type="button"
@@ -94,7 +94,7 @@ export default function NewQuotationPage() {
               type="email"
               className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-[13px] focus:outline-hidden"
             />
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {(["BRONZE", "SILVER", "GOLD"] as const).map((t) => (
                 <button
                   key={t}
@@ -132,17 +132,17 @@ export default function NewQuotationPage() {
                 key={c.id}
                 type="button"
                 onClick={() => setSelected(c.id)}
-                className={`flex w-full items-center justify-between rounded-[14px] border px-3.5 py-2.5 text-left transition-colors ${
+                className={`flex w-full items-center justify-between gap-3 rounded-[14px] border px-3.5 py-2.5 text-left transition-colors ${
                   selected === c.id
                     ? "border-ink bg-ink/5"
                     : "border-ink/8 hover:border-ink/20"
                 }`}
               >
-                <div>
+                <div className="min-w-0">
                   <p className="text-[13px] font-medium text-ink">{c.name}</p>
-                  <p className="text-[11.5px] text-mist">{c.email}</p>
+                  <p className="truncate text-[11.5px] text-mist">{c.email}</p>
                 </div>
-                <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded tone-warn text-warn">
+                <span className="shrink-0 text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded tone-warn text-warn">
                   {c.tier}
                 </span>
               </button>

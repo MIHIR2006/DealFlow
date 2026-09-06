@@ -38,10 +38,10 @@ export function Faq() {
   };
 
   return (
-    <section id="faq" className="px-6 py-24 sm:px-10">
-      <div className="mx-auto grid max-w-[1120px] gap-12 lg:grid-cols-[minmax(0,0.9fr)_1.1fr] lg:gap-20">
+    <section id="faq" className="px-6 py-20 sm:px-10 sm:py-24">
+      <div className="mx-auto grid max-w-[1120px] gap-8 sm:gap-12 lg:grid-cols-[minmax(0,0.9fr)_1.1fr] lg:gap-20">
         <div>
-          <h2 className="font-serif text-[40px] leading-[1.08] tracking-[-0.02em] sm:text-[52px]">
+          <h2 className="font-serif text-[32px] leading-[1.08] tracking-[-0.02em] sm:text-[52px]">
             Frequently Asked Questions
           </h2>
           <p className="mt-5 text-[15px] text-mist">
@@ -57,14 +57,14 @@ export function Faq() {
             return (
               <div
                 key={item.q}
-                className={`group px-6 transition-colors duration-200 ${
+                className={`group px-5 transition-colors duration-200 sm:px-6 ${
                   i < items.length - 1 ? "border-b border-ink/8" : ""
                 } ${isOpen ? "bg-cream/40" : "hover:bg-cream/20"}`}
               >
                 <button
                   type="button"
                   onClick={() => toggle(i)}
-                  className="flex w-full cursor-pointer items-center justify-between gap-6 py-5 text-left text-[15.5px] font-medium text-ink transition-colors"
+                  className="flex w-full cursor-pointer items-center justify-between gap-4 py-5 text-left text-[15px] font-medium text-ink transition-colors sm:gap-6 sm:text-[15.5px]"
                   aria-expanded={isOpen}
                 >
                   <span className={isOpen ? "font-semibold text-ink" : "text-ink/90"}>

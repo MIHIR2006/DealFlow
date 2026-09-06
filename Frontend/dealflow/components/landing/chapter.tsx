@@ -20,7 +20,7 @@ export function Chapter({
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-black/10" />
-        <h2 className="font-serif absolute inset-x-6 top-[18%] text-center text-[36px] leading-[1.08] tracking-[-0.02em] text-white text-balance sm:inset-x-16 sm:text-[52px] lg:text-[64px]">
+        <h2 className="font-serif absolute inset-x-5 top-[16%] text-center text-[30px] leading-[1.08] tracking-[-0.02em] text-white text-balance sm:inset-x-16 sm:top-[18%] sm:text-[52px] lg:text-[64px]">
           {children}
         </h2>
       </div>

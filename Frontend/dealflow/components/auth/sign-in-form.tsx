@@ -59,7 +59,7 @@ export function SignInForm({ role }: { role: RoleId | null }) {
   return (
     <form onSubmit={onSubmit} className="mx-auto w-full max-w-[420px]">
       <p className="text-[14px] text-mist">Welcome to DealFlow360</p>
-      <h1 className="font-serif mt-1 text-[32px] leading-[1.15] tracking-[-0.02em] text-ink">
+      <h1 className="font-serif mt-1 text-[28px] leading-[1.15] tracking-[-0.02em] text-ink sm:text-[32px]">
         {heading}
       </h1>
 

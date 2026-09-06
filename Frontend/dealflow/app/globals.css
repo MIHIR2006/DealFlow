@@ -216,11 +216,31 @@ body {
    content is the affordance; the scrollbar itself is noise over a pill row. */
 .scroll-x {
   overflow-x: auto;
-  scrollbar-width: none;
   overscroll-behavior-x: contain;
 }
-.scroll-x::-webkit-scrollbar {
-  display: none;
+
+/* Hide the bar on touch widths only: a phone paints an overlay scrollbar over
+   the pills, and a desktop keeps whatever chrome it had before. */
+@media (max-width: 47.999rem) {
+  .scroll-x {
+    scrollbar-width: none;
+  }
+  .scroll-x::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Filter and tab strips are the densest controls in the product. A pill sized
+   for a cursor is a poor target for a thumb, so give them a floor on touch
+   widths only — the pill keeps its own padding, shape and colours. */
+@media (max-width: 47.999rem) {
+  .scroll-x a,
+  .scroll-x button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+  }
 }
 
 /* `.stack-table` — one wide table on desktop, one card per row on a phone.
@@ -247,7 +267,11 @@ body {
     display: none;
   }
 
+  /* A flex column so a cell can be reordered for the stacked reading order
+     without moving the `<td>` away from the `<th>` it belongs to. */
   .stack-table tr {
+    display: flex;
+    flex-direction: column;
     padding: 14px 16px;
   }
 
@@ -275,6 +299,7 @@ body {
   /* The row's identity: name, reference, whatever the eye lands on first. */
   .stack-table td[data-stack="primary"] {
     display: block;
+    order: -1;
     padding-bottom: 8px;
     text-align: left;
   }
@@ -282,6 +307,7 @@ body {
   /* The row's action, sized for a thumb rather than a mouse. */
   .stack-table td[data-stack="action"] {
     display: block;
+    order: 1;
     padding-top: 12px;
     text-align: left;
   }
@@ -294,6 +320,11 @@ body {
     padding-bottom: 8px;
   }
 
+  /* A cell with nothing in it would otherwise read as a labelled blank line. */
+  .stack-table td:empty {
+    display: none;
+  }
+
   /* Loading, empty and other full-width rows keep their own breathing room. */
   .stack-table tr:has(> td[colspan]) {
     padding: 0;
@@ -302,6 +333,18 @@ body {
     display: block;
     padding: 32px 20px;
     text-align: center;
+  }
+}
+
+/* iOS Safari zooms the page in when a focused control renders text under 16px,
+   and never zooms back out — the layout is left off-centre for the rest of the
+   session. Put a floor under the rendered size on phones only; every desktop
+   size is the one the design specifies. */
+@media (max-width: 47.999rem) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 

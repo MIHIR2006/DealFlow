@@ -191,16 +191,16 @@ export default function WarehouseSplitDetailPage({
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto sm:items-center">
           <Link
             href="/fulfillment"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
+            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink sm:mt-0"
           >
             <ArrowLeft className="size-4" />
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-serif text-[22px] font-medium tracking-tight text-ink sm:text-[30px]">
                 Fulfillment Plan: {order.reference} ({order.customer_name})
               </h1>
               <StatusBadge status={order.status} size="sm" />
@@ -218,14 +218,14 @@ export default function WarehouseSplitDetailPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-2.5">
           {canDecideFulfillment && isPreview ? (
             <button
               type="button"
               disabled={busy || planLoading || !plan}
               onClick={() => setOverrideOpen(true)}
               title="Choose the warehouses yourself instead of taking the engine's split"
-              className="inline-flex items-center gap-1.5 rounded-full border border-ink/12 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-cream disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-ink/12 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-cream disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
             >
               <Sliders className="size-3.5" />
               Manual Override
@@ -242,7 +242,7 @@ export default function WarehouseSplitDetailPage({
               type="button"
               disabled={busy || planLoading || !plan}
               onClick={() => acceptSplit()}
-              className="inline-flex items-center gap-1.5 rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-bone hover:bg-ink/90 transition-colors disabled:opacity-50 sm:flex-none"
             >
               <CheckCircle className="size-3.5" />
               {busy ? "Accepting…" : "Accept Suggested Split"}
@@ -269,9 +269,9 @@ export default function WarehouseSplitDetailPage({
       ) : null}
 
       {/* Heuristic / Persisted Evaluation Callout */}
-      <div className="rounded-[20px] bg-white p-5 card-shadow flex items-start gap-3">
+      <div className="rounded-[20px] bg-white p-4 card-shadow flex items-start gap-3 sm:p-5">
         <Sparkles className="size-5 text-ok shrink-0 mt-0.5" />
-        <div className="text-[13px] text-ink">
+        <div className="min-w-0 text-[13px] text-ink">
           <p className="font-semibold">
             {isPreview
               ? "Suggested Warehouse Split (preview — not yet applied)"
@@ -302,9 +302,9 @@ export default function WarehouseSplitDetailPage({
       {/* Consolidate Remaining Backorder prompt */}
       {canConsolidate && (
         <div className="rounded-[20px] tone-warn p-4 border border-transparent flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Package className="size-5 text-warn" />
-            <div className="text-[13px]">
+          <div className="flex items-start gap-2.5">
+            <Package className="size-5 shrink-0 text-warn" />
+            <div className="min-w-0 text-[13px]">
               <span className="font-semibold text-warn">Open backorder on this order:</span>{" "}
               <span className="text-warn">
                 {openBackorders.length} line{openBackorders.length === 1 ? "" : "s"} awaiting stock.
@@ -318,7 +318,7 @@ export default function WarehouseSplitDetailPage({
               type="button"
               disabled={busy}
               onClick={consolidateBackorders}
-              className="inline-flex items-center gap-1.5 rounded-full fill-warn text-white px-3.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-full fill-warn text-white px-3.5 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50 sm:w-auto sm:py-1.5"
             >
               {busy ? "Consolidating…" : "Consolidate Remaining Backorder →"}
             </button>
@@ -335,17 +335,17 @@ export default function WarehouseSplitDetailPage({
       ) : null}
 
       {/* SHIPMENT CARDS */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">
         {[...shipmentGroups.entries()].map(([group, lines]) => (
           <div
             key={group}
-            className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between"
+            className="rounded-[24px] bg-white p-5 card-shadow flex flex-col justify-between sm:p-6"
           >
             <div>
-              <div className="flex items-center justify-between pb-3 border-b border-ink/6">
-                <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
-                  <Warehouse className="size-4 text-ink/70" />
-                  {lines[0]?.warehouse_name ?? "Warehouse"}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
+                <span className="flex min-w-0 items-center gap-2 font-semibold text-[14px] text-ink">
+                  <Warehouse className="size-4 shrink-0 text-ink/70" />
+                  <span className="truncate">{lines[0]?.warehouse_name ?? "Warehouse"}</span>
                 </span>
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tone-ok text-ok border border-transparent">
                   Shipment #{group}
@@ -359,7 +359,7 @@ export default function WarehouseSplitDetailPage({
                     className="rounded-[16px] bg-cream/40 p-3 border border-ink/6"
                   >
                     <p className="text-[13px] font-medium text-ink">{line.product_name}</p>
-                    <div className="mt-1 flex items-center justify-between text-[12px]">
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[12px]">
                       <span className="text-ink font-semibold">Qty: {line.qty} units</span>
                       <span className="text-mist font-medium">{line.warehouse_name}</span>
                     </div>
@@ -400,9 +400,9 @@ export default function WarehouseSplitDetailPage({
         ))}
 
         {/* Backorder Queue card */}
-        <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
+        <div className="rounded-[24px] bg-white p-5 card-shadow flex flex-col justify-between sm:p-6">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-ink/6">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
               <span className="flex items-center gap-2 font-semibold text-[14px] text-ink">
                 <Layers className="size-4 text-ink/70" />
                 Backorder Queue
@@ -452,7 +452,7 @@ export default function WarehouseSplitDetailPage({
         </div>
 
         {shipmentGroups.size === 0 ? (
-          <div className="rounded-[24px] bg-white p-6 card-shadow text-[13px] text-mist md:col-span-2">
+          <div className="rounded-[24px] bg-white p-5 card-shadow text-[13px] text-mist sm:col-span-2 sm:p-6">
             {planLoading
               ? "Computing the suggested split…"
               : isPreview

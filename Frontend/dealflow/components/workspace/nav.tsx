@@ -62,13 +62,6 @@ export function WorkspaceNav({ user }: { user: AuthUser }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Arriving somewhere new is the end of navigating: the sheet should not
-  // still be covering the page you just asked for.
-  useEffect(() => {
-    setNavOpen(false);
-    setMenuOpen(false);
-  }, [pathname]);
-
   function signOut() {
     clearToken();
     router.push("/");
@@ -161,7 +154,14 @@ export function WorkspaceNav({ user }: { user: AuthUser }) {
           <div className="mx-auto max-h-[calc(100svh-8rem)] max-w-[1280px] overflow-y-auto px-4 py-3 sm:px-6">
             <nav className="flex flex-wrap gap-1.5">
               {visibleLinks.map((l) => (
-                <Link key={l.href} href={l.href} className={pillClass(isOn(l.href))}>
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  // Arriving somewhere new ends the navigating; the sheet should
+                  // not still be covering the page you just asked for.
+                  onClick={() => setNavOpen(false)}
+                  className={pillClass(isOn(l.href))}
+                >
                   {l.label}
                 </Link>
               ))}

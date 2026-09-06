@@ -114,7 +114,7 @@ export default function ProductDetailPage({
 
   return (
     <div className="space-y-6 max-w-[820px]">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <Link href="/products" className="inline-flex items-center gap-1.5 text-[13px] text-mist hover:text-ink">
           <ArrowLeft className="size-3.5" /> Back to catalogue
         </Link>
@@ -157,9 +157,9 @@ export default function ProductDetailPage({
         </div>
       )}
 
-      <div className="rounded-[24px] bg-white p-6 card-shadow space-y-5">
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-ink/6">
-          <div className="flex-1">
+      <div className="rounded-[24px] bg-white p-5 card-shadow space-y-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-ink/6 sm:gap-4">
+          <div className="min-w-0 flex-1">
             {form ? (
               <input
                 type="text"
@@ -186,7 +186,7 @@ export default function ProductDetailPage({
             </p>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-1.5">
+          <div className="flex flex-wrap gap-1.5 sm:justify-end">
             {form ? (
               <>
                 <label className="flex items-center gap-1 text-[11px] font-semibold text-ink">

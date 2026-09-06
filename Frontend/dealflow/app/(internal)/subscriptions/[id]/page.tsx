@@ -136,16 +136,16 @@ export default function SubscriptionBillingDetailPage({
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto sm:items-center">
           <Link
             href="/subscriptions"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
+            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink sm:mt-0"
           >
             <ArrowLeft className="size-4" />
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-serif text-[22px] font-medium tracking-tight text-ink sm:text-[30px]">
                 Billing: {order.reference} ({order.customer_name})
               </h1>
               <StatusBadge status={order.status} size="sm" />
@@ -167,7 +167,7 @@ export default function SubscriptionBillingDetailPage({
 
       {changeResult && (
         <div
-          className={`rounded-[18px] p-4 text-[13px] font-medium flex items-center justify-between gap-3 ${
+          className={`rounded-[18px] p-4 text-[13px] font-medium flex flex-wrap items-center justify-between gap-3 ${
             changeResult.proration.kind === "CREDIT" ? "tone-warn text-warn" : "tone-ok text-ok"
           }`}
         >
@@ -189,7 +189,7 @@ export default function SubscriptionBillingDetailPage({
       )}
 
       {hasNoBillingYet ? (
-        <div className="rounded-[24px] bg-white p-8 card-shadow text-center">
+        <div className="rounded-[24px] bg-white p-6 card-shadow text-center sm:p-8">
           <Sparkles className="size-6 text-lilac mx-auto" />
           <h3 className="mt-3 text-[17px] font-semibold text-ink">
             No billing set up for this order yet
@@ -221,7 +221,7 @@ export default function SubscriptionBillingDetailPage({
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* TRACK 1: ONE-TIME INVOICES */}
-          <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-4 flex flex-col justify-between">
+          <div className="rounded-[24px] bg-white p-5 card-shadow lg:col-span-4 flex flex-col justify-between sm:p-6">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-ink/6">
                 <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
@@ -267,7 +267,7 @@ export default function SubscriptionBillingDetailPage({
           </div>
 
           {/* TRACK 2: RECURRING SUBSCRIPTION SCHEDULE */}
-          <div className="rounded-[24px] bg-white p-6 card-shadow lg:col-span-8 flex flex-col justify-between">
+          <div className="rounded-[24px] bg-white p-5 card-shadow lg:col-span-8 flex flex-col justify-between sm:p-6">
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
                 <div>
@@ -302,13 +302,13 @@ export default function SubscriptionBillingDetailPage({
                           {group.schedules.map((s) => (
                             <div
                               key={s.id}
-                              className="flex items-center justify-between p-3 rounded-[14px] bg-cream/30 border border-ink/6 text-[12.5px]"
+                              className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-[14px] bg-cream/30 border border-ink/6 text-[12.5px]"
                             >
-                              <div className="flex items-center gap-3">
-                                <span className="size-6 flex items-center justify-center rounded-full bg-white text-[11px] font-semibold text-ink">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <span className="size-6 shrink-0 flex items-center justify-center rounded-full bg-white text-[11px] font-semibold text-ink">
                                   {s.seq}
                                 </span>
-                                <div>
+                                <div className="min-w-0">
                                   <span className="font-medium text-ink">Period {s.seq}</span>
                                   <span className="text-mist ml-2 text-[11.5px]">
                                     {s.period_start} &ndash; {s.period_end}
@@ -316,7 +316,7 @@ export default function SubscriptionBillingDetailPage({
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-4">
+                              <div className="ml-auto flex items-center gap-3 sm:gap-4">
                                 <span className="font-semibold tabular-nums text-ink">
                                   {inr(s.amount)}
                                 </span>
@@ -338,7 +338,7 @@ export default function SubscriptionBillingDetailPage({
 
                         {/* Change quantity / cancel control */}
                         <div className="mt-3 pt-3 border-t border-ink/6 flex flex-wrap items-center gap-2.5">
-                          <label className="text-[11.5px] font-medium text-mist">
+                          <label className="basis-full text-[11.5px] font-medium text-mist sm:basis-auto">
                             Change quantity (0 to cancel this line):
                           </label>
                           <input
@@ -382,7 +382,7 @@ export default function SubscriptionBillingDetailPage({
 
       {/* Credit Notes */}
       {billing && billing.credit_notes.length > 0 && (
-        <div className="rounded-[24px] bg-white p-6 card-shadow">
+        <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
           <h3 className="text-[14px] font-semibold text-ink pb-3 border-b border-ink/6">
             Credit Notes
           </h3>

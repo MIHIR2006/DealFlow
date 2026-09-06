@@ -92,14 +92,14 @@ export default function DealHealthDashboardPage() {
         <button
           type="button"
           onClick={refetch}
-          className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-4 py-2 text-[12.5px] font-medium text-ink whitespace-nowrap hover:bg-cream transition-colors"
         >
           <RotateCcw className="size-3.5 text-mist" /> Rescan Pipeline
         </button>
       </div>
 
       {error && (
-        <div className="rounded-[18px] tone-bad p-4 border border-transparent flex items-center justify-between gap-3">
+        <div className="rounded-[18px] tone-bad p-4 border border-transparent flex flex-wrap items-center justify-between gap-3">
           <p className="text-[13px] text-bad font-medium">
             Failed to load deal health data: {error.message}
           </p>
@@ -123,27 +123,27 @@ export default function DealHealthDashboardPage() {
         <>
           {/* KPI Summary Strip */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Total Quotations</p>
-              <p className="mt-2 text-[28px] font-serif tracking-tight text-ink tabular-nums">
+              <p className="mt-2 text-[23px] font-serif tracking-tight sm:text-[28px] text-ink tabular-nums">
                 {health.summary.total_quotations}
               </p>
             </div>
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Pipeline Value</p>
-              <p className="mt-2 text-[28px] font-serif tracking-tight text-ink tabular-nums">
+              <p className="mt-2 text-[23px] font-serif tracking-tight sm:text-[28px] text-ink tabular-nums">
                 {inr(health.summary.pipeline_value)}
               </p>
             </div>
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Awaiting Approval</p>
-              <p className="mt-2 text-[28px] font-serif tracking-tight text-warn tabular-nums">
+              <p className="mt-2 text-[23px] font-serif tracking-tight sm:text-[28px] text-warn tabular-nums">
                 {health.summary.awaiting_approval}
               </p>
             </div>
-            <div className="rounded-[20px] bg-white p-5 card-shadow">
+            <div className="rounded-[20px] bg-white p-4 card-shadow sm:p-5">
               <p className="text-[12.5px] font-medium text-mist">Avg Blended Risk</p>
-              <p className="mt-2 text-[28px] font-serif tracking-tight text-bad tabular-nums">
+              <p className="mt-2 text-[23px] font-serif tracking-tight sm:text-[28px] text-bad tabular-nums">
                 {health.summary.avg_risk_score}%
               </p>
             </div>
@@ -152,9 +152,9 @@ export default function DealHealthDashboardPage() {
           {/* THREE FOCUSED ANOMALY STREAM CARDS */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {/* STREAM 1: STALLED DEALS */}
-            <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
+            <div className="rounded-[24px] bg-white p-5 card-shadow flex flex-col justify-between sm:p-6">
               <div>
-                <div className="flex items-center justify-between pb-3 border-b border-ink/6">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
                   <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
                     <Clock className="size-4 text-warn" />
                     Stalled Pipeline Deals
@@ -170,7 +170,7 @@ export default function DealHealthDashboardPage() {
                       key={deal.quotation_id}
                       className="rounded-[18px] tone-warn p-4 border border-transparent"
                     >
-                      <div className="flex items-start justify-between text-[12px]">
+                      <div className="flex flex-wrap items-start justify-between gap-2 text-[12px]">
                         <span className="font-semibold text-ink">{deal.reference}</span>
                         <span className="font-bold text-warn">
                           {deal.days_inactive} Days Inactive
@@ -187,7 +187,7 @@ export default function DealHealthDashboardPage() {
                         Owner: {deal.rep_name} &middot; Last activity {timeAgo(deal.last_activity_at)}
                       </p>
 
-                      <div className="mt-3 flex items-center justify-between pt-2 border-t border-transparent/60">
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-transparent/60">
                         <Link
                           href={`/quotations/${deal.quotation_id}`}
                           className="text-[12px] font-semibold text-ink hover:underline"
@@ -199,7 +199,7 @@ export default function DealHealthDashboardPage() {
                           type="button"
                           onClick={() => handleNudge(deal.quotation_id)}
                           disabled={nudged[deal.quotation_id] || nudging[deal.quotation_id]}
-                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11.5px] font-semibold transition-colors ${
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition-colors sm:py-1 ${
                             nudged[deal.quotation_id]
                               ? "fill-ok text-white cursor-default"
                               : "fill-warn"
@@ -242,9 +242,9 @@ export default function DealHealthDashboardPage() {
             </div>
 
             {/* STREAM 2: DISCOUNT ANOMALIES */}
-            <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
+            <div className="rounded-[24px] bg-white p-5 card-shadow flex flex-col justify-between sm:p-6">
               <div>
-                <div className="flex items-center justify-between pb-3 border-b border-ink/6">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
                   <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
                     <TrendingDown className="size-4 text-bad" />
                     Discount Anomalies
@@ -260,7 +260,7 @@ export default function DealHealthDashboardPage() {
                       key={a.quotation_id}
                       className="rounded-[18px] tone-bad p-4 border border-transparent"
                     >
-                      <div className="flex items-start justify-between text-[12px]">
+                      <div className="flex flex-wrap items-start justify-between gap-2 text-[12px]">
                         <span className="font-semibold text-ink">{a.reference}</span>
                         <span className="font-bold text-bad">
                           {a.discount_pct}% Discount Given
@@ -306,9 +306,9 @@ export default function DealHealthDashboardPage() {
             </div>
 
             {/* STREAM 3: DELIVERY PROMISE SLIPPAGE */}
-            <div className="rounded-[24px] bg-white p-6 card-shadow flex flex-col justify-between">
+            <div className="rounded-[24px] bg-white p-5 card-shadow flex flex-col justify-between sm:p-6">
               <div>
-                <div className="flex items-center justify-between pb-3 border-b border-ink/6">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/6">
                   <span className="text-[14px] font-semibold text-ink flex items-center gap-2">
                     <Truck className="size-4 text-lilac" />
                     Delivery Slippage Indicators
@@ -324,7 +324,7 @@ export default function DealHealthDashboardPage() {
                       key={s.order_id}
                       className="rounded-[18px] tone-lilac p-4 border border-transparent"
                     >
-                      <div className="flex items-start justify-between text-[12px]">
+                      <div className="flex flex-wrap items-start justify-between gap-2 text-[12px]">
                         <span className="font-semibold text-ink">{s.reference}</span>
                         <span className="font-bold text-lilac">
                           +{s.days_late} Days Slippage

@@ -13,11 +13,11 @@ export default async function SignInPage({
   );
 
   return (
-    <div className="grid min-h-[720px] overflow-hidden rounded-[28px] bg-white lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="flex items-center px-8 py-12 sm:px-14">
+    <div className="grid overflow-hidden rounded-[28px] bg-white lg:min-h-[720px] lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="flex items-center px-5 py-10 sm:px-14 sm:py-12">
         <SignInForm role={role} />
       </div>
-      <div className="p-3">
+      <div className="hidden p-3 lg:block">
         <AuthPanel />
       </div>
     </div>

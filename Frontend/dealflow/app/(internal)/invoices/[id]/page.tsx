@@ -106,15 +106,15 @@ export default function InvoiceDetailPage({
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto sm:items-center">
           <Link
             href="/invoices"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
+            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink sm:mt-0"
           >
             <ArrowLeft className="size-4" />
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-serif text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
                 {invoice.reference}
               </h1>
@@ -127,11 +127,11 @@ export default function InvoiceDetailPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-2.5">
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors sm:flex-none"
           >
             <Printer className="size-3.5" /> Print Invoice
           </button>
@@ -140,7 +140,7 @@ export default function InvoiceDetailPage({
             <button
               type="button"
               onClick={openPaymentModal}
-              className="inline-flex items-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-semibold text-white hover:fill-ok transition-colors"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full fill-ok px-5 py-2 text-[13px] font-semibold text-white hover:fill-ok transition-colors sm:flex-none"
             >
               <CreditCard className="size-3.5" /> Record Payment
             </button>
@@ -149,7 +149,7 @@ export default function InvoiceDetailPage({
       </div>
 
       {/* Main Invoice Card */}
-      <div className="rounded-[24px] bg-white p-8 card-shadow space-y-6 max-w-4xl mx-auto">
+      <div className="rounded-[24px] bg-white p-5 card-shadow space-y-6 max-w-4xl mx-auto sm:p-8">
         {/* Invoice Header Details */}
         <div className="flex flex-wrap justify-between gap-4 pb-6 border-b border-ink/8">
           <div>
@@ -161,7 +161,7 @@ export default function InvoiceDetailPage({
             </div>
           </div>
 
-          <div className="text-right text-[12.5px] space-y-1.5 text-mist">
+          <div className="text-[12.5px] space-y-1.5 text-mist sm:text-right">
             <div>
               <span>Issue Date:</span> <strong className="text-ink">{invoice.issue_date}</strong>
             </div>
@@ -180,7 +180,7 @@ export default function InvoiceDetailPage({
         </div>
 
         {/* Invoice Items Table */}
-        <table className="w-full text-left text-[13px]">
+        <table className="stack-table w-full text-left text-[13px]">
           <thead className="text-[11px] font-semibold text-mist border-b border-ink/8">
             <tr>
               <th className="py-2.5">Item Description</th>
@@ -198,13 +198,17 @@ export default function InvoiceDetailPage({
               </tr>
             ) : (
               invoice.lines.map((line) => (
-                <tr key={line.id}>
-                  <td className="py-3.5">
+                <tr key={line.id} className="max-md:rounded-[16px] max-md:bg-cream/30">
+                  <td data-stack="primary" className="py-3.5">
                     <p className="font-medium text-ink">{line.description}</p>
                   </td>
-                  <td className="py-3.5">{line.qty}</td>
-                  <td className="py-3.5">{inr(line.unit_price)}</td>
-                  <td className="py-3.5 text-right font-semibold text-ink">
+                  <td data-label="Qty" className="py-3.5">
+                    {line.qty}
+                  </td>
+                  <td data-label="Rate" className="py-3.5">
+                    {inr(line.unit_price)}
+                  </td>
+                  <td data-label="Amount" className="py-3.5 text-right font-semibold text-ink">
                     {inr(line.net_amount)}
                   </td>
                 </tr>
@@ -214,20 +218,20 @@ export default function InvoiceDetailPage({
         </table>
 
         {/* Invoice Totals */}
-        <div className="pt-4 border-t border-ink/8 flex flex-col items-end text-[13px] space-y-1.5">
-          <div className="flex justify-between w-64 text-mist">
+        <div className="pt-4 border-t border-ink/8 flex flex-col items-stretch text-[13px] space-y-1.5 sm:items-end">
+          <div className="flex w-full justify-between sm:w-64 text-mist">
             <span>Taxable Subtotal:</span>
             <span className="font-medium text-ink">{inr(invoice.subtotal)}</span>
           </div>
-          <div className="flex justify-between w-64 text-mist">
+          <div className="flex w-full justify-between sm:w-64 text-mist">
             <span>Tax:</span>
             <span className="font-medium text-ink">{inr(invoice.tax_total)}</span>
           </div>
-          <div className="flex justify-between w-64 text-[15px] font-bold text-ink pt-1.5 border-t border-ink/6">
+          <div className="flex w-full justify-between sm:w-64 text-[15px] font-bold text-ink pt-1.5 border-t border-ink/6">
             <span>Invoice Total:</span>
             <span className="tabular-nums">{inr(invoice.total)}</span>
           </div>
-          <div className="flex justify-between w-64 text-ok font-semibold pt-1">
+          <div className="flex w-full justify-between sm:w-64 text-ok font-semibold pt-1">
             <span>Total Paid to Date:</span>
             <span className="tabular-nums">{inr(invoice.amount_paid)}</span>
           </div>
@@ -238,7 +242,7 @@ export default function InvoiceDetailPage({
           <h3 className="text-[14px] font-semibold text-ink mb-3">Payments Applied History</h3>
 
           <div className="rounded-[16px] bg-cream/30 border border-ink/6 overflow-hidden">
-            <table className="w-full text-left text-[12.5px]">
+            <table className="stack-table w-full text-left text-[12.5px]">
               <thead className="text-[11px] text-mist border-b border-ink/6 bg-cream/50">
                 <tr>
                   <th className="px-4 py-2">Date</th>
@@ -257,10 +261,16 @@ export default function InvoiceDetailPage({
                 ) : (
                   invoice.payments.map((p) => (
                     <tr key={p.id}>
-                      <td className="px-4 py-2.5 text-mist">{p.received_at}</td>
-                      <td className="px-4 py-2.5 font-medium text-ink">{p.method}</td>
-                      <td className="px-4 py-2.5 text-mist">{p.reference || "—"}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-ok">
+                      <td data-label="Date" className="px-4 py-2.5 text-mist">
+                        {p.received_at}
+                      </td>
+                      <td data-label="Method" className="px-4 py-2.5 font-medium text-ink">
+                        {p.method}
+                      </td>
+                      <td data-label="Reference" className="px-4 py-2.5 text-mist">
+                        {p.reference || "—"}
+                      </td>
+                      <td data-label="Amount" className="px-4 py-2.5 text-right font-semibold text-ok">
                         {inr(p.amount)}
                       </td>
                     </tr>
@@ -274,8 +284,8 @@ export default function InvoiceDetailPage({
 
       {/* Record Payment Modal */}
       {paymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-[24px] bg-white p-6 shadow-2xl border border-ink/10">
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/40 backdrop-blur-xs p-3 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100svh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl border border-ink/10 sm:p-6">
             <h3 className="text-[17px] font-semibold text-ink">Record Payment</h3>
             <p className="text-[12.5px] text-mist mt-1">
               Apply customer funds against invoice {invoice.reference}. Partial payments will
@@ -337,12 +347,12 @@ export default function InvoiceDetailPage({
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-ink/8">
+            <div className="mt-6 flex flex-col gap-2.5 pt-3 border-t border-ink/8 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={() => setPaymentModalOpen(false)}
                 disabled={submitting}
-                className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink disabled:opacity-50"
+                className="rounded-full px-4 py-2.5 text-[13px] font-medium text-mist hover:text-ink disabled:opacity-50 sm:py-2"
               >
                 Cancel
               </button>
@@ -350,7 +360,7 @@ export default function InvoiceDetailPage({
                 type="button"
                 onClick={handleRecordPayment}
                 disabled={submitting || !amountInput.trim()}
-                className="rounded-full fill-ok text-white px-5 py-2 text-[13px] font-semibold hover:fill-ok disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                className="rounded-full fill-ok text-white px-5 py-2.5 text-[13px] font-semibold hover:fill-ok disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 sm:py-2"
               >
                 {submitting ? (
                   <>

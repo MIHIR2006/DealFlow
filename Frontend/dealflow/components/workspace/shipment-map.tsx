@@ -51,7 +51,12 @@ export function ShipmentMap({
   className = "",
 }: {
   lines: FulfillmentLine[];
-  destination: Destination;
+  /**
+   * The order's ship-to. The orders endpoint omits it on some orders, and the
+   * component already treats "nothing to plot" as "render nothing" — so accept
+   * its absence here rather than dereferencing it and taking the page down.
+   */
+  destination: Destination | null | undefined;
   className?: string;
 }) {
   const W = 640;
@@ -81,8 +86,8 @@ export function ShipmentMap({
       });
     }
 
-    const dLat = num(destination.latitude);
-    const dLng = num(destination.longitude);
+    const dLat = num(destination?.latitude);
+    const dLng = num(destination?.longitude);
     const originList = [...byWarehouse.values()];
 
     if (originList.length === 0 || dLat === null || dLng === null) {
@@ -104,13 +109,13 @@ export function ShipmentMap({
   }, [lines, destination]);
 
   // Nothing to plot without both ends of at least one route.
-  if (!box || !dest || origins.length === 0) return null;
+  if (!box || !dest || !destination || origins.length === 0) return null;
 
   const target = project(dest.lat, dest.lng, box, W, H, PAD);
   const plotted = origins.map((o) => ({ ...o, pt: project(o.lat, o.lng, box, W, H, PAD) }));
 
   return (
-    <div className={`rounded-[20px] bg-white p-5 card-shadow ${className}`}>
+    <div className={`rounded-[20px] bg-white p-4 card-shadow sm:p-5 ${className}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink/6 pb-3">
         <h3 className="text-[14px] font-semibold text-ink">Shipment routes</h3>
         <span className="rounded-full bg-cream px-2 py-0.5 text-[11px] text-mist">
@@ -167,11 +172,17 @@ export function ShipmentMap({
               y={o.pt.y - 13}
               textAnchor="middle"
               fill="var(--color-ink)"
-              className="text-[11px] font-semibold"
+              className="text-[17px] font-semibold sm:text-[11px]"
             >
               {o.city ?? o.name}
             </text>
-            <text x={o.pt.x} y={o.pt.y + 20} textAnchor="middle" fill="var(--color-mist)" className="text-[10px]">
+            <text
+              x={o.pt.x}
+              y={o.pt.y + 24}
+              textAnchor="middle"
+              fill="var(--color-mist)"
+              className="text-[15px] sm:text-[10px]"
+            >
               Shipment #{o.shipmentGroup} &middot; {o.units} unit{o.units === 1 ? "" : "s"}
             </text>
           </g>
@@ -192,11 +203,17 @@ export function ShipmentMap({
             y={target.y - 15}
             textAnchor="middle"
             fill="var(--color-ink)"
-            className="text-[11px] font-semibold"
+            className="text-[17px] font-semibold sm:text-[11px]"
           >
             {destination.city ?? destination.customer_name}
           </text>
-          <text x={target.x} y={target.y + 22} textAnchor="middle" fill="var(--color-mist)" className="text-[10px]">
+          <text
+            x={target.x}
+            y={target.y + 26}
+            textAnchor="middle"
+            fill="var(--color-mist)"
+            className="text-[15px] sm:text-[10px]"
+          >
             {destination.customer_name}
           </text>
         </g>
@@ -209,7 +226,7 @@ export function ShipmentMap({
         <span className="flex items-center gap-1.5">
           <MapPin className="size-3.5 text-ok" /> Delivery destination
         </span>
-        <span className="ml-auto">Schematic positions from stored coordinates.</span>
+        <span className="sm:ml-auto">Schematic positions from stored coordinates.</span>
       </div>
     </div>
   );

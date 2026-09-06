@@ -37,15 +37,20 @@ export function OverrideDialog({
     return seed;
   });
 
+  // The suggest response does not always carry demand and stock; without them
+  // there is nothing to override, and the dialog says so rather than throwing.
+  const demands = useMemo(() => plan.demands ?? [], [plan.demands]);
+
   const warehouses = useMemo(() => {
     const seen = new Map<number, string>();
-    for (const a of plan.availability) seen.set(a.warehouse_id, a.warehouse_name);
+    for (const a of plan.availability ?? []) seen.set(a.warehouse_id, a.warehouse_name);
     return [...seen.entries()].map(([id, name]) => ({ id, name }));
   }, [plan.availability]);
 
   const availableFor = (productId: number, warehouseId: number) =>
-    plan.availability.find((a) => a.product_id === productId && a.warehouse_id === warehouseId)
-      ?.available ?? 0;
+    (plan.availability ?? []).find(
+      (a) => a.product_id === productId && a.warehouse_id === warehouseId,
+    )?.available ?? 0;
 
   const qtyFor = (productId: number, warehouseId: number) => alloc[`${productId}:${warehouseId}`] ?? 0;
 
@@ -60,7 +65,7 @@ export function OverrideDialog({
   // The two things the server rejects, checked here so they are visible first.
   const problems = useMemo(() => {
     const out: string[] = [];
-    for (const d of plan.demands) {
+    for (const d of demands) {
       if (allocatedFor(d.product_id) > d.qty) {
         out.push(`${d.product_name}: allocating more than the order needs (${d.qty}).`);
       }
@@ -72,15 +77,15 @@ export function OverrideDialog({
       }
     }
     return out;
-  }, [alloc, plan.demands, warehouses]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [alloc, demands, warehouses]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Anything left unallocated becomes a backorder — stated plainly, because it
   // is a real consequence of the split being chosen here.
-  const shortfalls = plan.demands
+  const shortfalls = demands
     .map((d) => ({ name: d.product_name, short: d.qty - allocatedFor(d.product_id) }))
     .filter((s) => s.short > 0);
 
-  const overrides: FulfillmentOverride[] = plan.demands.flatMap((d) =>
+  const overrides: FulfillmentOverride[] = demands.flatMap((d) =>
     warehouses
       .map((w) => ({ product_id: d.product_id, warehouse_id: w.id, qty: qtyFor(d.product_id, w.id) }))
       .filter((o) => o.qty > 0),
@@ -89,9 +94,9 @@ export function OverrideDialog({
   const blocked = problems.length > 0 || overrides.length === 0 || busy;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-      <div className="flex max-h-[min(680px,calc(100vh-2rem))] w-full max-w-2xl flex-col rounded-[24px] border border-ink/10 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-3 border-b border-ink/8 px-6 py-5">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-xs p-3 sm:items-center sm:p-4">
+      <div className="flex max-h-[min(680px,calc(100svh-1.5rem))] w-full max-w-2xl flex-col rounded-[24px] border border-ink/10 bg-white shadow-2xl sm:max-h-[min(680px,calc(100svh-2rem))]">
+        <div className="flex items-start justify-between gap-3 border-b border-ink/8 px-5 py-4 sm:px-6 sm:py-5">
           <div>
             <h3 className="text-[17px] font-semibold text-ink">Manual override</h3>
             <p className="mt-0.5 text-[12.5px] text-mist">
@@ -109,8 +114,8 @@ export function OverrideDialog({
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          {plan.demands.map((d) => {
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
+          {demands.map((d) => {
             const allocated = allocatedFor(d.product_id);
             const over = allocated > d.qty;
             return (
@@ -158,9 +163,16 @@ export function OverrideDialog({
               </div>
             );
           })}
+
+          {demands.length === 0 ? (
+            <p className="py-6 text-center text-[12.5px] text-mist">
+              This plan did not come back with the per-product demand and stock the override
+              needs. Accept the suggested split instead.
+            </p>
+          ) : null}
         </div>
 
-        <div className="space-y-3 border-t border-ink/8 px-6 py-4">
+        <div className="space-y-3 border-t border-ink/8 px-5 py-4 sm:px-6">
           {problems.length > 0 ? (
             <div className="rounded-[14px] tone-bad p-3 text-[12px] text-bad">
               {problems.map((msg) => (
@@ -177,11 +189,11 @@ export function OverrideDialog({
             </div>
           ) : null}
 
-          <div className="flex items-center justify-end gap-2.5">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-full px-4 py-2 text-[13px] font-medium text-mist hover:text-ink"
+              className="rounded-full px-4 py-2.5 text-[13px] font-medium text-mist hover:text-ink sm:py-2"
             >
               Cancel
             </button>
@@ -189,7 +201,7 @@ export function OverrideDialog({
               type="button"
               disabled={blocked}
               onClick={() => onApply(overrides)}
-              className="rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-bone transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-bone transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40 sm:py-2"
             >
               {busy ? "Applying…" : "Apply override & reserve stock"}
             </button>

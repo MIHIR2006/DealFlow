@@ -176,15 +176,20 @@ export default function ProductsCatalogPage() {
                     <td data-label="Tax rate" className="px-6 py-4 tabular-nums text-mist">
                       {p.tax_rate_pct}%
                     </td>
+                    {/* Left genuinely empty when there is no flag, so the
+                        stacked card drops the line rather than showing a
+                        label with nothing beside it. */}
                     <td data-label="Flags" className="px-6 py-4">
-                      <div className="flex flex-wrap justify-end gap-1 md:justify-start">
-                        {p.is_promoted && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded tone-warn">Promoted</span>
-                        )}
-                        {p.is_subscription && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-ink/5 text-mist">Subscription</span>
-                        )}
-                      </div>
+                      {p.is_promoted || p.is_subscription ? (
+                        <div className="flex flex-wrap justify-end gap-1 md:justify-start">
+                          {p.is_promoted && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded tone-warn">Promoted</span>
+                          )}
+                          {p.is_subscription && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-ink/5 text-mist">Subscription</span>
+                          )}
+                        </div>
+                      ) : null}
                     </td>
                     <td data-label="Status" className="px-6 py-4 text-right">
                       <span

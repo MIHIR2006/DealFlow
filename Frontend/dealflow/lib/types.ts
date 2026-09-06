@@ -499,9 +499,12 @@ export interface FulfillmentPlan {
   backorders: Backorder[];
   fully_fulfilled: boolean;
 
-  /** Demand and stock, so a reviewer can propose a split instead of only accepting one. */
-  demands: ProductDemand[];
-  availability: StockAvailability[];
+  /**
+   * Demand and stock, so a reviewer can propose a split instead of only
+   * accepting one. Older backends omit both, so neither is guaranteed.
+   */
+  demands?: ProductDemand[];
+  availability?: StockAvailability[];
   destination: Destination;
 }
 

@@ -246,10 +246,10 @@ export default function QuotationBuilderPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto sm:items-center">
           <Link
             href="/quotations"
-            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
+            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink sm:mt-0"
           >
             <ArrowLeft className="size-4" />
           </Link>
@@ -373,7 +373,7 @@ export default function QuotationBuilderPage({
                       type="button"
                       disabled={busy || (product.is_subscription && plans.length === 0)}
                       onClick={() => addProduct(product)}
-                      className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium text-bone hover:bg-ink/90 transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded-full bg-ink px-3 py-2 text-[11px] font-medium text-bone hover:bg-ink/90 transition-colors disabled:opacity-50 sm:px-2.5 sm:py-1"
                     >
                       <Plus className="size-3" /> Add
                     </button>
@@ -451,7 +451,7 @@ export default function QuotationBuilderPage({
                           type="button"
                           onClick={() => removeLine(line.id)}
                           disabled={busy}
-                          className="text-mist hover:text-bad transition-colors p-1"
+                          className="-m-1 p-2 text-mist transition-colors hover:text-bad sm:m-0 sm:p-1"
                           title="Remove line item"
                         >
                           <Trash2 className="size-3.5" />
@@ -465,7 +465,7 @@ export default function QuotationBuilderPage({
                           type="button"
                           disabled={!isDraft || busy}
                           onClick={() => changeQty(line.id, line.qty, line.line_discount_pct, -1)}
-                          className="text-mist hover:text-ink transition-colors disabled:opacity-30"
+                          className="-m-2 p-2 text-mist transition-colors hover:text-ink disabled:opacity-30 sm:m-0 sm:p-0"
                         >
                           <Minus className="size-3" />
                         </button>
@@ -474,7 +474,7 @@ export default function QuotationBuilderPage({
                           type="button"
                           disabled={!isDraft || busy}
                           onClick={() => changeQty(line.id, line.qty, line.line_discount_pct, 1)}
-                          className="text-mist hover:text-ink transition-colors disabled:opacity-30"
+                          className="-m-2 p-2 text-mist transition-colors hover:text-ink disabled:opacity-30 sm:m-0 sm:p-0"
                         >
                           <Plus className="size-3" />
                         </button>
