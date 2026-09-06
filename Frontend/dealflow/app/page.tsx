@@ -8,6 +8,7 @@ import { Faq } from "@/components/landing/faq";
 import { RiskCard } from "@/components/landing/risk-card";
 import { SmoothScroll } from "@/components/landing/smooth-scroll";
 import { Preloader } from "@/components/landing/preloader";
+import { EmailCapture } from "@/components/landing/email-capture";
 
 const marquee = [
   "Laptop 12% / 15% · OK",
@@ -407,26 +408,21 @@ function Hero() {
             resolved by the system itself — before a manager ever opens the deal.
           </p> */}
 
-          <div className="mt-6 sm:mt-8 flex w-full max-w-[500px] flex-col items-center gap-2 sm:flex-row sm:rounded-full sm:border sm:border-white/25 sm:bg-white/15 sm:p-1 sm:backdrop-blur-xl sm:shadow-2xl">
-            <input
-              type="email"
-              placeholder="Enter your work email"
-              className="w-full rounded-full border border-white/20 bg-white/15 px-4 py-2 text-[13.5px] text-white placeholder-white/60 backdrop-blur-md focus:outline-none sm:border-none sm:bg-transparent sm:py-2 sm:backdrop-blur-none"
-            />
-            <div className="flex w-full shrink-0 flex-col gap-1.5 sm:w-auto sm:flex-row sm:items-center">
-              <a
-                href="/register"
-                className="inline-flex items-center justify-center rounded-full bg-bone px-4 py-2 text-[13.5px] font-medium text-ink shadow-lg transition-all hover:bg-white whitespace-nowrap"
-              >
-                Open workspace
-              </a>
-              <a
-                href="#engine"
-                className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/10 px-4 py-2 text-[13.5px] font-medium text-white backdrop-blur-md transition-all hover:bg-white/20 whitespace-nowrap"
-              >
-                Launch demo
-              </a>
-            </div>
+          <EmailCapture />
+
+          <div className="mt-4 flex w-full max-w-[500px] shrink-0 flex-col gap-1.5 sm:mt-5 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
+            <a
+              href="/register"
+              className="inline-flex items-center justify-center rounded-full bg-bone px-4 py-2 text-[13.5px] font-medium text-ink shadow-lg transition-all hover:bg-white whitespace-nowrap"
+            >
+              Open workspace
+            </a>
+            <a
+              href="#engine"
+              className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/10 px-4 py-2 text-[13.5px] font-medium text-white backdrop-blur-md transition-all hover:bg-white/20 whitespace-nowrap"
+            >
+              Launch demo
+            </a>
           </div>
         </div>
       </div>

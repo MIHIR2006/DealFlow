@@ -14,6 +14,9 @@
 /coverage
 /.shots
 
+# locally-captured lead emails — never commit user PII
+/data
+
 # next.js
 /.next/
 /out/
