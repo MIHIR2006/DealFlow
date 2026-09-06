@@ -1,19 +1,21 @@
-# Stage 1: Install dependencies
+# Stage 1: Install dependencies (Keep Bun for speed)
 FROM oven/bun:1.2-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
-# Stage 2: Build the application
-FROM oven/bun:1.2-alpine AS builder
+# Stage 2: Build the application (Switch to Node.js for stability)
+FROM node:20-alpine AS builder
 WORKDIR /app
+# Copy the installed node_modules from the Bun stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Disable telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun run build
+# Use standard npm/Node to build so Turbopack doesn't crash
+RUN npm run build
 
-# Stage 3: Production runner
+# Stage 3: Production runner (Node.js)
 FROM node:20-alpine AS runner
 WORKDIR /app
 

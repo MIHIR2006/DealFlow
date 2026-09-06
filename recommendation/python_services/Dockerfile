@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source
 COPY . .
 
-EXPOSE 8002
+EXPOSE 8001 8002
 
-CMD ["uvicorn", "ai_salesman.main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["python", "runner.py"]
