@@ -108,6 +108,7 @@ import type {
   UpsellRule,
   User,
   Warehouse,
+  ProductStock,
 } from "@/lib/types";
 
 function qs(params: Record<string, string | number | boolean | null | undefined>): string {
@@ -172,6 +173,9 @@ export const ConfigApi = {
     api<ApprovalPolicy>(`/v1/governance/policies/${id}`, { method: "PUT", body: JSON.stringify(input) }),
 
   listWarehouses: () => api<Page<Warehouse>>("/v1/warehouses"),
+
+  /** Availability for the whole catalogue in one read. */
+  listStock: () => api<Page<ProductStock>>("/v1/stock"),
   createWarehouse: (
     name: string,
     shippingCostWeight?: string,
@@ -239,6 +243,10 @@ export const QuotationApi = {
       body: JSON.stringify({ body, line_id: lineId ?? null }),
     }),
   send: (id: number) => api<SendQuotationResponse>(`/v1/quotations/${id}/send`, { method: "POST" }),
+
+  /** Email the link the customer already has, without minting a new token. */
+  resendLink: (id: number) =>
+    api<{ emailed_to: string }>(`/v1/quotations/${id}/resend-link`, { method: "POST" }),
   confirm: (id: number, promisedDate?: string) =>
     api<SalesOrder>(`/v1/quotations/${id}/confirm`, {
       method: "POST",

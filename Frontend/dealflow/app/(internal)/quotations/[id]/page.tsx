@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Lock,
   Info,
+  Mail,
 } from "lucide-react";
 import { LifecycleBar, type DealStage } from "@/components/workspace/lifecycle-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -25,7 +26,15 @@ import { UpsellPanel } from "@/components/workspace/upsell-panel";
 import { NegotiationPanel } from "@/components/workspace/negotiation-panel";
 import { QuotationApi, ConfigApi, ApiError } from "@/lib/api";
 import { inr } from "@/lib/hooks";
-import type { Quotation, Product, Category, SubscriptionPlan, Upsell, Page } from "@/lib/types";
+import type {
+  Quotation,
+  Product,
+  Category,
+  SubscriptionPlan,
+  Upsell,
+  Page,
+  ProductStock,
+} from "@/lib/types";
 
 const STAGE_BY_STATUS: Record<string, DealStage> = {
   DRAFT: "PRICING",
@@ -54,6 +63,9 @@ export default function QuotationBuilderPage({
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  // Availability per product, keyed by product id. A rep needs to see what
+  // they can actually promise before they put it in a cart.
+  const [stock, setStock] = useState<Record<number, ProductStock>>({});
   const [upsells, setUpsells] = useState<Upsell[]>([]);
   const [upsellLoading, setUpsellLoading] = useState(false);
 
@@ -61,6 +73,12 @@ export default function QuotationBuilderPage({
   const [categoryTab, setCategoryTab] = useState("ALL");
   const [portalLink, setPortalLink] = useState<string | null>(null);
   const [portalCopied, setPortalCopied] = useState(false);
+  // Whether the backend also emailed the link, and to whom. It only claims
+  // this when a send actually happened, so the rep is never told a customer
+  // was mailed on a deployment with no SMTP configured.
+  const [emailedTo, setEmailedTo] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendNote, setResendNote] = useState<string | null>(null);
 
   const [discountDraft, setDiscountDraft] = useState<Record<number, string>>({});
   const [orderDiscountDraft, setOrderDiscountDraft] = useState("");
@@ -97,6 +115,13 @@ export default function QuotationBuilderPage({
     ConfigApi.listProducts({ limit: 100 }).then((p: Page<Product>) => setProducts(p.data));
     ConfigApi.listCategories().then((p: Page<Category>) => setCategories(p.data));
     ConfigApi.listPlans().then((p: Page<SubscriptionPlan>) => setPlans(p.data));
+    ConfigApi.listStock()
+      .then((p: Page<ProductStock>) =>
+        setStock(Object.fromEntries(p.data.map((r) => [r.product_id, r]))),
+      )
+      // Stock is an aid, not a gate — the split engine re-reads it under lock
+      // at fulfilment. A failure here must not stop a rep pricing a deal.
+      .catch(() => setStock({}));
   }, [loadQuote, loadUpsells]);
 
   const isDraft = quote?.status === "DRAFT";
@@ -117,6 +142,14 @@ export default function QuotationBuilderPage({
     }
   }
 
+  const refreshStock = useCallback(() => {
+    ConfigApi.listStock()
+      .then((p: Page<ProductStock>) =>
+        setStock(Object.fromEntries(p.data.map((r) => [r.product_id, r]))),
+      )
+      .catch(() => {});
+  }, []);
+
   async function addProduct(product: Product, planId?: number) {
     const q = await withErrorHandling(() =>
       QuotationApi.addLine(id, {
@@ -126,7 +159,10 @@ export default function QuotationBuilderPage({
         plan_id: product.is_subscription ? planId ?? plans[0]?.id ?? null : null,
       }),
     );
-    if (q) loadUpsells();
+    if (q) {
+      loadUpsells();
+      refreshStock();
+    }
   }
 
   async function changeQty(lineId: number, currentQty: string, currentDiscount: string, delta: number) {
@@ -168,11 +204,29 @@ export default function QuotationBuilderPage({
     try {
       const res = await QuotationApi.send(id);
       setPortalLink(`${window.location.origin}/portal/q/${res.token}`);
+      setEmailedTo(res.emailed_to ?? null);
       await loadQuote();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not generate a portal link.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Re-send the live link. Deliberately not "send again": sending mints a new
+  // token and revokes this one, which would break the link already in the
+  // customer's inbox.
+  async function emailPortalLink() {
+    setResending(true);
+    setResendNote(null);
+    setError(null);
+    try {
+      const res = await QuotationApi.resendLink(id);
+      setResendNote(`Link emailed to ${res.emailed_to}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not email that link.");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -293,6 +347,18 @@ export default function QuotationBuilderPage({
               )}
             </button>
           ) : null}
+          {canSendToPortal ? (
+            <button
+              type="button"
+              onClick={emailPortalLink}
+              disabled={busy || resending}
+              title="Email this link to the customer without changing it"
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Mail className="size-3.5 text-mist" />
+              {resending ? "Sending…" : "Email to customer"}
+            </button>
+          ) : null}
           {portalLink ? (
             <Link
               href={portalLink.replace(window.location.origin, "")}
@@ -312,6 +378,22 @@ export default function QuotationBuilderPage({
         <p className="flex items-center gap-1.5 text-[12px] text-mist">
           <Info className="size-3.5 shrink-0" />
           {sendBlockedReason}
+        </p>
+      ) : null}
+
+      {resendNote ? (
+        <p className="flex items-center gap-1.5 text-[12px] text-ok">
+          <CheckCircle className="size-3.5 shrink-0" />
+          {resendNote} The link itself is unchanged.
+        </p>
+      ) : null}
+
+      {portalLink ? (
+        <p className="flex items-center gap-1.5 text-[12px] text-mist">
+          <Info className="size-3.5 shrink-0" />
+          {emailedTo
+            ? `Link emailed to ${emailedTo}. You can also copy it and share it yourself.`
+            : "Link ready to copy. Outbound email is not configured on this deployment, so send it to the customer yourself."}
         </p>
       ) : null}
 
@@ -363,6 +445,39 @@ export default function QuotationBuilderPage({
                     </span>
                   </div>
                   <p className="text-[11px] text-mist mt-1">SKU {product.sku}</p>
+
+                  {/* What the rep can actually promise. A subscription has no
+                      inventory, so it says so rather than reporting zero. */}
+                  {(() => {
+                    const st = stock[product.id];
+                    if (product.is_subscription) {
+                      return (
+                        <p className="mt-1.5 text-[11px] text-mist">No stock held &middot; billed per period</p>
+                      );
+                    }
+                    if (!st) {
+                      return <p className="mt-1.5 text-[11px] text-mist">Stock not tracked</p>;
+                    }
+                    const tone =
+                      st.available <= 0
+                        ? "tone-bad text-bad"
+                        : st.available <= 5
+                          ? "tone-warn text-warn"
+                          : "tone-ok text-ok";
+                    return (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${tone}`}
+                          title={`${st.on_hand} on hand, ${st.on_hand - st.available} reserved by other orders`}
+                        >
+                          {st.available > 0 ? `${st.available} in stock` : "Out of stock"}
+                        </span>
+                        <span className="text-[10.5px] text-mist">
+                          across {st.warehouse_count} warehouse{st.warehouse_count === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-ink/6">
                     <span className="text-[12px] font-semibold tabular-nums text-ink">

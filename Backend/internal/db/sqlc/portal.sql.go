@@ -122,6 +122,26 @@ func (q *Queries) CreatePortalToken(ctx context.Context, arg CreatePortalTokenPa
 	return i, err
 }
 
+const getActivePortalToken = `-- name: GetActivePortalToken :one
+SELECT token
+FROM portal_tokens
+WHERE quotation_id = $1
+  AND revoked_at IS NULL
+  AND expires_at > now()
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+// The live link for a quotation, if it still has one. Outbound customer email
+// carries the portal URL, and minting a fresh token to send a notification
+// would revoke the link the customer may already have open.
+func (q *Queries) GetActivePortalToken(ctx context.Context, quotationID int64) (string, error) {
+	row := q.db.QueryRow(ctx, getActivePortalToken, quotationID)
+	var token string
+	err := row.Scan(&token)
+	return token, err
+}
+
 const getQuotationByPortalToken = `-- name: GetQuotationByPortalToken :one
 
 SELECT

@@ -171,6 +171,22 @@ func (s *ConfigService) ListProducts(ctx context.Context, categoryID *int64, cur
 	return rows, nil
 }
 
+// ProductStock reports how much of each catalogue product is available across
+// every active warehouse.
+//
+// The quotation builder shows this beside each product so a rep can see what
+// they are actually able to promise. It is a summary for a human, not the
+// split engine's input: fulfilment re-reads stock under row locks at the
+// moment an order is accepted, because anything read here is already stale by
+// the time it is on screen.
+func (s *ConfigService) ProductStock(ctx context.Context) ([]sqlcgen.ProductStockSummaryRow, error) {
+	rows, err := s.q.ProductStockSummary(ctx)
+	if err != nil {
+		return nil, apierr.Internal(fmt.Errorf("product stock summary: %w", err))
+	}
+	return rows, nil
+}
+
 // GetProduct returns one catalogue entry.
 func (s *ConfigService) GetProduct(ctx context.Context, id int64) (sqlcgen.GetProductRow, error) {
 	row, err := s.q.GetProduct(ctx, id)

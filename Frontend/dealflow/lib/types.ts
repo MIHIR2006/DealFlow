@@ -260,6 +260,8 @@ export interface SendQuotationResponse {
   token: string;
   portal_url: string;
   expires_at: string;
+  /** Address the link was emailed to; absent when SMTP is not configured. */
+  emailed_to?: string;
 }
 
 // --- Negotiation, staff side ------------------------------------------------
@@ -362,6 +364,14 @@ export interface GovernanceSnapshot {
   tiers: DiscountTier[];
   category_ceilings: CategoryCeiling[];
   policies: ApprovalPolicy[];
+}
+
+/** Availability for one product, summed across active warehouses. */
+export interface ProductStock {
+  product_id: number;
+  available: number;
+  on_hand: number;
+  warehouse_count: number;
 }
 
 export interface Warehouse {

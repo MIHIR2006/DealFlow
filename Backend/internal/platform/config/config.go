@@ -70,6 +70,24 @@ type Config struct {
 	RecommendationURL     string
 	RecommendationTimeout time.Duration
 
+	// SMTP is the account transactional mail is sent through. Every field
+	// empty disables mail entirely: the platform must run with no credentials
+	// at all, exactly as it runs with the recommendation engine absent.
+	SMTPHost string
+	SMTPPort string
+	SMTPUser string
+	SMTPPass string
+	SMTPFrom string
+
+	// SalesInboxEmail receives landing-page enquiries. Empty falls back to
+	// SMTPFrom, so a configured mailer always has somewhere to deliver a lead.
+	SalesInboxEmail string
+
+	// AppBaseURL is the public origin of the frontend. Customer email carries
+	// portal links, and a link is only useful if it is absolute — the backend
+	// cannot infer this from a request it is not handling.
+	AppBaseURL string
+
 	// PprofAddr, when set, starts the profiling endpoints on a second
 	// listener. It is deliberately separate from the API port so profiles
 	// are never reachable from the internet by accident, and refuses to
@@ -79,6 +97,24 @@ type Config struct {
 
 // IsProd reports whether the service is running in production mode.
 func (c Config) IsProd() bool { return c.Env == EnvProd }
+
+// MailEnabled reports whether enough SMTP configuration is present to send.
+func (c Config) MailEnabled() bool {
+	return c.SMTPHost != "" && c.SMTPPort != "" && c.SMTPUser != "" && c.SMTPPass != ""
+}
+
+// SalesInbox is where landing-page enquiries go, falling back to the sending
+// account so a configured mailer never drops a lead for want of one more
+// variable.
+func (c Config) SalesInbox() string {
+	if c.SalesInboxEmail != "" {
+		return c.SalesInboxEmail
+	}
+	if c.SMTPFrom != "" {
+		return c.SMTPFrom
+	}
+	return c.SMTPUser
+}
 
 // Load reads configuration from the environment, applies defaults, and
 // validates. It returns every problem it finds at once so a misconfigured
@@ -113,6 +149,14 @@ func Load() (Config, error) {
 
 		RecommendationURL:     strings.TrimRight(str("RECOMMENDATION_URL", ""), "/"),
 		RecommendationTimeout: dur("RECOMMENDATION_TIMEOUT", 1500*time.Millisecond),
+
+		SMTPHost:        str("SMTP_HOST", ""),
+		SMTPPort:        str("SMTP_PORT", ""),
+		SMTPUser:        str("SMTP_USER", ""),
+		SMTPPass:        str("SMTP_PASS", ""),
+		SMTPFrom:        str("SMTP_FROM", ""),
+		SalesInboxEmail: str("SALES_INBOX_EMAIL", ""),
+		AppBaseURL:      strings.TrimRight(str("APP_BASE_URL", "http://localhost:3000"), "/"),
 	}
 
 	var problems []string

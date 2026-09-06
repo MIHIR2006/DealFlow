@@ -26,6 +26,15 @@ type ApprovalService struct {
 	pool  *pgxpool.Pool
 	q     *sqlcgen.Queries
 	quote *QuoteService
+
+	// notify tells a customer when terms they proposed are settled. Optional.
+	notify *Notifier
+}
+
+// WithNotifier attaches outbound mail. Optional; nil disables it.
+func (s *ApprovalService) WithNotifier(n *Notifier) *ApprovalService {
+	s.notify = n
+	return s
 }
 
 // NewApprovalService builds the service.
@@ -193,6 +202,14 @@ func (s *ApprovalService) Decide(ctx context.Context, actor auth.Principal, appr
 	if err != nil {
 		return Quotation{}, err
 	}
+
+	// A customer whose counter-offer put this round in motion is waiting on an
+	// answer. Only a settled round has one: a step approved with others still
+	// pending has decided nothing yet.
+	if outcome := counterOfferOutcomeFor(quotationStatus); outcome != "" {
+		s.notify.CounterOfferDecided(ctx, header, outcome)
+	}
+
 	return s.quote.Recalculate(ctx, actor, header)
 }
 

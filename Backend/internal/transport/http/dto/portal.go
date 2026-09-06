@@ -124,6 +124,10 @@ type SendQuotationResponse struct {
 	Token     string `json:"token"`
 	PortalURL string `json:"portal_url"`
 	ExpiresAt string `json:"expires_at"`
+	// EmailedTo is the address the link was sent to, empty when outbound mail
+	// is not configured. The rep's screen says "emailed and copied" or just
+	// "copied" on the strength of this rather than assuming.
+	EmailedTo string `json:"emailed_to,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

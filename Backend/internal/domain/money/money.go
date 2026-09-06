@@ -7,7 +7,11 @@
 // this codebase.
 package money
 
-import "github.com/shopspring/decimal"
+import (
+	"strings"
+
+	"github.com/shopspring/decimal"
+)
 
 // AmountScale is the number of decimal places money is stored and displayed
 // with. It matches NUMERIC(14,2) in Postgres.
@@ -97,4 +101,48 @@ func SafeDiv(a, b decimal.Decimal) decimal.Decimal {
 		return decimal.Zero
 	}
 	return a.Div(b)
+}
+
+// FormatINR renders an amount the way the interface does — Indian digit
+// grouping, two decimals only when they are not zero.
+//
+// It lives here rather than in the mailer because a customer reading an email
+// and the same customer reading the portal must see the same number in the
+// same shape. ₹4,45,096 in one place and ₹445096.00 in the other reads as two
+// different figures to the person paying it.
+func FormatINR(d decimal.Decimal) string {
+	neg := d.IsNegative()
+	if neg {
+		d = d.Neg()
+	}
+
+	rounded := RoundAmount(d)
+	whole := rounded.Truncate(0).String()
+	frac := rounded.Sub(rounded.Truncate(0))
+
+	// Indian grouping: the last three digits, then pairs.
+	var grouped string
+	if len(whole) <= 3 {
+		grouped = whole
+	} else {
+		head, tail := whole[:len(whole)-3], whole[len(whole)-3:]
+		var parts []string
+		for len(head) > 2 {
+			parts = append([]string{head[len(head)-2:]}, parts...)
+			head = head[:len(head)-2]
+		}
+		if head != "" {
+			parts = append([]string{head}, parts...)
+		}
+		grouped = strings.Join(parts, ",") + "," + tail
+	}
+
+	out := "₹" + grouped
+	if !frac.IsZero() {
+		out += frac.StringFixed(2)[1:] // drop the leading "0"
+	}
+	if neg {
+		out = "-" + out
+	}
+	return out
 }

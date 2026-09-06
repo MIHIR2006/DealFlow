@@ -70,3 +70,21 @@ UPDATE stock_items
 SET on_hand = on_hand + sqlc.arg('qty')::bigint, updated_at = now()
 WHERE warehouse_id = sqlc.arg('warehouse_id') AND product_id = sqlc.arg('product_id')
 RETURNING *;
+
+-- Availability per product across every active warehouse, for the rep's
+-- catalogue. It is a summary, not the split engine's input: the builder needs
+-- to show "6 available, across 2 warehouses" beside a product so a rep does
+-- not promise stock that is not there, and nothing more.
+--
+-- Subscription lines never ship, so a product with no stock rows at all is
+-- absent here rather than reported as zero — the caller distinguishes the two.
+-- name: ProductStockSummary :many
+SELECT si.product_id,
+       SUM(si.on_hand - si.reserved)::bigint AS available,
+       SUM(si.on_hand)::bigint               AS on_hand,
+       COUNT(*)::bigint                      AS warehouse_count
+FROM stock_items si
+JOIN warehouses w ON w.id = si.warehouse_id
+WHERE w.is_active
+GROUP BY si.product_id
+ORDER BY si.product_id;

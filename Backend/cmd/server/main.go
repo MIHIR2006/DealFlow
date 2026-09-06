@@ -87,6 +87,19 @@ func main() {
 		serveErr <- nil
 	}()
 
+	// Say once, at boot, whether outbound mail is on. Logging it per send
+	// would be noise, and finding out from a customer that no email ever left
+	// the building is worse than a line in the startup log.
+	if cfg.MailEnabled() {
+		log.Info("outbound mail enabled",
+			slog.String("smtp_host", cfg.SMTPHost),
+			slog.String("sales_inbox", cfg.SalesInbox()),
+			slog.String("app_base_url", cfg.AppBaseURL))
+	} else {
+		log.Warn("outbound mail disabled: SMTP is not configured; portal links, " +
+			"decision notices, invoices and landing-page enquiries will not be emailed")
+	}
+
 	// Profiling runs on its own loopback-only listener, so a CPU or heap
 	// profile can be taken from a running process without ever exposing
 	// those endpoints on the API port.

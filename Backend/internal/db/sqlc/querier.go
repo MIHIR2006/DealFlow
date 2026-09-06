@@ -58,6 +58,10 @@ type Querier interface {
 	// Quotations with no activity for longer than the configured window.
 	// Covered by idx_quotations_stalled.
 	FindStalledQuotations(ctx context.Context, arg FindStalledQuotationsParams) ([]FindStalledQuotationsRow, error)
+	// The live link for a quotation, if it still has one. Outbound customer email
+	// carries the portal URL, and minting a fresh token to send a notification
+	// would revoke the link the customer may already have open.
+	GetActivePortalToken(ctx context.Context, quotationID int64) (string, error)
 	GetApprovalRequest(ctx context.Context, id int64) (GetApprovalRequestRow, error)
 	GetCurrentBillingPeriod(ctx context.Context, quotationLineID int64) (BillingSchedule, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
@@ -170,6 +174,14 @@ type Querier interface {
 	// Headline figures for the dashboard, in one pass rather than one query per
 	// tile.
 	PipelineSummary(ctx context.Context, arg PipelineSummaryParams) (PipelineSummaryRow, error)
+	// Availability per product across every active warehouse, for the rep's
+	// catalogue. It is a summary, not the split engine's input: the builder needs
+	// to show "6 available, across 2 warehouses" beside a product so a rep does
+	// not promise stock that is not there, and nothing more.
+	//
+	// Subscription lines never ship, so a product with no stock rows at all is
+	// absent here rather than reported as zero — the caller distinguishes the two.
+	ProductStockSummary(ctx context.Context) ([]ProductStockSummaryRow, error)
 	QuotationStatusCounts(ctx context.Context) ([]QuotationStatusCountsRow, error)
 	// Recomputes paid amount and status from the payments actually recorded, so
 	// the invoice can never drift from its ledger. A short payment lands on

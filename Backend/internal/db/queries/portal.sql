@@ -75,3 +75,15 @@ LEFT JOIN quotation_lines l ON l.id = m.quotation_line_id
 LEFT JOIN products p ON p.id = l.product_id
 WHERE m.quotation_id = $1
 ORDER BY m.created_at;
+
+-- The live link for a quotation, if it still has one. Outbound customer email
+-- carries the portal URL, and minting a fresh token to send a notification
+-- would revoke the link the customer may already have open.
+-- name: GetActivePortalToken :one
+SELECT token
+FROM portal_tokens
+WHERE quotation_id = $1
+  AND revoked_at IS NULL
+  AND expires_at > now()
+ORDER BY created_at DESC
+LIMIT 1;

@@ -216,6 +216,57 @@ func (q *Queries) LockStockForProducts(ctx context.Context, dollar_1 []int64) ([
 	return items, nil
 }
 
+const productStockSummary = `-- name: ProductStockSummary :many
+SELECT si.product_id,
+       SUM(si.on_hand - si.reserved)::bigint AS available,
+       SUM(si.on_hand)::bigint               AS on_hand,
+       COUNT(*)::bigint                      AS warehouse_count
+FROM stock_items si
+JOIN warehouses w ON w.id = si.warehouse_id
+WHERE w.is_active
+GROUP BY si.product_id
+ORDER BY si.product_id
+`
+
+type ProductStockSummaryRow struct {
+	ProductID      int64
+	Available      int64
+	OnHand         int64
+	WarehouseCount int64
+}
+
+// Availability per product across every active warehouse, for the rep's
+// catalogue. It is a summary, not the split engine's input: the builder needs
+// to show "6 available, across 2 warehouses" beside a product so a rep does
+// not promise stock that is not there, and nothing more.
+//
+// Subscription lines never ship, so a product with no stock rows at all is
+// absent here rather than reported as zero — the caller distinguishes the two.
+func (q *Queries) ProductStockSummary(ctx context.Context) ([]ProductStockSummaryRow, error) {
+	rows, err := q.db.Query(ctx, productStockSummary)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProductStockSummaryRow{}
+	for rows.Next() {
+		var i ProductStockSummaryRow
+		if err := rows.Scan(
+			&i.ProductID,
+			&i.Available,
+			&i.OnHand,
+			&i.WarehouseCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reserveStock = `-- name: ReserveStock :one
 UPDATE stock_items
 SET reserved   = reserved + $1::bigint,

@@ -29,6 +29,15 @@ type BillingService struct {
 	pool  *pgxpool.Pool
 	q     *sqlcgen.Queries
 	quote *QuoteService
+
+	// notify tells a customer an invoice was raised. Optional.
+	notify *Notifier
+}
+
+// WithNotifier attaches outbound mail. Optional; nil disables it.
+func (s *BillingService) WithNotifier(n *Notifier) *BillingService {
+	s.notify = n
+	return s
 }
 
 // NewBillingService builds the service.
@@ -162,7 +171,25 @@ func (s *BillingService) Generate(ctx context.Context, actor auth.Principal, ord
 		fmt.Sprintf("%d one-time line(s), %d recurring line(s)", len(oneTime), len(recurring)),
 		map[string]any{"sales_order_id": order.ID})
 
-	return s.view(ctx, order.ID)
+	view, err := s.view(ctx, order.ID)
+	if err != nil {
+		return BillingView{}, err
+	}
+
+	// Tell the customer the invoice exists. The recurring schedule is named but
+	// never folded into the amount due — blending the two tracks in an email
+	// would undo the thing the billing engine is careful about.
+	if header, err := s.quote.Header(ctx, order.QuotationID); err == nil {
+		for _, inv := range view.Invoices {
+			if inv.Kind != "ONETIME" {
+				continue
+			}
+			s.notify.InvoiceRaised(ctx, header, order.Reference, inv, len(view.Schedules))
+			break
+		}
+	}
+
+	return view, nil
 }
 
 func createOneTimeInvoice(ctx context.Context, qtx *sqlcgen.Queries, orderID int64, lines []sqlcgen.ListQuotationLinesRow) error {

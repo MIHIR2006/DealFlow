@@ -48,6 +48,17 @@ type Product struct {
 	IsActive       bool   `json:"is_active"`
 }
 
+// ProductStock is availability for one product, summed across active
+// warehouses. A product with no stock rows at all is simply absent from the
+// listing rather than reported as zero — a subscription has no inventory, and
+// saying "0 available" about one would be wrong rather than merely unhelpful.
+type ProductStock struct {
+	ProductID      int64 `json:"product_id"`
+	Available      int64 `json:"available"`
+	OnHand         int64 `json:"on_hand"`
+	WarehouseCount int64 `json:"warehouse_count"`
+}
+
 // ProductRequest creates or replaces a catalogue entry.
 type ProductRequest struct {
 	CategoryID     int64  `json:"category_id"  binding:"required,gt=0"`

@@ -550,6 +550,55 @@ keep working.
 
 ---
 
+## 9b — Outbound email
+
+Mail is optional in exactly the way the two Python services are. With SMTP
+unset the backend logs `outbound mail disabled` at boot, every notification is
+a no-op, and nothing else changes — the rep still gets a link to copy, the
+nudge is still recorded, the invoice is still raised.
+
+Set these to turn it on (Gmail needs an App Password, never the account one):
+
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=you@example.com
+SMTP_PASS=your-app-password
+SMTP_FROM=you@example.com
+SALES_INBOX_EMAIL=sales@example.com
+APP_BASE_URL=http://localhost:3100
+```
+
+Six things send. Each fires after its operation has already committed, in the
+background, and a refused SMTP handshake never fails the request or rolls
+anything back.
+
+| Trigger | Goes to | Carries |
+| :--- | :--- | :--- |
+| Landing page enquiry | `SALES_INBOX_EMAIL` | The prospect's address, with `Reply-To` set so a rep can just hit reply |
+| Landing page enquiry | The prospect | An acknowledgement, so the form is not a black hole |
+| **Send to customer portal** | The customer | The portal link itself — the rep no longer copies it into a mail client |
+| Counter-offer approved or rejected | The customer | The decision, and the link they already hold |
+| Invoice generated | The customer | Invoice reference, amount due, due date, and a note that any subscription bills separately |
+| Nudge from Deal Health | The customer | The chase, only where a live portal link still exists |
+
+Two things worth pointing at on camera:
+
+- **`Send to customer portal` now says which address it reached.** The response
+  carries `emailed_to`, and the screen says *"Link emailed to buyer@acme.test"*
+  — or, with mail off, *"Outbound email is not configured… send it yourself"*.
+  It never claims a send that did not happen.
+- **A notification never mints a token.** It reads the live one, so an email
+  about a decision cannot revoke the link from the email before it.
+
+Customer-facing copy carries no cost, margin, risk score, ceiling or approver
+name — the same rule the portal document follows.
+
+To watch the mail without an SMTP account, point it at a local sink:
+`SMTP_HOST=127.0.0.1 SMTP_PORT=1025` with any user/pass.
+
+---
+
 ## 10 — Deal health, reports, role dashboards
 
 Everything else in the system reacts to something a person did. This part goes

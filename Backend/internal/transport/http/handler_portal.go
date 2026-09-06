@@ -18,6 +18,23 @@ type portalHandler struct {
 }
 
 // send generates a portal link for an approved quotation. Staff-side.
+// resendLink mails the existing link again without minting a new one.
+func (h portalHandler) resendLink(c *gin.Context) {
+	actor, quotationID, err := actorAndID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	to, err := h.svc.ResendLink(c.Request.Context(), actor, quotationID)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	OK(c, http.StatusAccepted, gin.H{"emailed_to": to})
+}
+
 func (h portalHandler) send(c *gin.Context) {
 	actor, quotationID, err := actorAndID(c)
 	if err != nil {
@@ -25,7 +42,7 @@ func (h portalHandler) send(c *gin.Context) {
 		return
 	}
 
-	token, err := h.svc.Send(c.Request.Context(), actor, quotationID, h.ttl)
+	token, emailedTo, err := h.svc.Send(c.Request.Context(), actor, quotationID, h.ttl)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -35,6 +52,7 @@ func (h portalHandler) send(c *gin.Context) {
 		Token:     token,
 		PortalURL: "/api/v1/portal/q/" + token,
 		ExpiresAt: iso(time.Now().Add(h.ttl)),
+		EmailedTo: emailedTo,
 	})
 }
 

@@ -30,6 +30,15 @@ type AnalyticsService struct {
 	q     *sqlcgen.Queries
 	cfg   config.Config
 	quote *QuoteService
+
+	// notify sends the chase a nudge represents. Optional.
+	notify *Notifier
+}
+
+// WithNotifier attaches outbound mail. Optional; nil disables it.
+func (s *AnalyticsService) WithNotifier(n *Notifier) *AnalyticsService {
+	s.notify = n
+	return s
 }
 
 // NewAnalyticsService builds the service.
@@ -187,6 +196,10 @@ func (s *AnalyticsService) Nudge(ctx context.Context, actor auth.Principal, quot
 	s.quote.Audit(ctx, quotationID, "NUDGED", actor, note, map[string]any{
 		"previous_activity_at": quote.Header.LastActivityAt.UTC().Format(time.RFC3339),
 	})
+
+	// The chase itself used to happen entirely outside this system. Now the
+	// nudge sends it, where the customer still holds a live portal link.
+	s.notify.QuotationNudged(ctx, quote.Header)
 
 	return s.quote.Get(ctx, actor, quotationID)
 }

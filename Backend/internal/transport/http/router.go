@@ -13,6 +13,7 @@ import (
 	"dealflow360/backend/internal/platform/auth"
 	"dealflow360/backend/internal/platform/cache"
 	"dealflow360/backend/internal/platform/config"
+	"dealflow360/backend/internal/platform/mailer"
 	"dealflow360/backend/internal/platform/recommender"
 	"dealflow360/backend/internal/service"
 	"dealflow360/backend/internal/transport/http/middleware"
@@ -103,6 +104,15 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		cfgCache = cache.New(queries)
 	}
 
+	// Outbound mail. Unconfigured SMTP yields a disabled mailer whose sends
+	// are no-ops, so every notification below is optional in exactly the way
+	// the recommendation engine and the AI assistant are.
+	mailSender := mailer.New(mailer.Config{
+		Host: d.Config.SMTPHost, Port: d.Config.SMTPPort,
+		User: d.Config.SMTPUser, Pass: d.Config.SMTPPass, From: d.Config.SMTPFrom,
+	}, d.Log)
+	notifier := service.NewNotifier(mailSender, d.Config.AppBaseURL, queries)
+
 	authed := middleware.RequireAuth(signer, Fail)
 	staff := middleware.RequireRole(Fail,
 		auth.RoleAdmin, auth.RoleManager, auth.RoleFinance, auth.RoleRep)
@@ -131,6 +141,12 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		authGroup.POST("/login", ah.login)
 		authGroup.GET("/me", authed, ah.me)
 	}
+
+	// Landing-page enquiries. Unauthenticated by necessity — the person
+	// filling it in does not have an account yet — so it sits behind the same
+	// rate limiter as login.
+	lh := leadHandler{notify: notifier, cfg: d.Config}
+	rg.POST("/leads", middleware.RateLimit(20, 5, Fail), lh.capture)
 
 	// The customer-facing tree. Separate group, separate middleware, and no
 	// handler below it ever accepts a quotation id from the request.
@@ -162,6 +178,11 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 		cfg.PUT("/governance/categories/:id/ceiling", governanceRole, ch.setCategoryCeiling)
 		cfg.POST("/governance/policies", governanceRole, ch.createPolicy)
 		cfg.PUT("/governance/policies/:id", governanceRole, ch.updatePolicy)
+
+		// Availability for the whole catalogue, which the quotation builder
+		// shows beside each product. Readable by any signed-in staff member;
+		// changing stock is still administrator-only.
+		cfg.GET("/stock", staff, ch.productStock)
 
 		cfg.GET("/warehouses", staff, ch.listWarehouses)
 		cfg.POST("/warehouses", adminOnly, ch.createWarehouse)
@@ -211,10 +232,14 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	// The customer-facing tree. Separate group, separate middleware, and no
 	// handler below it takes a quotation id: the token names exactly one.
 	ph := portalHandler{
-		svc: service.NewPortalService(d.Pool, queries, quoteSvc),
+		svc: service.NewPortalService(d.Pool, queries, quoteSvc).WithNotifier(notifier),
 		ttl: d.Config.PortalTokenTTL,
 	}
 	quotes.POST("/:id/send", ph.send)
+	// Re-send the live link. Separate from /send because sending mints a new
+	// token and revokes the old one, which is the wrong thing to do to a
+	// customer who simply missed the first email.
+	quotes.POST("/:id/resend-link", ph.resendLink)
 
 	// The internal half of the negotiation. The customer's portal writes to
 	// the same thread from the other side; without these the conversation
@@ -238,7 +263,7 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	// Approve and reject are terminal for a step; return sends the quotation
 	// back to draft so the rep can revise and resubmit, which the audit trail
 	// records alongside the original submission.
-	ah2 := approvalHandler{svc: service.NewApprovalService(d.Pool, queries, quoteSvc)}
+	ah2 := approvalHandler{svc: service.NewApprovalService(d.Pool, queries, quoteSvc).WithNotifier(notifier)}
 	approvals := rg.Group("/approvals", authed,
 		middleware.RequireRole(Fail, auth.RoleAdmin, auth.RoleManager, auth.RoleFinance))
 	{
@@ -267,7 +292,7 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	// one-time lines, and a schedule of future periods for the recurring
 	// ones. Money-moving endpoints accept an Idempotency-Key.
 	bh := billingHandler{
-		svc:  service.NewBillingService(d.Pool, queries, quoteSvc),
+		svc:  service.NewBillingService(d.Pool, queries, quoteSvc).WithNotifier(notifier),
 		idem: service.NewIdempotency(queries),
 	}
 	orders.POST("/:id/invoices", bh.generate)
@@ -284,7 +309,7 @@ func registerRoutes(rg *gin.RouterGroup, d Deps) {
 	// Phase 9 → portal negotiation routes
 	// Analytics. Every figure is an aggregate computed in Postgres, so the
 	// dashboard costs the same at twenty quotations as at twenty thousand.
-	anh := analyticsHandler{svc: service.NewAnalyticsService(d.Pool, queries, d.Config, quoteSvc)}
+	anh := analyticsHandler{svc: service.NewAnalyticsService(d.Pool, queries, d.Config, quoteSvc).WithNotifier(notifier)}
 	quotes.POST("/:id/nudge", anh.nudge)
 
 	analytics := rg.Group("", authed,

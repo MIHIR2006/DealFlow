@@ -497,6 +497,27 @@ func (h configHandler) setStock(c *gin.Context) {
 	OK(c, http.StatusOK, stockDTO(row))
 }
 
+// productStock serves availability for the whole catalogue in one read, so the
+// builder does not fan out a request per product.
+func (h configHandler) productStock(c *gin.Context) {
+	rows, err := h.svc.ProductStock(c.Request.Context())
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+
+	out := make([]dto.ProductStock, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dto.ProductStock{
+			ProductID:      r.ProductID,
+			Available:      r.Available,
+			OnHand:         r.OnHand,
+			WarehouseCount: r.WarehouseCount,
+		})
+	}
+	OK(c, http.StatusOK, gin.H{"data": out})
+}
+
 func (h configHandler) addStock(c *gin.Context) {
 	warehouseID, err := pathInt64(c, "id")
 	if err != nil {

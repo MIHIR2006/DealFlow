@@ -33,9 +33,19 @@ type PortalService struct {
 	pool  *pgxpool.Pool
 	q     *sqlcgen.Queries
 	quote *QuoteService
+
+	// notify carries portal links and decisions to the customer. Optional.
+	notify *Notifier
 }
 
 // NewPortalService builds the service.
+// WithNotifier attaches outbound mail. A nil notifier is supported and every
+// send becomes a no-op, so the portal works with no SMTP configured.
+func (s *PortalService) WithNotifier(n *Notifier) *PortalService {
+	s.notify = n
+	return s
+}
+
 func NewPortalService(pool *pgxpool.Pool, q *sqlcgen.Queries, quote *QuoteService) *PortalService {
 	return &PortalService{pool: pool, q: q, quote: quote}
 }
@@ -67,16 +77,19 @@ const DefaultPortalTTL = 14 * 24 * time.Hour
 //
 // Any earlier link for this quotation is revoked, so a token that has been
 // forwarded on cannot be used to reopen a negotiation after the terms moved.
-func (s *PortalService) Send(ctx context.Context, actor auth.Principal, quotationID int64, ttl time.Duration) (string, error) {
+// Send mints a portal link and, where mail is configured, delivers it. The
+// second return is the address it reached, empty when nothing was sent.
+func (s *PortalService) Send(ctx context.Context, actor auth.Principal, quotationID int64, ttl time.Duration) (string, string, error) {
+	var emailedTo string
 	quote, err := s.quote.Get(ctx, actor, quotationID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	switch quote.Header.Status {
 	case "APPROVED", "SENT", "UNDER_NEGOTIATION":
 	default:
-		return "", apierr.Conflict(fmt.Sprintf(
+		return "", "", apierr.Conflict(fmt.Sprintf(
 			"a quotation in %s cannot be sent; it must clear approval first",
 			quote.Header.Status))
 	}
@@ -89,7 +102,7 @@ func (s *PortalService) Send(ctx context.Context, actor auth.Principal, quotatio
 
 	token, err := auth.NewPortalToken()
 	if err != nil {
-		return "", apierr.Internal(err)
+		return "", "", apierr.Internal(err)
 	}
 
 	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -116,13 +129,55 @@ func (s *PortalService) Send(ctx context.Context, actor auth.Principal, quotatio
 		return nil
 	})
 	if err != nil {
-		return "", apierr.Internal(err)
+		return "", "", apierr.Internal(err)
 	}
 
 	s.quote.Audit(ctx, quotationID, "SENT", actor,
 		"Quotation sent to the customer portal", nil)
 
-	return token, nil
+	// The rep pressed "send"; actually sending it is this line. Without it the
+	// button only ever put a link on their clipboard.
+	if header, err := s.quote.Header(ctx, quotationID); err == nil {
+		if s.notify.QuotationSent(ctx, header, token) {
+			emailedTo = header.CustomerEmail
+		}
+	}
+
+	return token, emailedTo, nil
+}
+
+// ResendLink emails the customer the link they already have.
+//
+// Deliberately not Send: Send mints a token and revokes the previous one, so
+// using it to chase an unread email would break the link sitting in the
+// customer's inbox. This re-sends the live token and mints nothing.
+func (s *PortalService) ResendLink(ctx context.Context, actor auth.Principal, quotationID int64) (string, error) {
+	quote, err := s.quote.Get(ctx, actor, quotationID)
+	if err != nil {
+		return "", err
+	}
+
+	token, err := s.q.GetActivePortalToken(ctx, quotationID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", apierr.Conflict(
+				"this quotation has no live portal link; send it to the customer portal first")
+		}
+		return "", apierr.Internal(fmt.Errorf("get active portal token: %w", err))
+	}
+
+	if quote.Header.CustomerEmail == "" {
+		return "", apierr.Validation("this customer has no email address on file")
+	}
+	if !s.notify.QuotationSent(ctx, quote.Header, token) {
+		return "", apierr.Conflict(
+			"outbound email is not configured on this deployment; copy the link and send it yourself")
+	}
+
+	s.quote.Audit(ctx, quotationID, "PORTAL_LINK_RESENT", actor,
+		fmt.Sprintf("Portal link re-sent to %s", quote.Header.CustomerEmail), nil)
+
+	return quote.Header.CustomerEmail, nil
 }
 
 // View returns the quotation a token names, with its negotiation history.
