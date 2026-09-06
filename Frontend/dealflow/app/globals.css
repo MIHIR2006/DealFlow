@@ -155,6 +155,9 @@
 
 html {
   scroll-behavior: smooth;
+  /* Keep the type scale we designed when a phone is rotated. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -197,6 +200,109 @@ body {
 
 .card-shadow {
   box-shadow: var(--shadow-card);
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive primitives
+   ---------------------------------------------------------------------------
+   These carry the desktop design down to phone widths. Nothing here fires at
+   or above the `md` breakpoint, so the desktop rendering is byte-for-byte the
+   one that was signed off. They live outside `@layer` on purpose: unlayered
+   rules outrank Tailwind's utility layer, so a stacked cell can drop the
+   `px-6 py-4` it carries for the table layout without `!important`.
+--------------------------------------------------------------------------- */
+
+/* A horizontal strip of pills/tabs that scrolls rather than wraps. The clipped
+   content is the affordance; the scrollbar itself is noise over a pill row. */
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+/* `.stack-table` — one wide table on desktop, one card per row on a phone.
+   Same markup, same data, no duplicated component. Cells opt in to a role:
+
+     data-label="Status"     key/value line, label on the left
+     data-stack="primary"    the row's title block, full width, no label
+     data-stack="action"     the row's action, full width at the foot
+     colspan                 loading / empty row, kept centred
+
+   A cell with no `data-label` and no role renders as a plain full-width line. */
+@media (max-width: 47.999rem) {
+  .stack-table,
+  .stack-table thead,
+  .stack-table tbody,
+  .stack-table tr,
+  .stack-table th,
+  .stack-table td {
+    display: block;
+    width: auto;
+  }
+
+  .stack-table thead {
+    display: none;
+  }
+
+  .stack-table tr {
+    padding: 14px 16px;
+  }
+
+  .stack-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    padding: 3px 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .stack-table td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--color-mist);
+  }
+
+  /* The row's identity: name, reference, whatever the eye lands on first. */
+  .stack-table td[data-stack="primary"] {
+    display: block;
+    padding-bottom: 8px;
+    text-align: left;
+  }
+
+  /* The row's action, sized for a thumb rather than a mouse. */
+  .stack-table td[data-stack="action"] {
+    display: block;
+    padding-top: 12px;
+    text-align: left;
+  }
+  .stack-table td[data-stack="action"] > a,
+  .stack-table td[data-stack="action"] > button {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* Loading, empty and other full-width rows keep their own breathing room. */
+  .stack-table tr:has(> td[colspan]) {
+    padding: 0;
+  }
+  .stack-table td[colspan] {
+    display: block;
+    padding: 32px 20px;
+    text-align: center;
+  }
 }
 
 .tone-ok {

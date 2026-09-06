@@ -68,7 +68,7 @@ export default function GovernanceConfigPage() {
         </div>
 
         {snapshot && (
-          <div className="rounded-[16px] bg-white px-4 py-2.5 card-shadow text-right">
+          <div className="rounded-[16px] bg-white px-4 py-2.5 card-shadow text-left sm:text-right">
             <p className="text-[10.5px] font-semibold uppercase text-mist">Engine Config Snapshot</p>
             <p className="text-[13px] font-semibold text-ink tabular-nums">v{snapshot.version}</p>
             <p className="text-[11px] text-mist">{timeAgo(snapshot.loaded_at)}</p>
@@ -92,7 +92,7 @@ export default function GovernanceConfigPage() {
       {snapshot && (
         <>
           {/* MATRIX 1: CUSTOMER TIER CEILINGS */}
-          <div className="rounded-[24px] bg-white p-6 card-shadow">
+          <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
             <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
               1. Customer Tier Discount Ceilings
             </h2>
@@ -110,7 +110,7 @@ export default function GovernanceConfigPage() {
           </div>
 
           {/* MATRIX 2: CATEGORY SPECIFIC CEILINGS */}
-          <div className="rounded-[24px] bg-white p-6 card-shadow">
+          <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
             <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
               2. Product Category Discount Ceilings
             </h2>
@@ -135,7 +135,7 @@ export default function GovernanceConfigPage() {
           </div>
 
           {/* MATRIX 3: APPROVAL POLICIES */}
-          <div className="rounded-[24px] bg-white p-6 card-shadow">
+          <div className="rounded-[24px] bg-white p-5 card-shadow sm:p-6">
             <h2 className="text-[16px] font-semibold text-ink pb-2 border-b border-ink/6">
               3. Automated Approval Routing Policies
             </h2>
@@ -145,7 +145,7 @@ export default function GovernanceConfigPage() {
             </p>
 
             <div className="mt-4 overflow-hidden rounded-[18px] border border-ink/6">
-              <table className="w-full text-left text-[12.5px]">
+              <table className="stack-table w-full text-left text-[12.5px]">
                 <thead className="text-[11px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
                   <tr>
                     <th className="px-4 py-2.5">Policy</th>
@@ -284,8 +284,10 @@ function PolicyRow({
 
   return (
     <tr className="hover:bg-cream/30 transition-colors">
-      <td className="px-4 py-3 font-medium text-ink">{policy.name}</td>
-      <td className="px-4 py-3">
+      <td data-stack="primary" className="px-4 py-3 font-medium text-ink">
+        {policy.name}
+      </td>
+      <td data-label="Min blended %" className="px-4 py-3">
         <input
           type="text"
           inputMode="decimal"
@@ -296,7 +298,7 @@ function PolicyRow({
           className="w-20 rounded-md border border-ink/15 bg-white px-2 py-1 text-center tabular-nums disabled:bg-ink/[0.03] disabled:text-mist"
         />
       </td>
-      <td className="px-4 py-3">
+      <td data-label="Min line overage (pt)" className="px-4 py-3">
         <input
           type="text"
           inputMode="decimal"
@@ -307,7 +309,7 @@ function PolicyRow({
           className="w-20 rounded-md border border-ink/15 bg-white px-2 py-1 text-center tabular-nums disabled:bg-ink/[0.03] disabled:text-mist"
         />
       </td>
-      <td className="px-4 py-3 text-center">
+      <td data-label="Manager" className="px-4 py-3 text-center">
         <input
           type="checkbox"
           disabled={!canEdit}
@@ -315,7 +317,7 @@ function PolicyRow({
           onChange={(e) => commitPatch({ requires_manager: e.target.checked })}
         />
       </td>
-      <td className="px-4 py-3 text-center">
+      <td data-label="Finance" className="px-4 py-3 text-center">
         <input
           type="checkbox"
           disabled={!canEdit}
@@ -323,8 +325,8 @@ function PolicyRow({
           onChange={(e) => commitPatch({ requires_finance: e.target.checked })}
         />
       </td>
-      <td className="px-4 py-3 text-center">
-        <div className="flex items-center justify-center gap-2">
+      <td data-label="Active" className="px-4 py-3 text-center">
+        <div className="flex items-center justify-end gap-2 md:justify-center">
           <input
             type="checkbox"
             disabled={!canEdit}
@@ -373,7 +375,7 @@ function AddPolicyForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 flex flex-wrap items-end gap-3 rounded-[16px] bg-cream/40 p-4 border border-ink/6">
+    <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 items-end gap-3 rounded-[16px] bg-cream/40 p-4 border border-ink/6 sm:flex sm:flex-wrap">
       <div>
         <label className="text-[11px] font-medium text-mist">Policy name</label>
         <input
@@ -381,7 +383,7 @@ function AddPolicyForm({ onCreated }: { onCreated: () => void }) {
           required
           value={form.name}
           onChange={(e) => set("name", e.target.value)}
-          className="mt-1 w-48 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px]"
+          className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] sm:w-48"
         />
       </div>
       <div>
@@ -391,7 +393,7 @@ function AddPolicyForm({ onCreated }: { onCreated: () => void }) {
           inputMode="decimal"
           value={form.min_blended}
           onChange={(e) => set("min_blended", e.target.value)}
-          className="mt-1 w-24 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] tabular-nums"
+          className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] tabular-nums sm:w-24"
         />
       </div>
       <div>
@@ -401,21 +403,23 @@ function AddPolicyForm({ onCreated }: { onCreated: () => void }) {
           inputMode="decimal"
           value={form.min_line_overage}
           onChange={(e) => set("min_line_overage", e.target.value)}
-          className="mt-1 w-24 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] tabular-nums"
+          className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] tabular-nums sm:w-24"
         />
       </div>
-      <label className="flex items-center gap-1.5 text-[12px] text-ink pb-1.5">
-        <input type="checkbox" checked={form.requires_manager} onChange={(e) => set("requires_manager", e.target.checked)} />
-        Manager
-      </label>
-      <label className="flex items-center gap-1.5 text-[12px] text-ink pb-1.5">
-        <input type="checkbox" checked={form.requires_finance} onChange={(e) => set("requires_finance", e.target.checked)} />
-        Finance
-      </label>
+      <div className="flex flex-wrap items-center gap-4 sm:contents">
+        <label className="flex items-center gap-1.5 text-[12px] text-ink sm:pb-1.5">
+          <input type="checkbox" checked={form.requires_manager} onChange={(e) => set("requires_manager", e.target.checked)} />
+          Manager
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px] text-ink sm:pb-1.5">
+          <input type="checkbox" checked={form.requires_finance} onChange={(e) => set("requires_finance", e.target.checked)} />
+          Finance
+        </label>
+      </div>
       <button
         type="submit"
         disabled={saving}
-        className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-bone hover:bg-ink/90 disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-ink px-4 py-2.5 text-[12px] font-semibold text-bone hover:bg-ink/90 disabled:opacity-50 sm:w-auto sm:py-2"
       >
         <Plus className="size-3.5" /> {saving ? "Adding..." : "Add policy"}
       </button>

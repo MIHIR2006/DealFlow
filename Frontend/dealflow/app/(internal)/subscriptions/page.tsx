@@ -41,7 +41,7 @@ export default function SubscriptionsPage() {
 
       {/* Orders Table */}
       <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
-        <table className="w-full text-left text-[13.5px]">
+        <table className="stack-table w-full text-left text-[13.5px]">
           <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
             <tr>
               <th className="px-6 py-3.5">Order #</th>
@@ -76,22 +76,24 @@ export default function SubscriptionsPage() {
                   key={order.id}
                   className="hover:bg-cream/40 transition-colors group cursor-pointer"
                 >
-                  <td className="px-6 py-4 font-medium text-ink">
+                  <td data-stack="primary" className="px-6 py-4 font-medium text-ink">
                     <Link href={`/subscriptions/${order.id}`} className="hover:underline">
                       {order.reference}
                     </Link>
                   </td>
-                  <td className="px-6 py-4 font-medium text-ink">{order.customer_name}</td>
-                  <td className="px-6 py-4 text-mist text-[12.5px]">
+                  <td data-label="Customer" className="px-6 py-4 font-medium text-ink">
+                    {order.customer_name}
+                  </td>
+                  <td data-label="Quotation" className="px-6 py-4 text-mist text-[12.5px]">
                     {order.quotation_reference}
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Status" className="px-6 py-4">
                     <StatusBadge status={order.status} size="sm" />
                   </td>
-                  <td className="px-6 py-4 text-mist text-[12.5px]">
+                  <td data-label="Promised / confirmed" className="px-6 py-4 text-mist text-[12.5px]">
                     {order.promised_date ?? order.confirmed_at ?? "—"}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td data-stack="action" className="px-6 py-4 text-right">
                     <Link
                       href={`/subscriptions/${order.id}`}
                       className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors whitespace-nowrap cursor-pointer"

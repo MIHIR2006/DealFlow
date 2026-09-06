@@ -86,16 +86,18 @@ function StatCard({
 
   const body = (
     <>
-      <div className="flex items-center justify-between">
-        <p className="text-[12.5px] font-medium text-mist">{label}</p>
-        {Icon ? <Icon className={`size-4 ${toneClass} group-hover:scale-110 transition-transform`} /> : null}
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 text-[12.5px] font-medium text-mist">{label}</p>
+        {Icon ? (
+          <Icon className={`mt-0.5 size-4 shrink-0 ${toneClass} group-hover:scale-110 transition-transform`} />
+        ) : null}
       </div>
       <p className={`mt-2 text-[30px] font-serif tracking-tight tabular-nums ${toneClass}`}>{value}</p>
       {hint ? <p className={`mt-1 text-[12px] font-medium ${hintClass}`}>{hint}</p> : null}
     </>
   );
 
-  const className = "group rounded-[20px] bg-white p-5 card-shadow transition-colors";
+  const className = "group rounded-[20px] bg-white p-4 card-shadow transition-colors sm:p-5";
   return href ? (
     <Link href={href} className={`${className} hover:bg-white/60`}>
       {body}
@@ -250,11 +252,11 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {isApprover ? (
             <Link
               href="/approvals"
-              className="rounded-full border border-ink/10 bg-white/80 px-4 py-2 text-[13px] font-medium text-ink hover:bg-white transition-colors"
+              className="rounded-full border border-ink/10 bg-white/80 px-4 py-2 text-[13px] font-medium text-ink whitespace-nowrap hover:bg-white transition-colors"
             >
               Approvals ({myApprovals})
             </Link>
@@ -262,7 +264,7 @@ export default function DashboardPage() {
           {isAdmin ? (
             <Link
               href="/reports"
-              className="rounded-full border border-ink/10 bg-white/80 px-4 py-2 text-[13px] font-medium text-ink hover:bg-white transition-colors"
+              className="rounded-full border border-ink/10 bg-white/80 px-4 py-2 text-[13px] font-medium text-ink whitespace-nowrap hover:bg-white transition-colors"
             >
               Platform analytics
             </Link>
@@ -271,7 +273,7 @@ export default function DashboardPage() {
           {!isFinance ? (
             <Link
               href="/quotations/new"
-              className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bone shadow-sm hover:bg-ink/90 transition-all"
+              className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bone whitespace-nowrap shadow-sm hover:bg-ink/90 transition-all"
             >
               <Plus className="size-4" />
               New Quotation
@@ -595,7 +597,7 @@ export default function DashboardPage() {
       {isAdmin ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Panel title="Backend setup" subtitle="Everything the pricing engine reads.">
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {[
                 { href: "/products", label: "Products & price lists", icon: Package },
                 { href: "/products", label: "Warehouses & stock", icon: Warehouse },
@@ -671,8 +673,8 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+        <div className="md:overflow-x-auto">
+          <table className="stack-table w-full text-left text-[13px]">
             <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
               <tr>
                 <th className="px-6 py-3">Quote Ref</th>
@@ -700,12 +702,12 @@ export default function DashboardPage() {
               ) : (
                 quotes.map((q) => (
                   <tr key={q.id} className="hover:bg-cream/40 transition-colors cursor-pointer group">
-                    <td className="px-6 py-3.5 font-medium text-ink">
+                    <td data-stack="primary" className="px-6 py-3.5 font-medium text-ink">
                       <Link href={`/quotations/${q.id}`} className="hover:underline">
                         {q.reference}
                       </Link>
                     </td>
-                    <td className="px-6 py-3.5">
+                    <td data-label="Customer" className="px-6 py-3.5">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-ink">{q.customer_name}</span>
                         <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded tone-warn text-warn">
@@ -713,20 +715,24 @@ export default function DashboardPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-3.5">
+                    <td data-label="Status" className="px-6 py-3.5">
                       <StatusBadge status={q.status} size="sm" />
                     </td>
-                    <td className="px-6 py-3.5 tabular-nums font-semibold text-ink">
+                    <td data-label="Grand total" className="px-6 py-3.5 tabular-nums font-semibold text-ink">
                       {inr(q.grand_total)}
                     </td>
-                    <td className="px-6 py-3.5">
+                    <td data-label="Blended risk" className="px-6 py-3.5">
                       <RiskBadge score={q.blended_risk_score} requiredLevel={q.required_level} size="sm" />
                     </td>
-                    {!isRep ? <td className="px-6 py-3.5 text-mist">{q.rep_name}</td> : null}
-                    <td className="px-6 py-3.5 text-right">
+                    {!isRep ? (
+                      <td data-label="Owner" className="px-6 py-3.5 text-mist">
+                        {q.rep_name}
+                      </td>
+                    ) : null}
+                    <td data-stack="action" className="px-6 py-3.5 text-right">
                       <Link
                         href={`/quotations/${q.id}`}
-                        className="inline-flex items-center text-[12px] font-medium text-ink/70 group-hover:text-ink group-hover:underline"
+                        className="inline-flex items-center text-[12px] font-medium text-ink/70 group-hover:text-ink group-hover:underline max-md:rounded-full max-md:border max-md:border-ink/10"
                       >
                         {isRep ? "Open Builder" : "Review"} &rarr;
                       </Link>

@@ -246,14 +246,14 @@ export default function QuotationBuilderPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <Link
             href="/quotations"
-            className="flex size-8 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
+            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-white hover:bg-cream transition-colors text-ink"
           >
             <ArrowLeft className="size-4" />
           </Link>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-serif text-[24px] font-medium tracking-tight text-ink sm:text-[28px]">
                 {quote.reference} &middot; {quote.customer_name}
@@ -269,7 +269,7 @@ export default function QuotationBuilderPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-2.5">
           {/* The rep's own step in the flow. It stays on screen in every state
               so the action is discoverable, and says why when it cannot run --
               a quotation still in approval has nothing to send yet. */}
@@ -279,7 +279,7 @@ export default function QuotationBuilderPage({
               onClick={portalLink ? copyPortalLink : sendToPortal}
               disabled={busy || !canSendToPortal}
               title={sendBlockedReason ?? undefined}
-              className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-ink/10 bg-white px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-cream transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:flex-none sm:justify-start"
             >
               {portalCopied ? (
                 <>
@@ -321,7 +321,7 @@ export default function QuotationBuilderPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {isDraft ? (
-          <div className="rounded-[24px] bg-white p-4 card-shadow lg:col-span-3 flex flex-col h-[740px]">
+          <div className="flex h-[420px] flex-col rounded-[24px] bg-white p-4 card-shadow lg:col-span-3 lg:h-[740px]">
             <div className="pb-3 border-b border-ink/6">
               <h2 className="text-[14px] font-semibold text-ink">Catalog &amp; Stock</h2>
               <p className="text-[11.5px] text-mist mt-0.5">Select products to add to the cart</p>
@@ -334,13 +334,13 @@ export default function QuotationBuilderPage({
                 className="mt-3 w-full rounded-full bg-ink/[0.03] px-3 py-1.5 text-[12px] border border-ink/6 focus:outline-hidden"
               />
 
-              <div className="mt-2.5 flex items-center gap-1 overflow-x-auto pb-1">
+              <div className="scroll-x mt-2.5 flex items-center gap-1 pb-1">
                 {["ALL", ...categories.map((c) => c.name)].map((tab) => (
                   <button
                     key={tab}
                     type="button"
                     onClick={() => setCategoryTab(tab)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
                       categoryTab === tab ? "bg-ink text-bone" : "bg-ink/[0.03] text-mist hover:text-ink"
                     }`}
                   >
@@ -418,7 +418,7 @@ export default function QuotationBuilderPage({
               </div>
             ) : null}
 
-            <div className="mt-4 space-y-3 max-h-[460px] overflow-y-auto pr-1">
+            <div className="mt-4 space-y-3 lg:max-h-[460px] lg:overflow-y-auto lg:pr-1">
               {quote.lines.map((line) => {
                 const isOver = parseFloat(line.margin_pct) < 0 || risk.breakdown.find((b) => b.line_id === line.id)?.is_over;
                 const breakdown = risk.breakdown.find((b) => b.line_id === line.id);
@@ -430,8 +430,8 @@ export default function QuotationBuilderPage({
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-[13.5px] text-ink">{line.product_name}</span>
                           <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-ink/5 text-mist">
                             {line.category_name}

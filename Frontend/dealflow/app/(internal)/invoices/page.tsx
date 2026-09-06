@@ -41,13 +41,13 @@ export default function InvoicesPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-1 rounded-full bg-white p-1 card-shadow w-fit overflow-x-auto">
+      <div className="scroll-x flex w-full max-w-full items-center gap-1 rounded-full bg-white p-1 card-shadow sm:w-fit">
         {FILTERS.map((f) => (
           <button
             key={f.id}
             type="button"
             onClick={() => setFilter(f.id)}
-            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
               filter === f.id ? "bg-ink text-bone" : "text-mist hover:text-ink"
             }`}
           >
@@ -71,7 +71,7 @@ export default function InvoicesPage() {
 
       {/* Invoices Table */}
       <div className="overflow-hidden rounded-[24px] bg-white card-shadow">
-        <table className="w-full text-left text-[13.5px]">
+        <table className="stack-table w-full text-left text-[13.5px]">
           <thead className="text-[11.5px] font-semibold text-mist bg-cream/50 border-b border-ink/6">
             <tr>
               <th className="px-6 py-3.5">Invoice #</th>
@@ -105,29 +105,33 @@ export default function InvoicesPage() {
             {!loading &&
               invoices.map((inv) => (
                 <tr key={inv.id} className="hover:bg-cream/40 transition-colors group cursor-pointer">
-                  <td className="px-6 py-4 font-medium text-ink">
+                  <td data-stack="primary" className="px-6 py-4 font-medium text-ink">
                     <Link href={`/invoices/${inv.id}`} className="hover:underline">
                       {inv.reference}
                     </Link>
                   </td>
-                  <td className="px-6 py-4 text-mist text-[12.5px]">
+                  <td data-label="Order" className="px-6 py-4 text-mist text-[12.5px]">
                     {inv.order_reference ?? "—"}
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Customer" className="px-6 py-4">
                     <p className="font-semibold text-ink">{inv.customer_name ?? "—"}</p>
                     <p className="text-[11.5px] text-mist">
                       {inv.kind === "ONETIME" ? "One-Time" : "Recurring"}
                     </p>
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Status" className="px-6 py-4">
                     <StatusBadge status={inv.status} size="sm" />
                   </td>
-                  <td className="px-6 py-4 font-semibold tabular-nums text-ink">
+                  <td data-label="Total" className="px-6 py-4 font-semibold tabular-nums text-ink">
                     {inr(inv.total)}
                   </td>
-                  <td className="px-6 py-4 tabular-nums text-ok">{inr(inv.amount_paid)}</td>
-                  <td className="px-6 py-4 text-mist text-[12.5px]">{inv.due_date ?? "—"}</td>
-                  <td className="px-6 py-4 text-right">
+                  <td data-label="Paid" className="px-6 py-4 tabular-nums text-ok">
+                    {inr(inv.amount_paid)}
+                  </td>
+                  <td data-label="Due date" className="px-6 py-4 text-mist text-[12.5px]">
+                    {inv.due_date ?? "—"}
+                  </td>
+                  <td data-stack="action" className="px-6 py-4 text-right">
                     <Link
                       href={`/invoices/${inv.id}`}
                       className="inline-flex items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-bone hover:bg-ink/90 transition-colors whitespace-nowrap cursor-pointer"
