@@ -1,0 +1,201 @@
+﻿services:
+  db:
+    image: postgres:16-alpine
+    container_name: dealflow360-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-dealflow360}
+    ports:
+      # Host-side only; services reach it as db:5432 on the compose network.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-dealflow360}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dealflow-network
+
+  init-db:
+    image: golang:1.25-alpine
+    container_name: dealflow360-init-db
+    working_dir: /app
+    volumes:
+      - ./Backend:/app
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-dealflow360}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-changeme-this-is-a-super-secret-key-that-is-at-least-32-chars}
+    command: >
+      /bin/sh -c " go run github.com/pressly/goose/v3/cmd/goose@v3.24.1 -dir internal/db/migrations postgres \"$$DATABASE_URL\" up && go run ./cmd/seed "
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dealflow-network
+
+  backend:
+    image: dealflow360-backend:latest
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: dealflow360-backend
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      PORT: 8080
+      DB_MAX_CONNS: 20
+      DB_MIN_CONNS: 2
+      DB_MAX_CONN_LIFETIME: 1h
+      DB_MAX_CONN_IDLE: 30m
+      DB_QUERY_TIMEOUT: 5s
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-dealflow360}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-changemeoausbcoacnpai-this-is-a-super-secret-key-that-is-at-least-32-chars}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      # The upsell panel prefers the recommendation engine and falls back to
+      # the upsell_rules pairings, so this is not a startup dependency.
+      RECOMMENDATION_URL: http://recommendation:8001
+      RECOMMENDATION_TIMEOUT: ${RECOMMENDATION_TIMEOUT:-1500ms}
+      HTTP_READ_TIMEOUT: 10s
+      HTTP_WRITE_TIMEOUT: 30s
+      HTTP_IDLE_TIMEOUT: 120s
+      HTTP_SHUTDOWN_TIMEOUT: 15s
+      EXPOSE_DB_STATS: true
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SALES_INBOX_EMAIL: ${SALES_INBOX_EMAIL:-}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    depends_on:
+      db:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+    networks:
+      - dealflow-network
+
+  recommendation:
+    image: dealflow360-recommendation:latest
+    build:
+      context: ./recommendation/python_services
+      dockerfile: Dockerfile
+    container_name: dealflow360-recommendation
+    environment:
+      # Database & Shared
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-dealflow360}
+      ENVIRONMENT: ${APP_ENV:-development}
+      # Recommendation Engine (Port 8001)
+      HOST: 0.0.0.0
+      PORT: 8001
+      RECOMMENDATION_PORT: 8001
+      MARGIN_THRESHOLD_PCT: 20.0
+      TOP_K: 10
+      MIN_SUPPORT: 3
+      # AI Salesman Assistant (Port 8002)
+      BACKEND_BASE_URL: http://backend:8080/api/v1
+      AI_SALESMAN_HOST: 0.0.0.0
+      AI_SALESMAN_PORT: 8002
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-oss-120b}
+      LLM_API_KEY: ${LLM_API_KEY:-your-groq-api-key-here}
+      ALLOW_ASSISTANT_CONFIRM: ${ALLOW_ASSISTANT_CONFIRM:-false}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-3600}
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health'); urllib.request.urlopen('http://127.0.0.1:8002/health')" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    depends_on:
+      db:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+      backend:
+        condition: service_healthy
+    networks:
+      dealflow-network:
+        aliases:
+          - recommendation
+          - ai-salesman
+
+  frontend:
+    image: dealflow360-frontend:latest
+    build:
+      context: ./Frontend/dealflow
+      dockerfile: Dockerfile
+    container_name: dealflow360-frontend
+    environment:
+      GO_BACKEND_URL: http://backend:8080/api
+      # Recommendations reach the frontend through the backend's upsell
+      # endpoint, which is where authorisation and pricing live.
+      AI_SALESMAN_URL: http://ai-salesman:8002
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+      recommendation:
+        condition: service_healthy
+    networks:
+      - dealflow-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: dealflow360-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-odoo.sitesundertesting.indevs.in}
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - frontend
+      - backend
+      - recommendation
+    networks:
+      - dealflow-network
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: dealflow360-certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt:rw
+      - ./certbot/www:/var/www/certbot:rw
+    entrypoint: >
+      /bin/sh -c " trap exit TERM; while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        sleep 12h & wait $${!};
+      done; "
+    networks:
+      - dealflow-network
+
+volumes:
+  pgdata:
+
+networks:
+  dealflow-network:
+    name: dealflow-network
+    driver: bridge
